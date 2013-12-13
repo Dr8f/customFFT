@@ -420,3 +420,9 @@ let partition_closure (closure: rstep_unpartitioned list) : rstep_partitioned li
   in
   List.map f closure
 ;;
+
+let make_lib (functionalities: spl list) (algo: spl -> boolexpr * (intexpr*intexpr) list * spl) : rstep_partitioned list =
+  let closure = compute_the_closure functionalities algo in
+  partition_closure closure
+;;
+
