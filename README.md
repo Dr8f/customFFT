@@ -1,5 +1,5 @@
-fastdaft
+customFFT
 ========
 Build & execute with:
 
-ocamlbuild fastdaft.ml --
+ocamlbuild customFFT.ml --
