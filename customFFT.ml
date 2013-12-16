@@ -2,10 +2,7 @@
 TYPES
 *******)
 
-open Spl
-;;
-
-let lib = Lib.make_lib [DFT(IVar(IArg(1)))] Algo.algo_cooley_tukey
+let lib = Lib.make_lib [Spl.DFT(Spl.IArg(1))] Algo.algo_cooley_tukey
 ;;
 
 print_string (Lib.string_of_lib lib)

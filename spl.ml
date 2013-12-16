@@ -1,30 +1,25 @@
 (******    TYPES    *******)
-
 module StringMap = Map.Make(String)
 ;;
 
 module IntMap = Map.Make(struct type t = int let compare = compare end)
 ;;
 
-type intvar =
-| IFreedom of int
-| ILoopCounter of int
-| IArg of int
-| ITranscendental of string
-;;
 
 type intexpr =
   IConstant of int
-| IVar of intvar
+| IFreedom of int (* degree of freedom *)
+| ILoopCounter of int
+| IArg of int (* function argument *)
 | IMul of intexpr list
 | IPlus of intexpr list
-| IDivPerfect of intexpr * intexpr 
-| IDivisor of intexpr
-| IWrap of int * intexpr
+| IDivPerfect of intexpr * intexpr (* IDivPerfect(i,j) = i / j and j divides i for sure *)
+| IDivisor of intexpr (* IDivisor(i) returns a divisor of i *)
+| ICountWrap of int * intexpr (* internal *)
 ;;
 
 type boolexpr =
-  IsNotPrime of intexpr
+  IsNotPrime of intexpr 
 | And of boolexpr list
 | IntEqual of intexpr * intexpr
 ;;
@@ -34,12 +29,12 @@ type idxfunc =
 | FL of intexpr * intexpr
 | FD of intexpr * intexpr
 | FCompose of idxfunc list
-| Pre of idxfunc
+| Pre of idxfunc (* Precompute *)
 ;;
 
 type spl =
 DFT of intexpr
-| RS of spl
+| RS of spl (* Recursion step *)
 | Tensor of spl list
 | I of intexpr
 | T of intexpr * intexpr
@@ -53,27 +48,15 @@ DFT of intexpr
 | ActualCall of string * intexpr list * intexpr list * intexpr list 
 ;;
 
-
-
-
 (***********    PRINTING    ************)
 
 let optional_short_print (optional : string) (mandatory : string) : string = 
-  let short_print = true
-  in
+  let short_print = true in
   if (short_print) then
     mandatory
   else
     optional ^ "(" ^ mandatory ^ ")"
 ;;
-
-let string_of_intvar (e : intvar) : string =
-  match e with
-  | IFreedom i -> "f"^(string_of_int i)
-  | ILoopCounter i -> "i" ^ (string_of_int i)
-  | IArg i -> "u"^(string_of_int i)
-  | ITranscendental s -> s
-;; 
 
 let rec string_of_intexpr (e : intexpr) : string =
   match e with
@@ -81,9 +64,11 @@ let rec string_of_intexpr (e : intexpr) : string =
   | IMul (l) -> optional_short_print "IMul" (String.concat " * " (List.map string_of_intexpr l))
   | IPlus (l) -> optional_short_print "IPlus" (String.concat " + " (List.map string_of_intexpr l))
   | IDivPerfect(l,r) -> optional_short_print "IDivPerfect" ((string_of_intexpr l)^"/"^(string_of_intexpr r))
-  | IWrap (l,r) -> "["^string_of_int l^"]"^string_of_intexpr r
+  | ICountWrap (l,r) -> "["^string_of_int l^"]"^string_of_intexpr r
   | IDivisor(l)->"divisor("^string_of_intexpr l^")"
-  | IVar(s) -> string_of_intvar s
+  | IFreedom i -> "f"^(string_of_int i)
+  | ILoopCounter i -> "i" ^ (string_of_int i)
+  | IArg i -> "u"^(string_of_int i)
 ;;
 
 let rec string_of_boolexpr (e : boolexpr) : string = 
@@ -135,6 +120,7 @@ let rec string_of_spl (e : spl) : string =
 (*********************************************
 	 METARULES                 
 *********************************************)
+
 type recursion_direction = 
   BottomUp 
 | TopDown
@@ -463,7 +449,7 @@ object
   val tbl = ref 0;
   method get () : intexpr = 
     tbl := !tbl + 1;
-    IVar (ILoopCounter !tbl)
+    ILoopCounter !tbl
 end
 ;;
 
@@ -615,10 +601,10 @@ let rule_suck_inside_pre : (spl -> spl) =
 ;;
 
 let rec apply_rewriting_rules (e : spl) : spl = 
+  let add_pair (map) (name, rule) =
+    StringMap.add name rule map
+  in
   let rules = 
-    let add_pair (map) (name,rule) =
-      StringMap.add name rule map
-    in
     List.fold_left add_pair StringMap.empty [
       ("Tensor to ISum", rule_tensor_to_isum);
       ("Remove unary tensor", rule_remove_unary_tensor);

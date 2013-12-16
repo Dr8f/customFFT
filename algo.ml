@@ -10,7 +10,7 @@ object
   val tbl = ref 0;
   method get () : intexpr = 
     tbl := !tbl + 1;
-    IVar (IFreedom !tbl)
+    IFreedom !tbl
 end
 ;;
 

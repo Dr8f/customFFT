@@ -124,9 +124,9 @@ let wrap_intexprs_naively (e :spl) : spl =
   let count = ref 0 in
   let f (i : intexpr) : intexpr = 
     match i with 
-      IMul _ | IPlus _ | IDivPerfect _ | IVar _ -> 
+      IMul _ | IPlus _ | IDivPerfect _ | IFreedom _ | ILoopCounter _ | IArg _ -> 
 	count := !count + 1;
-	IWrap(!count, i)
+	ICountWrap(!count, i)
     | x -> x
   in
   (meta_transform_intexpr_on_spl TopDown f) e
@@ -154,7 +154,7 @@ let reintegrate_RS (e: spl) (canonized : spl list) : spl =
 let unwrap (e:spl) : spl =
   let g (e:intexpr) : intexpr = 
     match e with
-      IWrap(l,r)->IVar(IArg l)
+      ICountWrap(l,r)->IArg l
     | x -> x
   in
   (meta_transform_intexpr_on_spl TopDown g) e
@@ -173,14 +173,14 @@ let replace_by_a_call ((spl,name):spl * string) : spl =
   let collect_binds (spl:spl) : 'a list = 
     let binds (i : intexpr) : 'a list =
       match i with
-	IWrap _ -> [i]
+	ICountWrap _ -> [i]
       | _ -> []
     in
     ((meta_collect_intexpr_on_spl binds) spl) in
   let rec mapify (binds : intexpr list) (map : 'a IntMap.t) : 'a IntMap.t =
     match binds with
       [] -> map
-    | IWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
+    | ICountWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
     | _ -> failwith "type is not supported"
   in
   Call(name, (mapify (collect_binds spl) IntMap.empty ))
@@ -190,7 +190,7 @@ let collect_args (rstep : spl) : IntExprSet.t =
   let args = ref  IntExprSet.empty in
   let g (e : intexpr) : _ =
     match e with
-    | IVar(IArg _) -> args := IntExprSet.add e !args
+    | IArg _ -> args := IntExprSet.add e !args
     | _ -> ()
   in
   meta_iter_intexpr_on_spl g rstep;
@@ -243,7 +243,7 @@ let compute_dependency_map (closure: rstep_unpartitioned list) : SpecArgSet.t Sp
     	  let key = (callee,arg) in
     	  let h (e:intexpr): _ =
     	    match e with
-    	      IVar (IArg i) ->
+    	      IArg i ->
     		let new_content = (name,i) in
     		depmap :=
     		  if (SpecArgMap.mem key !depmap) then
@@ -273,7 +273,7 @@ let compute_initial_hots (closure: rstep_unpartitioned list) : SpecArgSet.t =
 	let g (arg:int) (expr:intexpr) : _ =
     	  let h (e:intexpr): _ =
     	    match e with
-    	    | IVar (ILoopCounter _) -> hot_set := SpecArgSet.add (callee,arg) !hot_set 
+    	    | ILoopCounter _ -> hot_set := SpecArgSet.add (callee,arg) !hot_set 
     	    | _ -> ()
     	  in
     	  meta_iter_intexpr_on_intexpr h expr
@@ -296,7 +296,7 @@ let compute_initial_colds (closure: rstep_unpartitioned list) : SpecArgSet.t =
   let init_rstep ((name, rstep, args, breakdowns) : rstep_unpartitioned) : _=
     let add_args_to_cold (e:intexpr) : _ =
       match e with
-	IVar (IArg i) -> 
+	IArg i -> 
 	  cold_set := SpecArgSet.add (name,i) !cold_set
       | x -> ()
     in
@@ -373,7 +373,7 @@ let filter_by_rstep (name:string) (s:SpecArgSet.t) : IntExprSet.t =
   let res = ref IntExprSet.empty in
   let f ((rs,i):specified_arg) : _ =
     if (rs = name) then
-      res := IntExprSet.add (IVar(IArg i)) !res
+      res := IntExprSet.add (IArg i) !res
   in
   SpecArgSet.iter f s;
   !res
@@ -404,7 +404,7 @@ let compute_partition_map (closure: rstep_unpartitioned list) : (IntExprSet.t St
 
 let partition_closure (closure: rstep_unpartitioned list) : rstep_partitioned list =
   let filter_by (args:intexpr IntMap.t) (set:IntExprSet.t) : intexpr list =
-    List.map snd (List.filter (fun ((i,expr):int*intexpr) -> IntExprSet.mem (IVar (IArg i)) set) (IntMap.bindings args))
+    List.map snd (List.filter (fun ((i,expr):int*intexpr) -> IntExprSet.mem (IArg i) set) (IntMap.bindings args))
   in
   let (cold,reinit,hot) = compute_partition_map closure in
   let f ((name, rstep, _, breakdowns) : rstep_unpartitioned) : rstep_partitioned =

@@ -2,4 +2,4 @@ customFFT
 ========
 Build & execute with:
 
-ocamlbuild customFFT.ml --
+ocamlbuild customFFT.byte --
