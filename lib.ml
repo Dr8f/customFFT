@@ -183,7 +183,7 @@ let replace_by_a_call ((spl,name):spl * string) : spl =
     | ICountWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
     | _ -> failwith "type is not supported"
   in
-  Call(name, (mapify (collect_binds spl) IntMap.empty ))
+  UnpartitionnedCall(name, (mapify (collect_binds spl) IntMap.empty ))
 ;;
 
 let collect_args (rstep : spl) : IntExprSet.t = 
@@ -238,7 +238,7 @@ let compute_dependency_map (closure: rstep_unpartitioned list) : SpecArgSet.t Sp
   let per_rstep ((name, _, _, breakdowns) : rstep_unpartitioned) : _=   
     let per_rule ((_,_,_,desc_with_calls):breakdown) : _ = 
       meta_iter_spl_on_spl ( function
-      | Call(callee,vars) ->
+      | UnpartitionnedCall(callee,vars) ->
 	let g (arg:int) (expr:intexpr) : _ =
     	  let key = (callee,arg) in
     	  let h (e:intexpr): _ =
@@ -269,7 +269,7 @@ let compute_initial_hots (closure: rstep_unpartitioned list) : SpecArgSet.t =
   let per_rstep ((name, _, _, breakdowns) : rstep_unpartitioned) : _=   
     let per_rule ((_,_,_,desc_with_calls):breakdown) : _ = 
       meta_iter_spl_on_spl ( function
-      | Call(callee,vars) ->
+      | UnpartitionnedCall(callee,vars) ->
 	let g (arg:int) (expr:intexpr) : _ =
     	  let h (e:intexpr): _ =
     	    match e with
@@ -411,8 +411,8 @@ let partition_closure (closure: rstep_unpartitioned list) : rstep_partitioned li
     let g ((condition, freedoms, desc, desc_with_calls):breakdown) : breakdown = 
       let h (e:spl) : spl =
 	match e with
-	| Call (callee, args) ->
-  	  ActualCall(callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)))
+	| UnpartitionnedCall (callee, args) ->
+  	  PartitionnedCall(callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)))
 	| x -> x
       in
       (condition, freedoms, desc, (meta_transform_spl_on_spl BottomUp h) desc_with_calls) in

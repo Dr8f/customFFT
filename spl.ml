@@ -44,8 +44,8 @@ DFT of intexpr
 | G of idxfunc
 | Diag of idxfunc
 | ISum of intexpr * intexpr * spl
-| Call of string * intexpr IntMap.t
-| ActualCall of string * intexpr list * intexpr list * intexpr list 
+| UnpartitionnedCall of string * intexpr IntMap.t
+| PartitionnedCall of string * intexpr list * intexpr list * intexpr list 
 ;;
 
 (***********    PRINTING    ************)
@@ -108,9 +108,9 @@ let rec string_of_spl (e : spl) : string =
   | Diag (f) -> "Diag("^(string_of_idxfunc f)^")"
   | ISum (i, high, spl) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^","^(string_of_spl spl)^")"
   | RS(spl) -> "RS("^(string_of_spl spl)^")"
-  | Call(f, l) -> 
+  | UnpartitionnedCall(f, l) -> 
     f^"("^(String.concat "," (List.map string_of_int_intexpr (IntMap.bindings l)))^")"
-  | ActualCall(f, cold, reinit, hot) -> 
+  | PartitionnedCall(f, cold, reinit, hot) -> 
     f^"("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr reinit)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr hot)) ^ ")"
 ;;
 
@@ -188,8 +188,8 @@ let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f 
     | T (n, m) -> T(g n, g m)
     | I n -> I(g n)
     | DFT n -> DFT (g n)
-    | Call _ -> e
-    | ActualCall _ -> e
+    | UnpartitionnedCall _ -> e
+    | PartitionnedCall _ -> e
   in
   let intexprs_in_idxfunc (e : idxfunc) : idxfunc =
     match e with 
@@ -284,7 +284,7 @@ let meta_collect_intexpr_on_boolexpr (f : intexpr -> 'a list) : (boolexpr -> 'a 
 let meta_collect_intexpr_on_spl (f : intexpr -> 'a list) : (spl -> 'a list) =
   let direct_from_spl (ff : intexpr -> 'a list) (e : spl) : 'a list =
     match e with
-      Compose _ | Tensor _ | RS _ | Diag _ | G _| S _ | Call _ | ActualCall _ -> []
+      Compose _ | Tensor _ | RS _ | Diag _ | G _| S _ | UnpartitionnedCall _ | PartitionnedCall _ -> []
     | ISum(v,c,a) -> (ff v) @ (ff c)
     | L (n, m) -> (ff n) @ (ff m)
     | T (n, m) -> (ff n) @ (ff m)
@@ -392,8 +392,8 @@ let rec range (e :spl) : intexpr =
   | Diag (f) -> func_domain f
   | ISum (_, _, spl) -> range spl
   | RS (spl) -> range spl
-  | Call _ -> raise InvalidDimException
-  | ActualCall _ -> raise InvalidDimException
+  | UnpartitionnedCall _ -> raise InvalidDimException
+  | PartitionnedCall _ -> raise InvalidDimException
 ;;    
 
 let rec domain (e :spl) : intexpr = 
@@ -409,8 +409,8 @@ let rec domain (e :spl) : intexpr =
   | Diag (f) -> func_domain f (* by definition a diag range is equal to a diag domain. However the range of the function is larger but noone cares since its precomputed*)
   | ISum (_, _, spl) -> domain spl
   | RS (spl) -> domain spl
-  | Call _ -> raise InvalidDimException
-  | ActualCall _ -> raise InvalidDimException
+  | UnpartitionnedCall _ -> raise InvalidDimException
+  | PartitionnedCall _ -> raise InvalidDimException
 ;;    
 
 (*********************************************
