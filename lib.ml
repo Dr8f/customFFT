@@ -20,7 +20,13 @@ type breakdown = (boolexpr * (intexpr * intexpr) list * spl* spl)
 type rstep_unpartitioned = (string * spl * IntExprSet.t * breakdown list )
 ;;
 
+type closure = rstep_unpartitioned list
+;;
+
 type rstep_partitioned = (string * spl * IntExprSet.t * IntExprSet.t * IntExprSet.t * breakdown list)
+;;
+
+type lib = rstep_partitioned list
 ;;
 
 type specified_arg = string * int
@@ -58,7 +64,7 @@ let string_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns ): 
   ^"\n"
 ;;
 
-let string_of_lib (lib: rstep_partitioned list) : string =
+let string_of_lib (lib: lib) : string =
   String.concat "" (List.map string_of_rstep_partitioned lib)
 ;;
 
@@ -198,7 +204,7 @@ let collect_args (rstep : spl) : IntExprSet.t =
 ;;
 
 
-let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*intexpr) list * spl) : rstep_unpartitioned list = 
+let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*intexpr) list * spl) : closure = 
   let under_consideration = ref [] in
   let rsteps = ref [] in
   let namemap = ref SplMap.empty in
@@ -233,7 +239,7 @@ let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*in
   !rsteps
 ;;
 
-let compute_dependency_map (closure: rstep_unpartitioned list) : SpecArgSet.t SpecArgMap.t =
+let dependency_map_of_closure (closure : closure) : SpecArgSet.t SpecArgMap.t =
   let depmap = ref SpecArgMap.empty in 
   let per_rstep ((name, _, _, breakdowns) : rstep_unpartitioned) : _=   
     let per_rule ((_,_,_,desc_with_calls):breakdown) : _ = 
@@ -264,7 +270,7 @@ let compute_dependency_map (closure: rstep_unpartitioned list) : SpecArgSet.t Sp
   (!depmap)
 ;;
 
-let compute_initial_hots (closure: rstep_unpartitioned list) : SpecArgSet.t =
+let initial_hots_of_closure (closure: closure) : SpecArgSet.t =
   let hot_set = ref SpecArgSet.empty in
   let per_rstep ((name, _, _, breakdowns) : rstep_unpartitioned) : _=   
     let per_rule ((_,_,_,desc_with_calls):breakdown) : _ = 
@@ -290,7 +296,7 @@ let compute_initial_hots (closure: rstep_unpartitioned list) : SpecArgSet.t =
 
 
 
-let compute_initial_colds (closure: rstep_unpartitioned list) : SpecArgSet.t =
+let initial_colds_of_closure (closure: closure) : SpecArgSet.t =
   let cold_set = ref SpecArgSet.empty in
 
   let init_rstep ((name, rstep, args, breakdowns) : rstep_unpartitioned) : _=
@@ -379,34 +385,34 @@ let filter_by_rstep (name:string) (s:SpecArgSet.t) : IntExprSet.t =
   !res
 ;;
 
-let compute_partition_map (closure: rstep_unpartitioned list) : (IntExprSet.t StringMap.t * IntExprSet.t StringMap.t * IntExprSet.t StringMap.t) = 
-  let dependency_map = compute_dependency_map closure in
-  let initial_all_colds = compute_initial_colds closure in
-  let initial_all_hots = compute_initial_hots closure in
-  let all_colds = backward_propagation initial_all_colds dependency_map in
-  let all_hots = forward_propagation initial_all_hots dependency_map in
+let partition_map_of_closure (closure: closure) : (IntExprSet.t StringMap.t * IntExprSet.t StringMap.t * IntExprSet.t StringMap.t) = 
+  let dependency_map = dependency_map_of_closure closure in
+  let initial_colds = initial_colds_of_closure closure in
+  let initial_hots = initial_hots_of_closure closure in
+  let all_colds = backward_propagation initial_colds dependency_map in
+  let all_hots = forward_propagation initial_hots dependency_map in
 
-  let resC = ref StringMap.empty in
-  let resR = ref StringMap.empty in
-  let resH = ref StringMap.empty in
+  let colds = ref StringMap.empty in
+  let reinits = ref StringMap.empty in
+  let hots = ref StringMap.empty in
   let partition_args ((name, rstep, args, breakdowns) : rstep_unpartitioned) : _=
-    let my_necessarily_colds = filter_by_rstep name all_colds in
-    let my_necessarily_hots = filter_by_rstep name all_hots in
-    let not_constrained = IntExprSet.diff args (IntExprSet.union my_necessarily_colds my_necessarily_hots) in
-    let reinit = IntExprSet.inter my_necessarily_colds my_necessarily_hots in
-    resR := StringMap.add name reinit !resR;
-    resC := StringMap.add name (IntExprSet.diff my_necessarily_colds reinit) !resC;
-    resH := StringMap.add name (IntExprSet.diff (IntExprSet.union my_necessarily_hots not_constrained) reinit) !resH (* as hot as possible *)
+    let necessarily_colds = filter_by_rstep name all_colds in
+    let necessarily_hots = filter_by_rstep name all_hots in
+    let not_constrained = IntExprSet.diff args (IntExprSet.union necessarily_colds necessarily_hots) in
+    let reinit = IntExprSet.inter necessarily_colds necessarily_hots in
+    reinits := StringMap.add name reinit !reinits;
+    colds := StringMap.add name (IntExprSet.diff necessarily_colds reinit) !colds;
+    hots := StringMap.add name (IntExprSet.diff (IntExprSet.union necessarily_hots not_constrained) reinit) !hots (* as hot as possible *)
   in
   List.iter partition_args closure;
-  (!resC,!resR,!resH)
+  (!colds,!reinits,!hots)
 ;;
 
-let partition_closure (closure: rstep_unpartitioned list) : rstep_partitioned list =
+let lib_from_closure (closure: closure) : lib =
   let filter_by (args:intexpr IntMap.t) (set:IntExprSet.t) : intexpr list =
     List.map snd (List.filter (fun ((i,expr):int*intexpr) -> IntExprSet.mem (IArg i) set) (IntMap.bindings args))
   in
-  let (cold,reinit,hot) = compute_partition_map closure in
+  let (cold,reinit,hot) = partition_map_of_closure closure in
   let f ((name, rstep, _, breakdowns) : rstep_unpartitioned) : rstep_partitioned =
     let g ((condition, freedoms, desc, desc_with_calls):breakdown) : breakdown = 
       let h (e:spl) : spl =
@@ -421,8 +427,8 @@ let partition_closure (closure: rstep_unpartitioned list) : rstep_partitioned li
   List.map f closure
 ;;
 
-let make_lib (functionalities: spl list) (algo: spl -> boolexpr * (intexpr*intexpr) list * spl) : rstep_partitioned list =
+let make_lib (functionalities: spl list) (algo: spl -> boolexpr * (intexpr*intexpr) list * spl) : lib =
   let closure = compute_the_closure functionalities algo in
-  partition_closure closure
+  lib_from_closure closure
 ;;
 
