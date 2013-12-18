@@ -138,3 +138,13 @@ let string_of_lib (lib: lib) : string =
   (* String.concat "" (List.map string_of_rstep_partitioned lib) *)
 ;;
 
+
+
+open Codegen
+;;
+
+let rec string_of_code (n:int) (code : code) : string = 
+  match code with
+    Class name -> "struct "^name^"{\n"^"};\n"
+  | Chain l -> String.concat "" (List.map (string_of_code n) l)
+;;
