@@ -140,11 +140,43 @@ let string_of_lib (lib: lib) : string =
 
 
 
+(**********************************************)
+
 open Codegen
 ;;
 
-let rec string_of_code (n:int) (code : code) : string = 
-  match code with
-    Class name -> "struct "^name^"{\n"^"};\n"
-  | Chain l -> String.concat "" (List.map (string_of_code n) l)
+let rec string_of_ctype (t : ctype) : string =
+  match t with
+  |Int -> "int"
 ;;
+
+type unparse_type =
+  Prototype
+| Implementation
+;;
+
+let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
+  match code with
+    Class(name,vars,cons) -> 
+      (match unparse_type with
+	Prototype -> (white n) ^ "struct "^name^" : public RS {\n" ^ (white (n+4))
+	| Implementation -> (white n) ^ name ^ "::")
+      ^ name ^ "(" ^ (String.concat ", " (List.map (fun var -> 
+	let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
+      ) vars))^")" ^ (match unparse_type with
+	Prototype -> ";\n"
+      | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
+      ^ (match unparse_type with
+	  Prototype -> (white n) ^ "};\n\n"
+	| Implementation -> "\n")
+
+
+  | Chain l -> String.concat "" (List.map (cpp_string_of_code unparse_type n) l)
+  | Assign(Var(_, nameL),Var(_, nameR)) -> (white n) ^ nameL ^ " = " ^ nameR ^ ";"
+;;
+
+let string_of_code (n:int) (code : code) : string = 
+  (cpp_string_of_code Prototype n code)
+  ^(cpp_string_of_code Implementation n code)
+;;
+
