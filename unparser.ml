@@ -18,7 +18,7 @@ type statement =
 | Chain of statement list
 | IntAssign of intexpr * intexpr
 | EnvAssign of envexpr * string
-| Loop of intexpr * intexpr * statement 
+| Loop2 of intexpr * intexpr * statement 
 | Error2 of string
 | If2 of boolexpr * statement * statement
 | EnvCall of string * envexpr * string
@@ -37,7 +37,7 @@ let rec string_of_statement (n:int) (stmt:statement) : string =
   | Chain l -> String.concat "" (List.map (string_of_statement n) l)
   | IntAssign (left, right) -> (white n)^(string_of_intexpr left) ^ " = " ^ (string_of_intexpr right) ^ ";\n"
   | EnvAssign(env,s) -> (white n)^(string_of_envexpr env)^ " = " ^ s ^ ";\n" 
-  | Loop (i,c,exp) -> (white n)^"for(int "^(string_of_intexpr i)^" = 0; "^(string_of_intexpr i)^" < "^(string_of_intexpr c)^"; "^(string_of_intexpr i)^"++){\n"^(string_of_statement (n+4) exp)^(white n)^"}\n" 
+  | Loop2 (i,c,exp) -> (white n)^"for(int "^(string_of_intexpr i)^" = 0; "^(string_of_intexpr i)^" < "^(string_of_intexpr c)^"; "^(string_of_intexpr i)^"++){\n"^(string_of_statement (n+4) exp)^(white n)^"}\n" 
   | Error2(str) -> (white n)^"error(\""^str^"\");\n"
   | If2 (cond, path_a, path_b) -> (white n)^"if ("^(string_of_boolexpr cond)^") {\n"^(string_of_statement (n+4) path_a)^(white n)^"} else {\n"^(string_of_statement (n+4) path_b)^(white n)^"}\n"
   | EnvCall(name,env,s) -> (white n)^"cast <"^name^" *>("^(string_of_envexpr env) ^ ")" ^ s ^ ";\n"
@@ -83,7 +83,7 @@ let build_implementation ((name, rstep, cold, reinit, hot, breakdowns ): rstep_p
     let rec prepare_cons (e:spl) : statement =
       match e with
       |Compose l -> Chain (List.map prepare_cons (List.rev l))
-      |ISum(i,count,spl) -> Loop(i,count,(prepare_cons spl)) (*FIXME, there's some hoisting*)
+      |ISum(i,count,spl) -> Loop2(i,count,(prepare_cons spl)) (*FIXME, there's some hoisting*)
       |PartitionnedCall(callee,cold,reinit,_) -> prepare_env_cons callee cold reinit
       | _ -> Error2("nop")
     in
@@ -102,7 +102,7 @@ let build_implementation ((name, rstep, cold, reinit, hot, breakdowns ): rstep_p
   let rec prepare_body (e:spl) : statement =
     match e with
     |Compose l -> Chain (List.map prepare_body (List.rev l))
-    |ISum(i,count,spl) -> Loop(i,count,(prepare_body spl)) (*FIXME, there's some hoisting*)
+    |ISum(i,count,spl) -> Loop2(i,count,(prepare_body spl)) (*FIXME, there's some hoisting*)
     |PartitionnedCall(callee,_,_,hot) -> prepare_env_body callee hot
     | _ -> Error2("nop")
   in
@@ -148,12 +148,27 @@ open Codegen
 let rec string_of_ctype (t : ctype) : string =
   match t with
   |Int -> "int"
+  |Env -> "env"
 ;;
 
 type unparse_type =
   Prototype
 | Implementation
 ;;
+
+let rec string_of_intrvalue (intrvalue:intrvalue) : string = 
+  match intrvalue with
+    ContentsOf Var(_, name) -> name
+  | ValueOf intexpr -> string_of_intexpr intexpr
+;;
+
+let rec string_of_envrvalue (envrvalue:envrvalue) : string = 
+  match envrvalue with
+    Create(name,args) -> "new "^name^"("^(String.concat ", " (List.map string_of_intrvalue args))^")"
+;;
+
+
+  
 
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
   match code with
@@ -176,10 +191,13 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
 
 	
   | Chain l -> String.concat "" (List.map (cpp_string_of_code unparse_type n) l)
-  | Assign(Var(_, nameL),Var(_, nameR)) -> (white n) ^ nameL ^ " = " ^ nameR ^ ";\n"
+  | IntAssign(Var(_, nameL), rvalue) -> (white n) ^ nameL ^ " = "^ (string_of_intrvalue rvalue) ^ ";\n"
   | Noop -> (white n)^"/* noop */\n"
   | Error str -> (white n)^"error(\""^str^"\");\n"
   | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_boolexpr cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
+  | Loop(Var(Int,name), intrvalue, code) -> (white n)^"for(int "^name^" = 0; "^name^" < "^(string_of_intrvalue intrvalue)^"; "^name^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
+  | EnvAssign(Var(_, nameL), rvalue) -> (white n) ^ nameL ^ " = "^ (string_of_envrvalue rvalue) ^ ";\n"
+
 ;;
 
 let string_of_code (n:int) (code : code) : string = 
