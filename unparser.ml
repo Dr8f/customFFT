@@ -19,8 +19,8 @@ type statement =
 | IntAssign of intexpr * intexpr
 | EnvAssign of envexpr * string
 | Loop of intexpr * intexpr * statement 
-| Error of string
-| If of boolexpr * statement * statement
+| Error2 of string
+| If2 of boolexpr * statement * statement
 | EnvCall of string * envexpr * string
 ;;
 
@@ -38,8 +38,8 @@ let rec string_of_statement (n:int) (stmt:statement) : string =
   | IntAssign (left, right) -> (white n)^(string_of_intexpr left) ^ " = " ^ (string_of_intexpr right) ^ ";\n"
   | EnvAssign(env,s) -> (white n)^(string_of_envexpr env)^ " = " ^ s ^ ";\n" 
   | Loop (i,c,exp) -> (white n)^"for(int "^(string_of_intexpr i)^" = 0; "^(string_of_intexpr i)^" < "^(string_of_intexpr c)^"; "^(string_of_intexpr i)^"++){\n"^(string_of_statement (n+4) exp)^(white n)^"}\n" 
-  | Error(str) -> (white n)^"error(\""^str^"\");\n"
-  | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_boolexpr cond)^") {\n"^(string_of_statement (n+4) path_a)^(white n)^"} else {\n"^(string_of_statement (n+4) path_b)^(white n)^"}\n"
+  | Error2(str) -> (white n)^"error(\""^str^"\");\n"
+  | If2 (cond, path_a, path_b) -> (white n)^"if ("^(string_of_boolexpr cond)^") {\n"^(string_of_statement (n+4) path_a)^(white n)^"} else {\n"^(string_of_statement (n+4) path_b)^(white n)^"}\n"
   | EnvCall(name,env,s) -> (white n)^"cast <"^name^" *>("^(string_of_envexpr env) ^ ")" ^ s ^ ";\n"
 ;;
 
@@ -85,16 +85,16 @@ let build_implementation ((name, rstep, cold, reinit, hot, breakdowns ): rstep_p
       |Compose l -> Chain (List.map prepare_cons (List.rev l))
       |ISum(i,count,spl) -> Loop(i,count,(prepare_cons spl)) (*FIXME, there's some hoisting*)
       |PartitionnedCall(callee,cold,reinit,_) -> prepare_env_cons callee cold reinit
-      | _ -> Error("nop")
+      | _ -> Error2("nop")
     in
     let rulecount = ref 0 in
     let g (stmt:statement) ((condition,freedoms,desc,desc_with_calls):breakdown) : statement  =
       let freedom_assigns = List.map (fun (l,r)->IntAssign(l,r)) freedoms in
       rulecount := !rulecount + 1;
       (* FIXME: [IntAssign(IVar(ITranscendental "_rule"),IConstant !rulecount)] *)
-      If(condition,(Chain( freedom_assigns @ [prepare_cons desc_with_calls])),(Error("no applicable rules")))
+      If2(condition,(Chain( freedom_assigns @ [prepare_cons desc_with_calls])),(Error2("no applicable rules")))
     in
-  let code_cons = List.fold_left g (Error("no error")) breakdowns in 
+  let code_cons = List.fold_left g (Error2("no error")) breakdowns in 
   let prepare_env_body (rs:string) (hot:intexpr list) : statement =
     envcount := !envcount + 1; (*FIXME the arrays they are not correct*)
     EnvCall (rs, SimpleEnv !envcount,("->compute("^(String.concat ", " (List.map string_of_intexpr hot))^")"))
@@ -104,18 +104,18 @@ let build_implementation ((name, rstep, cold, reinit, hot, breakdowns ): rstep_p
     |Compose l -> Chain (List.map prepare_body (List.rev l))
     |ISum(i,count,spl) -> Loop(i,count,(prepare_body spl)) (*FIXME, there's some hoisting*)
     |PartitionnedCall(callee,_,_,hot) -> prepare_env_body callee hot
-    | _ -> Error("nop")
+    | _ -> Error2("nop")
   in
   let g (stmt:statement) ((condition,freedoms,desc,desc_with_calls):breakdown) : statement  =
-    let decls = [Error("decl_buffer")] in
+    let decls = [Error2("decl_buffer")] in
     envcount := 0;
     rulecount := !rulecount + 1;
     (* FIXME
-    If(IntEqual(IVar(ITranscendental "_rule"),IConstant !rulecount),(Chain( decls @ [prepare_body desc_with_calls])),(Error("unknown rule")))*)
-    Error("FIXME")
+    If2(IntEqual(IVar(ITranscendental "_rule"),IConstant !rulecount),(Chain( decls @ [prepare_body desc_with_calls])),(Error2("unknown rule")))*)
+    Error2("FIXME")
   (* FIXME rulecount := 0; *)
   in
-  let code_comp = List.fold_left g (Error("no error")) breakdowns in 
+  let code_comp = List.fold_left g (Error2("no error")) breakdowns in 
 
 
 
@@ -158,21 +158,28 @@ type unparse_type =
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
   match code with
     Class(name,vars,cons) -> 
-      (match unparse_type with
-	Prototype -> (white n) ^ "struct "^name^" : public RS {\n" ^ (white (n+4))
-	| Implementation -> (white n) ^ name ^ "::")
-      ^ name ^ "(" ^ (String.concat ", " (List.map (fun var -> 
+      let colds = (List.map (fun var -> 
 	let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
-      ) vars))^")" ^ (match unparse_type with
+      ) vars) in
+      (match unparse_type with
+	Prototype -> (white n) ^ "struct "^name^" : public RS {\n" 
+	  ^ (white (n+4)) ^ "int _rule;\n" 
+	  ^ (white (n+4)) ^ "char *_dat;\n" 
+	  ^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") colds))^ (white (n+4))
+      | Implementation -> (white n) ^ name ^ "::")
+      ^ name ^ "(" ^ (String.concat ", " colds)^")" ^ (match unparse_type with
 	Prototype -> ";\n"
       | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
       ^ (match unparse_type with
 	  Prototype -> (white n) ^ "};\n\n"
-	| Implementation -> "\n")
+      | Implementation -> "\n")
 
-
+	
   | Chain l -> String.concat "" (List.map (cpp_string_of_code unparse_type n) l)
-  | Assign(Var(_, nameL),Var(_, nameR)) -> (white n) ^ nameL ^ " = " ^ nameR ^ ";"
+  | Assign(Var(_, nameL),Var(_, nameR)) -> (white n) ^ nameL ^ " = " ^ nameR ^ ";\n"
+  | Noop -> (white n)^"/* noop */\n"
+  | Error str -> (white n)^"error(\""^str^"\");\n"
+  | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_boolexpr cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
 ;;
 
 let string_of_code (n:int) (code : code) : string = 
