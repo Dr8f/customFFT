@@ -14,7 +14,7 @@ module IntExprSet = Set.Make (struct
 end)
 ;;
 
-type breakdown = (boolexpr * (intexpr * intexpr) list * spl* spl)
+type breakdown = (boolexpr * (intexpr * intexpr) list * spl * spl)
 ;;
 
 type rstep_unpartitioned = (string * spl * IntExprSet.t * breakdown list )
@@ -23,7 +23,10 @@ type rstep_unpartitioned = (string * spl * IntExprSet.t * breakdown list )
 type closure = rstep_unpartitioned list
 ;;
 
-type rstep_partitioned = (string * spl * IntExprSet.t * IntExprSet.t * IntExprSet.t * breakdown list)
+type breakdown_enhanced = (boolexpr * (intexpr * intexpr) list * spl * spl * spl * spl)
+;;
+
+type rstep_partitioned = (string * spl * IntExprSet.t * IntExprSet.t * IntExprSet.t * breakdown_enhanced list)
 ;;
 
 type lib = rstep_partitioned list
@@ -47,20 +50,22 @@ end)
 
 (******** PRINTING *******)
 
-let string_of_breakdown ((condition, freedoms, desc, desc_with_calls):breakdown) : string = 
-  "APPLICABLE\t"^(string_of_boolexpr condition)^"\n"
-  ^"FREEDOM\t\t"^(String.concat ", " (List.map string_of_intexpr_intexpr freedoms))^"\n"
-  ^"DESCEND\t\t"^(string_of_spl desc)^"\n"
-  ^"DESCEND - CALLS\t"^(string_of_spl desc_with_calls)^"\n"
+let string_of_breakdown_enhanced ((condition, freedoms, desc, desc_with_calls, desc_with_calls_cons, desc_with_calls_comp):breakdown_enhanced) : string = 
+  "APPLICABLE\t\t"^(string_of_boolexpr condition)^"\n"
+  ^"FREEDOM\t\t\t"^(String.concat ", " (List.map string_of_intexpr_intexpr freedoms))^"\n"
+  ^"DESCEND\t\t\t"^(string_of_spl desc)^"\n"
+  ^"DESCEND - CALLS\t\t"^(string_of_spl desc_with_calls)^"\n"
+  ^"DESCEND - CALLS CONS\t"^(string_of_spl desc_with_calls_cons)^"\n"
+  ^"DESCEND - CALLS COMP\t"^(string_of_spl desc_with_calls_comp)^"\n"
 ;;
 
 let string_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns ): rstep_partitioned) : string =
-  "NAME\t\t"^name^"\n"
-  ^"RS\t\t"^(string_of_spl rstep)^"\n"
-  ^"COLD\t\t"^(String.concat ", " (List.map string_of_intexpr (IntExprSet.elements cold)))^"\n"
-  ^"REINIT\t\t"^(String.concat ", " (List.map string_of_intexpr (IntExprSet.elements reinit)))^"\n"
-  ^"HOT\t\t"^(String.concat ", " (List.map string_of_intexpr (IntExprSet.elements hot)))^"\n"
-  ^(String.concat "" (List.map string_of_breakdown breakdowns))^"\n"
+  "NAME\t\t\t"^name^"\n"
+  ^"RS\t\t\t"^(string_of_spl rstep)^"\n"
+  ^"COLD\t\t\t"^(String.concat ", " (List.map string_of_intexpr (IntExprSet.elements cold)))^"\n"
+  ^"REINIT\t\t\t"^(String.concat ", " (List.map string_of_intexpr (IntExprSet.elements reinit)))^"\n"
+  ^"HOT\t\t\t"^(String.concat ", " (List.map string_of_intexpr (IntExprSet.elements hot)))^"\n"
+  ^(String.concat "" (List.map string_of_breakdown_enhanced breakdowns))^"\n"
   ^"\n"
 ;;
 
@@ -414,14 +419,27 @@ let lib_from_closure (closure: closure) : lib =
   in
   let (cold,reinit,hot) = partition_map_of_closure closure in
   let f ((name, rstep, _, breakdowns) : rstep_unpartitioned) : rstep_partitioned =
-    let g ((condition, freedoms, desc, desc_with_calls):breakdown) : breakdown = 
+    let g ((condition, freedoms, desc, desc_with_calls):breakdown) : breakdown_enhanced = 
       let h (e:spl) : spl =
 	match e with
 	| UnpartitionnedCall (callee, args) ->
   	  PartitionnedCall(callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)))
 	| x -> x
       in
-      (condition, freedoms, desc, (meta_transform_spl_on_spl BottomUp h) desc_with_calls) in
+      let partitioned = (meta_transform_spl_on_spl BottomUp h) desc_with_calls in
+      let j (e:spl) : spl =
+	match e with
+	  ISum(_, _, PartitionnedCall(callee, cold, [], _)) -> Construct(callee, cold)
+	| ISum(i, high, PartitionnedCall(callee, cold, reinit, _)) -> ISumReinitConstruct(i, high, callee, cold, reinit)
+	| x -> x
+      in
+      let k (e:spl) : spl =
+	match e with
+	  PartitionnedCall(callee, _, [], hot) -> Compute(callee, hot)
+	| ISum(i, high, PartitionnedCall(callee, _, _, hot)) -> ISumReinitCompute(i, high, callee, hot)
+	| x -> x
+      in
+      (condition, freedoms, desc, partitioned, (meta_transform_spl_on_spl BottomUp j) partitioned, (meta_transform_spl_on_spl BottomUp k) partitioned) in
     (name, rstep, (StringMap.find name cold), (StringMap.find name reinit), (StringMap.find name hot), (List.map g breakdowns))
   in
   List.map f closure

@@ -46,6 +46,10 @@ DFT of intexpr
 | ISum of intexpr * intexpr * spl
 | UnpartitionnedCall of string * intexpr IntMap.t
 | PartitionnedCall of string * intexpr list * intexpr list * intexpr list 
+| Construct of string * intexpr list
+| ISumReinitConstruct of intexpr * intexpr * string * intexpr list * intexpr list 
+| Compute of string * intexpr list  
+| ISumReinitCompute of intexpr * intexpr * string * intexpr list 
 ;;
 
 (***********    PRINTING    ************)
@@ -112,6 +116,11 @@ let rec string_of_spl (e : spl) : string =
     f^"("^(String.concat "," (List.map string_of_int_intexpr (IntMap.bindings l)))^")"
   | PartitionnedCall(f, cold, reinit, hot) -> 
     f^"("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr reinit)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr hot)) ^ ")"
+  | Construct(f, cold) -> "Construct-"^f^"("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")"
+  | ISumReinitConstruct(i, high, f, cold, reinit) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", ReinitConstruct-"^f^"("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")(" ^(String.concat "," (List.map string_of_intexpr reinit)) ^ "))"
+  | Compute(f, hot) ->
+    "Compute-"^f^"("^(String.concat "," (List.map string_of_intexpr hot)) ^ ")"
+  | ISumReinitCompute(i, high, f, hot) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", ReinitCompute-"^f^"(" ^(String.concat "," (List.map string_of_intexpr hot)) ^ "))"
 ;;
 
 
@@ -190,6 +199,7 @@ let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f 
     | DFT n -> DFT (g n)
     | UnpartitionnedCall _ -> e
     | PartitionnedCall _ -> e
+    | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ | Construct _ -> assert false
   in
   let intexprs_in_idxfunc (e : idxfunc) : idxfunc =
     match e with 
@@ -290,6 +300,7 @@ let meta_collect_intexpr_on_spl (f : intexpr -> 'a list) : (spl -> 'a list) =
     | T (n, m) -> (ff n) @ (ff m)
     | I n -> ff n
     | DFT n -> ff n
+    | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ | Construct _ -> assert false
   in
   fun (e : spl) ->
     let ff = meta_collect_intexpr_on_intexpr f in
@@ -394,6 +405,7 @@ let rec range (e :spl) : intexpr =
   | RS (spl) -> range spl
   | UnpartitionnedCall _ -> raise InvalidDimException
   | PartitionnedCall _ -> raise InvalidDimException
+  | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ | Construct _ -> assert false
 ;;    
 
 let rec domain (e :spl) : intexpr = 
@@ -411,6 +423,7 @@ let rec domain (e :spl) : intexpr =
   | RS (spl) -> domain spl
   | UnpartitionnedCall _ -> raise InvalidDimException
   | PartitionnedCall _ -> raise InvalidDimException
+  | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ | Construct _ -> assert false
 ;;    
 
 (*********************************************
@@ -461,7 +474,7 @@ let rule_tensor_to_isum : (spl -> spl) =
 	f ( ISum(i, k, Compose( [S(FH(range a, IMul([range a; k]), IMul([range a; i]), IConstant 1)); a ; G(FH(domain a, IMul([domain a; k]), IMul([domain a; i]), IConstant 1)) ] )) :: tl)
     | a :: I(k) :: tl -> 
       let i = gen_loop_counter#get () in 
-      f ( ISum(i, k, Compose( [S(FH(range a, IMul([range a; k]), i, k)); a; G(FH(domain a, IMul([domain a; k]),i , k)) ] )) :: tl)
+      f ( ISum(i, k, Compose( [S(FH(range a, IMul([range a; k]), i, k)); a; G(FH(domain a, IMul([domain a; k]), i, k)) ] )) :: tl)
     | a::tl -> a :: (f tl)
     | [] -> []
   in

@@ -166,9 +166,7 @@ let rec string_of_envrvalue (envrvalue:envrvalue) : string =
   match envrvalue with
     Create(name,args) -> "new "^name^"("^(String.concat ", " (List.map string_of_intrvalue args))^")"
 ;;
-
-
-  
+ 
 
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
   match code with
@@ -201,7 +199,11 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
 ;;
 
 let string_of_code (n:int) (code : code) : string = 
-  (cpp_string_of_code Prototype n code)
-  ^(cpp_string_of_code Implementation n code)
+  "static bool isNotPrime(int a) {return true;} /*FIXME*/\n"
+  ^ "static int divisor(int a) {return 1;} /*FIXME*/\n"
+  ^ "static void error(char* s) {throw s;}\n"
+  ^ "struct RS {};\n\n"
+  ^ (cpp_string_of_code Prototype n code)
+  ^ (cpp_string_of_code Implementation n code)
 ;;
 
