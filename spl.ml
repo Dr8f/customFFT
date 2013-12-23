@@ -45,11 +45,11 @@ DFT of intexpr
 | Diag of idxfunc
 | ISum of intexpr * intexpr * spl
 | UnpartitionnedCall of string * intexpr IntMap.t
-| PartitionnedCall of string * intexpr list * intexpr list * intexpr list 
-| Construct of string * intexpr list
-| ISumReinitConstruct of intexpr * intexpr * string * intexpr list * intexpr list 
-| Compute of string * intexpr list  
-| ISumReinitCompute of intexpr * intexpr * string * intexpr list 
+| PartitionnedCall of int * string * intexpr list * intexpr list * intexpr list 
+| Construct of int * string * intexpr list
+| ISumReinitConstruct of int * intexpr * intexpr * string * intexpr list * intexpr list 
+| Compute of int * string * intexpr list  
+| ISumReinitCompute of int * intexpr * intexpr * string * intexpr list 
 ;;
 
 (***********    PRINTING    ************)
@@ -114,13 +114,13 @@ let rec string_of_spl (e : spl) : string =
   | RS(spl) -> "RS("^(string_of_spl spl)^")"
   | UnpartitionnedCall(f, l) -> 
     f^"("^(String.concat "," (List.map string_of_int_intexpr (IntMap.bindings l)))^")"
-  | PartitionnedCall(f, cold, reinit, hot) -> 
-    f^"("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr reinit)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr hot)) ^ ")"
-  | Construct(f, cold) -> "Construct-"^f^"("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")"
-  | ISumReinitConstruct(i, high, f, cold, reinit) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", ReinitConstruct-"^f^"("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")(" ^(String.concat "," (List.map string_of_intexpr reinit)) ^ "))"
-  | Compute(f, hot) ->
-    "Compute-"^f^"("^(String.concat "," (List.map string_of_intexpr hot)) ^ ")"
-  | ISumReinitCompute(i, high, f, hot) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", ReinitCompute-"^f^"(" ^(String.concat "," (List.map string_of_intexpr hot)) ^ "))"
+  | PartitionnedCall(childcount, f, cold, reinit, hot) -> 
+    "child"^(string_of_int childcount)^"<"^f^">"^"("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr reinit)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr hot)) ^ ")"
+  | Construct(childcount, f, cold) -> "Construct-child"^(string_of_int childcount)^"<"^f^">("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")"
+  | ISumReinitConstruct(childcount, i, high, f, cold, reinit) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", ReinitConstruct-child"^(string_of_int childcount)^"<"^f^">("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")(" ^(String.concat "," (List.map string_of_intexpr reinit)) ^ "))"
+  | Compute(childcount, f, hot) ->
+    "child"^(string_of_int childcount)^"<"^f^">-Compute("^(String.concat "," (List.map string_of_intexpr hot)) ^ ")"
+  | ISumReinitCompute(childcount, i, high, f, hot) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", child"^(string_of_int childcount)^"<"^f^">-ReinitCompute(" ^(String.concat "," (List.map string_of_intexpr hot)) ^ "))"
 ;;
 
 

@@ -52,7 +52,7 @@ let build_header () : string =
 ;;
 
 let build_prototype ((name, rstep, cold, reinit, hot, breakdowns ): rstep_partitioned) = 
-  let g ((condition, freedoms, desc, desc_with_calls):breakdown) : string =
+  let g ((condition, freedoms, desc, desc_with_calls, desc_cons, desc_comp):breakdown_enhanced) : string =
     let h (l,_) : string =
       string_of_statement 4 (IntDecl(l))
     in
@@ -84,11 +84,11 @@ let build_implementation ((name, rstep, cold, reinit, hot, breakdowns ): rstep_p
       match e with
       |Compose l -> Chain (List.map prepare_cons (List.rev l))
       |ISum(i,count,spl) -> Loop2(i,count,(prepare_cons spl)) (*FIXME, there's some hoisting*)
-      |PartitionnedCall(callee,cold,reinit,_) -> prepare_env_cons callee cold reinit
+      |PartitionnedCall(numchild, callee,cold,reinit,_) -> prepare_env_cons callee cold reinit
       | _ -> Error2("nop")
     in
     let rulecount = ref 0 in
-    let g (stmt:statement) ((condition,freedoms,desc,desc_with_calls):breakdown) : statement  =
+    let g (stmt:statement) ((condition,freedoms,desc,desc_with_calls, desc_cons, desc_comp):breakdown_enhanced) : statement  =
       let freedom_assigns = List.map (fun (l,r)->IntAssign(l,r)) freedoms in
       rulecount := !rulecount + 1;
       (* FIXME: [IntAssign(IVar(ITranscendental "_rule"),IConstant !rulecount)] *)
@@ -103,10 +103,10 @@ let build_implementation ((name, rstep, cold, reinit, hot, breakdowns ): rstep_p
     match e with
     |Compose l -> Chain (List.map prepare_body (List.rev l))
     |ISum(i,count,spl) -> Loop2(i,count,(prepare_body spl)) (*FIXME, there's some hoisting*)
-    |PartitionnedCall(callee,_,_,hot) -> prepare_env_body callee hot
+    |PartitionnedCall(numchild, callee,_,_,hot) -> prepare_env_body callee hot
     | _ -> Error2("nop")
   in
-  let g (stmt:statement) ((condition,freedoms,desc,desc_with_calls):breakdown) : statement  =
+  let g (stmt:statement) ((condition,freedoms,desc,desc_with_calls,desc_cons, desc_comp):breakdown_enhanced) : statement  =
     let decls = [Error2("decl_buffer")] in
     envcount := 0;
     rulecount := !rulecount + 1;
@@ -166,6 +166,12 @@ let rec string_of_envrvalue (envrvalue:envrvalue) : string =
   match envrvalue with
     Create(name,args) -> "new "^name^"("^(String.concat ", " (List.map string_of_intrvalue args))^")"
 ;;
+
+let rec string_of_envlvalue (envlvalue:envlvalue) : string = 
+  match envlvalue with
+    Into Var(_,name) -> name
+  | Nth(Var(_,name),count) -> name^"["^(string_of_intrvalue count)^"]"
+;;
  
 
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
@@ -194,7 +200,8 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | Error str -> (white n)^"error(\""^str^"\");\n"
   | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_boolexpr cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
   | Loop(Var(Int,name), intrvalue, code) -> (white n)^"for(int "^name^" = 0; "^name^" < "^(string_of_intrvalue intrvalue)^"; "^name^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
-  | EnvAssign(Var(_, nameL), rvalue) -> (white n) ^ nameL ^ " = "^ (string_of_envrvalue rvalue) ^ ";\n"
+  | Loop(Var(_,_), _, _) -> assert false
+  | EnvAssign(lvalue, rvalue) -> (white n) ^ (string_of_envlvalue lvalue) ^ " = "^ (string_of_envrvalue rvalue) ^ ";\n"
 
 ;;
 

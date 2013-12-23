@@ -420,23 +420,25 @@ let lib_from_closure (closure: closure) : lib =
   let (cold,reinit,hot) = partition_map_of_closure closure in
   let f ((name, rstep, _, breakdowns) : rstep_unpartitioned) : rstep_partitioned =
     let g ((condition, freedoms, desc, desc_with_calls):breakdown) : breakdown_enhanced = 
+      let childcount = ref 0 in
       let h (e:spl) : spl =
 	match e with
 	| UnpartitionnedCall (callee, args) ->
-  	  PartitionnedCall(callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)))
+	  childcount := !childcount + 1;
+  	  PartitionnedCall(!childcount, callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)))
 	| x -> x
       in
       let partitioned = (meta_transform_spl_on_spl BottomUp h) desc_with_calls in
       let j (e:spl) : spl =
 	match e with
-	  ISum(_, _, PartitionnedCall(callee, cold, [], _)) -> Construct(callee, cold)
-	| ISum(i, high, PartitionnedCall(callee, cold, reinit, _)) -> ISumReinitConstruct(i, high, callee, cold, reinit)
+	  ISum(_, _, PartitionnedCall(childcount, callee, cold, [], _)) -> Construct(childcount, callee, cold)
+	| ISum(i, high, PartitionnedCall(childcount, callee, cold, reinit, _)) -> ISumReinitConstruct(childcount, i, high, callee, cold, reinit)
 	| x -> x
       in
       let k (e:spl) : spl =
 	match e with
-	  PartitionnedCall(callee, _, [], hot) -> Compute(callee, hot)
-	| ISum(i, high, PartitionnedCall(callee, _, _, hot)) -> ISumReinitCompute(i, high, callee, hot)
+	  PartitionnedCall(childcount, callee, _, [], hot) -> Compute(childcount, callee, hot)
+	| ISum(i, high, PartitionnedCall(childcount, callee, _, _, hot)) -> ISumReinitCompute(childcount, i, high, callee, hot)
 	| x -> x
       in
       (condition, freedoms, desc, partitioned, (meta_transform_spl_on_spl BottomUp j) partitioned, (meta_transform_spl_on_spl BottomUp k) partitioned) in
