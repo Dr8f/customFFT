@@ -176,21 +176,30 @@ let rec string_of_envlvalue (envlvalue:envlvalue) : string =
 
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
   match code with
-    Class(name,vars,cons) -> 
-      let colds = (List.map (fun var -> 
+    Class(name,cold,reinit,hot,cons,comp) -> 
+      let cons_args = (List.map (fun var -> 
 	let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
-      ) vars) in
+      ) (cold@reinit)) in
+      let comp_args = (List.map (fun var -> 
+	let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
+      ) hot) in
       (match unparse_type with
 	Prototype -> (white n) ^ "struct "^name^" : public RS {\n" 
 	  ^ (white (n+4)) ^ "int _rule;\n" 
 	  ^ (white (n+4)) ^ "char *_dat;\n" 
-	  ^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") colds))^ (white (n+4))
+	  ^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") cons_args))^ (white (n+4))
       | Implementation -> (white n) ^ name ^ "::")
-      ^ name ^ "(" ^ (String.concat ", " colds)^")" ^ (match unparse_type with
+      ^ name ^ "(" ^ (String.concat ", " cons_args)^")" ^ (match unparse_type with
 	Prototype -> ";\n"
       | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
       ^ (match unparse_type with
-	  Prototype -> (white n) ^ "};\n\n"
+      | Prototype -> (white (n+4))^"void "
+      | Implementation -> (white (n))^"void "^name ^ "::")
+      ^ "compute(" ^ (String.concat ", " ("double* Y"::"double* X"::comp_args)) ^ ")"^ (match unparse_type with
+	Prototype -> ";\n"
+      | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) comp)^(white n)^"}\n")
+      ^ (match unparse_type with
+	Prototype -> (white n) ^ "};\n\n"
       | Implementation -> "\n")
 
 	

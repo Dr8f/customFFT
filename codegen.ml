@@ -25,7 +25,7 @@ type envlvalue =
 ;;
 
 type code =
-  Class of string(*name*) * var list(*cold args*) * code (*cons*)
+  Class of string(*name*) * var list(*cold args*) * var list(*reinit args*) * var list(*hot args*) * code (*cons*) * code (*comp*)  
 | Chain of code list
 | Noop
 | Error of string
@@ -67,7 +67,10 @@ let code_of_lib (lib : lib) : code =
     let (name, rstep, cold, reinit, hot, breakdowns) = rstep_partitioned in 
     Class (name,
 	   List.map (function x -> Var(Int, Spl.string_of_intexpr x)) (IntExprSet.elements cold),
-	   cons_code_of_rstep_partitioned rstep_partitioned		 
+	   List.map (function x -> Var(Int, Spl.string_of_intexpr x)) (IntExprSet.elements reinit),
+	   List.map (function x -> Var(Int, Spl.string_of_intexpr x)) (IntExprSet.elements hot),
+	   cons_code_of_rstep_partitioned rstep_partitioned,	   
+	   Error("NOT IMPLEMENTED")
     )
   in
   Chain (List.map f lib)
