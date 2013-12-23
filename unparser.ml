@@ -97,7 +97,7 @@ let build_implementation ((name, rstep, cold, reinit, hot, breakdowns ): rstep_p
   let code_cons = List.fold_left g (Error2("no error")) breakdowns in 
   let prepare_env_body (rs:string) (hot:intexpr list) : statement =
     envcount := !envcount + 1; (*FIXME the arrays they are not correct*)
-    EnvCall (rs, SimpleEnv !envcount,("->compute("^(String.concat ", " (List.map string_of_intexpr hot))^")"))
+    EnvCall (rs, SimpleEnv !envcount,("->compute("^(String.concat ", " (List.map string_of_intexpr hot))^");"))
   in
   let rec prepare_body (e:spl) : statement =
     match e with
@@ -211,6 +211,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | Loop(Var(Int,name), intrvalue, code) -> (white n)^"for(int "^name^" = 0; "^name^" < "^(string_of_intrvalue intrvalue)^"; "^name^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | Loop(Var(_,_), _, _) -> assert false
   | EnvAssign(lvalue, rvalue) -> (white n) ^ (string_of_envlvalue lvalue) ^ " = "^ (string_of_envrvalue rvalue) ^ ";\n"
+  | MethodCall(lvalue, methodname,args) -> (white n) ^ (string_of_envlvalue lvalue) ^ "."^methodname^"("^(String.concat ", " ("Y"::"X"::(List.map string_of_intrvalue args)))^");\n" 
 
 ;;
 
