@@ -21,7 +21,6 @@ type intexpr =
 type boolexpr =
   IsNotPrime of intexpr 
 | And of boolexpr list
-| IntEqual of intexpr * intexpr
 ;;
 
 type idxfunc = 
@@ -79,7 +78,6 @@ let rec string_of_boolexpr (e : boolexpr) : string =
   match e with
     IsNotPrime(l)->"isNotPrime("^string_of_intexpr l^")"
   | And(l)->optional_short_print "And" (String.concat " && " (List.map string_of_boolexpr l))
-  | IntEqual(l,r)->"("^(string_of_intexpr l)^" == "^(string_of_intexpr r)^")"
 ;;
 
 let string_of_intexpr_intexpr ((e,f) : intexpr * intexpr) : string = 
