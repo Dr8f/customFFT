@@ -1,10 +1,6 @@
 open Spl
 ;;
 
-(**********************
-      ALGO
-***********************)
-
 let gen_freedom_var =
 object 
   val tbl = ref 0;
