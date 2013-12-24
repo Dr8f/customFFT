@@ -15,6 +15,11 @@ type intrvalue =
 | ValueOf of Spl.intexpr
 ;;
 
+type boolrvalue = 
+  Equal of intrvalue * intrvalue
+| BoolValueOf of Spl.boolexpr
+;;
+
 type envrvalue = 
 Create of string * intrvalue list
 ;;
@@ -32,7 +37,7 @@ type code =
 | IntAssign of var * intrvalue 
 | EnvAssign of envlvalue * envrvalue
 | MethodCall of envlvalue * string * intrvalue list
-| If of Spl.boolexpr * code * code
+| If of boolrvalue * code * code
 | Loop of var * intrvalue * code
 ;;
 
@@ -55,7 +60,7 @@ Loop(loopvar, ValueOf count, (prepare_env_cons (Nth(Var(Env, "child"^(string_of_
     let freedom_assigns = List.map (fun (l,r)->IntAssign(Var(Int,Spl.string_of_intexpr l), ContentsOf(Var(Int,Spl.string_of_intexpr r)))) freedoms in
     rulecount := !rulecount + 1;
     
-    If(condition, 
+    If((BoolValueOf condition), 
        Chain( [IntAssign(Var(Int, "_rule"), ValueOf(Spl.IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]), 
        Error("no applicable rules"))
       
@@ -83,7 +88,7 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
     let freedom_assigns = List.map (fun (l,r)->IntAssign(Var(Int,Spl.string_of_intexpr l), ContentsOf(Var(Int,Spl.string_of_intexpr r)))) freedoms in
     rulecount := !rulecount + 1;
     
-    If(condition, (*FIXME IntEqual Var(Int, "_rule") ValueOf(Spl.IConstant !rulecount)*) 
+    If(Equal(ContentsOf(Var(Int, "_rule")), ValueOf(Spl.IConstant !rulecount)),
        prepare_comp desc_comp, 
        Error("internal error: no valid rule has been selected"))
       

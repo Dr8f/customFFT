@@ -173,6 +173,11 @@ let rec string_of_envlvalue (envlvalue:envlvalue) : string =
   | Nth(Var(_,name),count) -> name^"["^(string_of_intrvalue count)^"]"
 ;;
  
+let rec string_of_boolrvalue (boolrvalue:boolrvalue) : string =
+  match boolrvalue with
+    Equal(a,b) -> "(" ^ (string_of_intrvalue a) ^ " == " ^ (string_of_intrvalue b) ^ ")"
+  | BoolValueOf(boolexpr) -> string_of_boolexpr boolexpr
+;;
 
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
   match code with
@@ -207,7 +212,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | IntAssign(Var(_, nameL), rvalue) -> (white n) ^ nameL ^ " = "^ (string_of_intrvalue rvalue) ^ ";\n"
   | Noop -> (white n)^"/* noop */\n"
   | Error str -> (white n)^"error(\""^str^"\");\n"
-  | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_boolexpr cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
+  | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_boolrvalue cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
   | Loop(Var(Int,name), intrvalue, code) -> (white n)^"for(int "^name^" = 0; "^name^" < "^(string_of_intrvalue intrvalue)^"; "^name^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | Loop(Var(_,_), _, _) -> assert false
   | EnvAssign(lvalue, rvalue) -> (white n) ^ (string_of_envlvalue lvalue) ^ " = "^ (string_of_envrvalue rvalue) ^ ";\n"
