@@ -30,7 +30,7 @@ let rec string_of_intrvalue (intrvalue:intrvalue) : string =
 
 let rec string_of_envrvalue (envrvalue:envrvalue) : string = 
   match envrvalue with
-    Create(name,args) -> "new "^name^"("^(String.concat ", " (List.map string_of_intrvalue args))^")"
+    CreateEnv(name,args) -> "new "^name^"("^(String.concat ", " (List.map string_of_intrvalue args))^")"
 ;;
 
 let rec string_of_envlvalue (envlvalue:envlvalue) : string = 

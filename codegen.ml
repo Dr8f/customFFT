@@ -21,7 +21,7 @@ type boolrvalue =
 ;;
 
 type envrvalue = 
-Create of string * intrvalue list
+CreateEnv of string * intrvalue list
 ;;
 
 type envlvalue = 
@@ -43,7 +43,7 @@ type code =
 
 let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_partitioned) : code =
   let prepare_env_cons (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) : code =
-    EnvAssign (envlvalue,Create(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args))
+    EnvAssign (envlvalue, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args))
   in
 
   let rec prepare_cons (e:Spl.spl) : code =
