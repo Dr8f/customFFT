@@ -3,7 +3,7 @@ open Lib
 
 type ctype = 
   Int
-| Env
+| Env of string
 ;;
 
 type var = 
@@ -36,6 +36,7 @@ type code =
 | Error of string
 | IntAssign of var * intrvalue 
 | EnvAssign of envlvalue * envrvalue
+| EnvArrayAllocate of string * string * intrvalue
 | MethodCall of envlvalue * string * intrvalue list
 | If of boolrvalue * code * code
 | Loop of var * intrvalue * code
@@ -49,10 +50,14 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
   let rec prepare_cons (e:Spl.spl) : code =
     match e with
     | Spl.Compose l -> Chain (List.map prepare_cons (List.rev l)) 
-    | Spl.Construct(numchild, rs, cold) -> prepare_env_cons (Into(Var(Env, "child"^(string_of_int numchild)))) rs cold
+    | Spl.Construct(numchild, rs, cold) -> prepare_env_cons (Into(Var(Env(rs), "child"^(string_of_int numchild)))) rs cold
     | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit) ->
+      let name = "child"^(string_of_int numchild) in
       let loopvar = Var(Int, Spl.string_of_intexpr i) in 
-Loop(loopvar, ValueOf count, (prepare_env_cons (Nth(Var(Env, "child"^(string_of_int numchild)), (ContentsOf(loopvar)))) rs (cold@reinit))) 
+      Chain([
+	EnvArrayAllocate(name, rs, (ValueOf count));
+	Loop(loopvar, ValueOf count, (prepare_env_cons (Nth(Var(Env(rs), name), (ContentsOf(loopvar)))) rs (cold@reinit))) 
+      ])
     | _ -> Error("UNIMPLEMENTED")
   in
   let rulecount = ref 0 in
@@ -77,10 +82,10 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
     match e with
     | Spl.Compose l -> Chain (List.map prepare_comp (List.rev l)) 
     | Spl.ISum(i, count, content) -> Loop(Var(Int, Spl.string_of_intexpr i), ValueOf count, (prepare_comp content))
-    | Spl.Compute(numchild, rs, hot) -> prepare_env_comp (Into(Var(Env, "child"^(string_of_int numchild)))) rs hot
+    | Spl.Compute(numchild, rs, hot) -> prepare_env_comp (Into(Var(Env(rs), "child"^(string_of_int numchild)))) rs hot
     | Spl.ISumReinitCompute(numchild, i, count, rs, hot) -> 
       let loopvar = Var(Int, Spl.string_of_intexpr i) in
-      Loop(loopvar, ValueOf count, (prepare_env_comp (Nth(Var(Env, "child"^(string_of_int numchild)), (ContentsOf(loopvar)))) rs hot ))
+      Loop(loopvar, ValueOf count, (prepare_env_comp (Nth(Var(Env(rs), "child"^(string_of_int numchild)), (ContentsOf(loopvar)))) rs hot ))
     | _ -> Error("UNIMPLEMENTED")
   in
   let rulecount = ref 0 in
