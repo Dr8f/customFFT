@@ -11,12 +11,6 @@ print_string (Lib.string_of_lib lib)
 let code = Codegen.code_of_lib lib
 ;;
 
-(* print_string "********************************\n" *)
-(* ;; *)
-
-(* print_string (Unparser.string_of_lib lib) *)
-(* ;; *)
-
 print_string "********************************\n"
 ;;
 

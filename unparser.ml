@@ -36,7 +36,7 @@ let rec string_of_envrvalue (envrvalue:envrvalue) : string =
 let rec string_of_envlvalue (envlvalue:envlvalue) : string = 
   match envlvalue with
     Into Var(_,name) -> name
-  | Nth(Var(_,name),count) -> name^"["^(string_of_intrvalue count)^"]"
+  | Nth(Var(_, name),count) -> name^"["^(string_of_intrvalue count)^"]"
 ;;
  
 let rec string_of_boolrvalue (boolrvalue:boolrvalue) : string =
