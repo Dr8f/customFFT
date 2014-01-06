@@ -80,13 +80,14 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
 
   let rec prepare_comp (output:string) (input:string) (e:Spl.spl): code =
     match e with
-    | Spl.Compose l -> let count = ref 0 in
-		       let g (res:string list) (_:Spl.spl) : string list = 
-			 count := !count + 1; 
-			 ("T"^(string_of_int !count)) :: res 
-		       in
-		       let buffers = List.fold_left g [] (List.tl l) in
-		       Chain (List.map (fun ((input,output),spl)->(prepare_comp output input spl)) (List.combine (List.combine (input :: buffers) (buffers @ [ output ])) (List.rev l)))
+    | Spl.Compose l -> let buffernames = 
+			 let count = ref 0 in
+			 let g (res:string list) (_:Spl.spl) : string list = 
+			   count := !count + 1; 
+			   ("T"^(string_of_int !count)) :: res 
+			 in
+			 List.fold_left g [] (List.tl l) in
+		       Chain (List.map (fun ((output,input),spl)->(prepare_comp output input spl)) (List.combine (List.combine (buffernames @ [ output ]) (input :: buffernames)) (List.rev l))) (*FIXME buffer allocation goes here *)
     | Spl.ISum(i, count, content) -> Loop(Var(Int, Spl.string_of_intexpr i), ValueOf count, (prepare_comp output input content))
     | Spl.Compute(numchild, rs, hot) -> prepare_env_comp (Into(Var(Env(rs), "child"^(string_of_int numchild)))) rs hot output input
     | Spl.ISumReinitCompute(numchild, i, count, rs, hot) -> 
