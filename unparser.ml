@@ -89,10 +89,10 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | Loop(Var(_,_), _, _) -> assert false
   | EnvAllocateConstruct(lvalue, rvalue) -> (white n) ^ (string_of_envlvalue lvalue) ^ " = new "^ (string_of_envrvalue rvalue) ^ ";\n"
   | EnvArrayAllocate(name,rs,int) -> (white n)^name^" = static_cast<"^rs^"*> (::operator new (sizeof("^rs^"["^(string_of_intrvalue int)^"])));\n"
+  | EnvArrayConstruct(lvalue,rvalue) -> (white n)^"new ("^(string_of_envlvalue lvalue)^") "^(string_of_envrvalue rvalue)^";\n"
   | MethodCall(lvalue, methodname,args, output, input) -> (white n) ^ (string_of_envlvalue lvalue) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_intrvalue args)))^");\n" 
   | BufferAllocate(buf, size) -> (white n)^"double * "^buf^" = LIB_MALLOC("^(string_of_intrvalue size)^");\n"
   | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^buf^", "^(string_of_intrvalue size)^");\n"
-  | EnvLoopConstruct(lvalue,rvalue) -> (white n)^"new ("^(string_of_envlvalue lvalue)^") "^(string_of_envrvalue rvalue)^";\n"
 
 (* ^rs^"("^(String.concat ", " (List.map string_of_intrvalue args))^");\n" *)
 

@@ -37,7 +37,7 @@ type code =
 | IntAssign of var * intrvalue 
 | EnvAllocateConstruct of envlvalue * envrvalue
 | EnvArrayAllocate of string * string * intrvalue
-| EnvLoopConstruct of envlvalue * envrvalue
+| EnvArrayConstruct of envlvalue * envrvalue
 | MethodCall of envlvalue * string * intrvalue list * string * string
 | If of boolrvalue * code * code
 | Loop of var * intrvalue * code
@@ -85,7 +85,7 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
   in
 
   let prepare_env_cons_loop (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) : code =
-    EnvLoopConstruct (envlvalue, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args))
+    EnvArrayConstruct (envlvalue, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args))
   in
 
   let rec prepare_cons (e:Spl.spl) : code =
