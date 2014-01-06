@@ -84,6 +84,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | EnvAssign(lvalue, rvalue) -> (white n) ^ "*" ^ (string_of_envlvalue lvalue) ^ " = "^ (string_of_envrvalue rvalue) ^ ";\n"
   | EnvArrayAllocate(name,rs,int) -> (white n)^name^" = new "^rs^"["^(string_of_intrvalue int)^"];\n"
   | MethodCall(lvalue, methodname,args, output, input) -> (white n) ^ (string_of_envlvalue lvalue) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_intrvalue args)))^");\n" 
+  | BufferAllocate(buf, size) -> (white n)^"double * "^buf^" = LIB_MALLOC("^(string_of_intrvalue size)^");\n"
 
 ;;
 

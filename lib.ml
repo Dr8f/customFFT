@@ -180,7 +180,7 @@ let drop_RS : (spl -> spl) =
   meta_transform_spl_on_spl BottomUp g
 ;;
 
-let replace_by_a_call ((spl,name):spl * string) : spl =
+let replace_by_a_call ((wrapped,(name,unwrapped)) : (spl * (string * spl))) : spl =
   let collect_binds (spl:spl) : 'a list = 
     let binds (i : intexpr) : 'a list =
       match i with
@@ -194,7 +194,7 @@ let replace_by_a_call ((spl,name):spl * string) : spl =
     | ICountWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
     | _ -> failwith "type is not supported"
   in
-  UnpartitionnedCall(name, (mapify (collect_binds spl) IntMap.empty ))
+  UnpartitionnedCall(name, (mapify (collect_binds wrapped) IntMap.empty ), (range unwrapped), (domain unwrapped))
 ;;
 
 let collect_args (rstep : spl) : IntExprSet.t = 
@@ -234,10 +234,11 @@ let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*in
     let args = collect_args rstep in
     let (condition, freedoms, naive_desc) = algo rstep in
     let desc = apply_rewriting_rules (mark_RS(naive_desc)) in
-    let wrapped_RSes = List.map wrap_intexprs (collect_RS desc) in
+    let rses = collect_RS desc in
+    let wrapped_RSes = List.map wrap_intexprs rses in
     let new_steps = List.map unwrap wrapped_RSes in
     let new_names = List.map ensure_name new_steps in
-    let extracts_with_calls = List.map replace_by_a_call (List.combine wrapped_RSes new_names) in
+    let extracts_with_calls = List.map replace_by_a_call (List.combine wrapped_RSes (List.combine new_names rses)) in
     let desc_with_calls = drop_RS (reintegrate_RS desc extracts_with_calls) in
     rsteps := !rsteps @ [(name, rstep, args, [(condition, freedoms, desc, desc_with_calls)])];
   done;
@@ -249,7 +250,7 @@ let dependency_map_of_closure (closure : closure) : SpecArgSet.t SpecArgMap.t =
   let per_rstep ((name, _, _, breakdowns) : rstep_unpartitioned) : _=   
     let per_rule ((_,_,_,desc_with_calls):breakdown) : _ = 
       meta_iter_spl_on_spl ( function
-      | UnpartitionnedCall(callee,vars) ->
+      | UnpartitionnedCall(callee,vars,_,_) ->
 	let g (arg:int) (expr:intexpr) : _ =
     	  let key = (callee,arg) in
     	  let h (e:intexpr): _ =
@@ -280,7 +281,7 @@ let initial_hots_of_closure (closure: closure) : SpecArgSet.t =
   let per_rstep ((name, _, _, breakdowns) : rstep_unpartitioned) : _=   
     let per_rule ((_,_,_,desc_with_calls):breakdown) : _ = 
       meta_iter_spl_on_spl ( function
-      | UnpartitionnedCall(callee,vars) ->
+      | UnpartitionnedCall(callee,vars,_,_) ->
 	let g (arg:int) (expr:intexpr) : _ =
     	  let h (e:intexpr): _ =
     	    match e with
@@ -423,22 +424,22 @@ let lib_from_closure (closure: closure) : lib =
       let childcount = ref 0 in
       let h (e:spl) : spl =
 	match e with
-	| UnpartitionnedCall (callee, args) ->
+	| UnpartitionnedCall (callee, args, range, domain) ->
 	  childcount := !childcount + 1;
-  	  PartitionnedCall(!childcount, callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)))
+  	  PartitionnedCall(!childcount, callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)), range, domain)
 	| x -> x
       in
       let partitioned = (meta_transform_spl_on_spl BottomUp h) desc_with_calls in
       let j (e:spl) : spl =
 	match e with
-	  ISum(_, _, PartitionnedCall(childcount, callee, cold, [], _)) -> Construct(childcount, callee, cold)
-	| ISum(i, high, PartitionnedCall(childcount, callee, cold, reinit, _)) -> ISumReinitConstruct(childcount, i, high, callee, cold, reinit)
+	  ISum(_, _, PartitionnedCall(childcount, callee, cold, [], _,_,_)) -> Construct(childcount, callee, cold)
+	| ISum(i, high, PartitionnedCall(childcount, callee, cold, reinit, _,_,_)) -> ISumReinitConstruct(childcount, i, high, callee, cold, reinit)
 	| x -> x
       in
       let k (e:spl) : spl =
 	match e with
-	  PartitionnedCall(childcount, callee, _, [], hot) -> Compute(childcount, callee, hot)
-	| ISum(i, high, PartitionnedCall(childcount, callee, _, _, hot)) -> ISumReinitCompute(childcount, i, high, callee, hot)
+	  PartitionnedCall(childcount, callee, _, [], hot, range, domain) -> Compute(childcount, callee, hot, range, domain)
+	| ISum(i, high, PartitionnedCall(childcount, callee, _, _, hot,range, domain)) -> ISumReinitCompute(childcount, i, high, callee, hot, range, domain)
 	| x -> x
       in
       (condition, freedoms, desc, partitioned, (meta_transform_spl_on_spl BottomUp j) partitioned, (meta_transform_spl_on_spl BottomUp k) partitioned) in

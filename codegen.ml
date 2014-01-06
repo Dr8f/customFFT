@@ -40,6 +40,7 @@ type code =
 | MethodCall of envlvalue * string * intrvalue list * string * string
 | If of boolrvalue * code * code
 | Loop of var * intrvalue * code
+| BufferAllocate of string * intrvalue
 ;;
 
 let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_partitioned) : code =
@@ -87,10 +88,14 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
 			   ("T"^(string_of_int !count)) :: res 
 			 in
 			 List.fold_left g [] (List.tl l) in
-		       Chain (List.map (fun ((output,input),spl)->(prepare_comp output input spl)) (List.combine (List.combine (buffernames @ [ output ]) (input :: buffernames)) (List.rev l))) (*FIXME buffer allocation goes here *)
+		       let out_in_spl = (List.combine (List.combine (buffernames @ [ output ]) (input :: buffernames)) (List.rev l)) in
+		       let buffers = (List.combine (buffernames) (List.rev (List.tl l))) in
+		       Chain (
+			 (List.map (fun (output,spl)->(BufferAllocate(output,ValueOf(Spl.range spl)))) buffers )
+			 @ (List.map (fun ((output,input),spl)->(prepare_comp output input spl)) out_in_spl))
     | Spl.ISum(i, count, content) -> Loop(Var(Int, Spl.string_of_intexpr i), ValueOf count, (prepare_comp output input content))
-    | Spl.Compute(numchild, rs, hot) -> prepare_env_comp (Into(Var(Env(rs), "child"^(string_of_int numchild)))) rs hot output input
-    | Spl.ISumReinitCompute(numchild, i, count, rs, hot) -> 
+    | Spl.Compute(numchild, rs, hot,_,_) -> prepare_env_comp (Into(Var(Env(rs), "child"^(string_of_int numchild)))) rs hot output input
+    | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
       let loopvar = Var(Int, Spl.string_of_intexpr i) in
       Loop(loopvar, ValueOf count, (prepare_env_comp (Nth(Var(Env(rs), "child"^(string_of_int numchild)), (ContentsOf(loopvar)))) rs hot output input))
     | _ -> Error("UNIMPLEMENTED")

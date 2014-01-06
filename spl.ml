@@ -43,12 +43,12 @@ DFT of intexpr
 | G of idxfunc
 | Diag of idxfunc
 | ISum of intexpr * intexpr * spl
-| UnpartitionnedCall of string * intexpr IntMap.t
-| PartitionnedCall of int * string * intexpr list * intexpr list * intexpr list 
+| UnpartitionnedCall of string * intexpr IntMap.t * intexpr * intexpr
+| PartitionnedCall of int * string * intexpr list * intexpr list * intexpr list * intexpr * intexpr
 | Construct of int * string * intexpr list
 | ISumReinitConstruct of int * intexpr * intexpr * string * intexpr list * intexpr list 
-| Compute of int * string * intexpr list  
-| ISumReinitCompute of int * intexpr * intexpr * string * intexpr list 
+| Compute of int * string * intexpr list * intexpr * intexpr
+| ISumReinitCompute of int * intexpr * intexpr * string * intexpr list * intexpr * intexpr
 ;;
 
 (***********    PRINTING    ************)
@@ -110,15 +110,15 @@ let rec string_of_spl (e : spl) : string =
   | Diag (f) -> "Diag("^(string_of_idxfunc f)^")"
   | ISum (i, high, spl) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^","^(string_of_spl spl)^")"
   | RS(spl) -> "RS("^(string_of_spl spl)^")"
-  | UnpartitionnedCall(f, l) -> 
+  | UnpartitionnedCall(f, l, _, _) -> 
     f^"("^(String.concat "," (List.map string_of_int_intexpr (IntMap.bindings l)))^")"
-  | PartitionnedCall(childcount, f, cold, reinit, hot) -> 
+  | PartitionnedCall(childcount, f, cold, reinit, hot, _, _) -> 
     "child"^(string_of_int childcount)^"<"^f^">"^"("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr reinit)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr hot)) ^ ")"
   | Construct(childcount, f, cold) -> "Construct-child"^(string_of_int childcount)^"<"^f^">("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")"
   | ISumReinitConstruct(childcount, i, high, f, cold, reinit) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", ReinitConstruct-child"^(string_of_int childcount)^"<"^f^">("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")(" ^(String.concat "," (List.map string_of_intexpr reinit)) ^ "))"
-  | Compute(childcount, f, hot) ->
+  | Compute(childcount, f, hot,_,_) ->
     "child"^(string_of_int childcount)^"<"^f^">-Compute("^(String.concat "," (List.map string_of_intexpr hot)) ^ ")"
-  | ISumReinitCompute(childcount, i, high, f, hot) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", child"^(string_of_int childcount)^"<"^f^">-ReinitCompute(" ^(String.concat "," (List.map string_of_intexpr hot)) ^ "))"
+  | ISumReinitCompute(childcount, i, high, f, hot, _, _) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", child"^(string_of_int childcount)^"<"^f^">-ReinitCompute(" ^(String.concat "," (List.map string_of_intexpr hot)) ^ "))"
 ;;
 
 
@@ -385,9 +385,6 @@ let rec func_domain (e : idxfunc) : intexpr =
 | Pre(l) -> func_domain l
 ;;
 
-exception InvalidDimException
-;;
-
 let rec range (e :spl) : intexpr = 
   match e with
     DFT(n) -> n
@@ -401,9 +398,12 @@ let rec range (e :spl) : intexpr =
   | Diag (f) -> func_domain f
   | ISum (_, _, spl) -> range spl
   | RS (spl) -> range spl
-  | UnpartitionnedCall _ -> raise InvalidDimException
-  | PartitionnedCall _ -> raise InvalidDimException
-  | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ | Construct _ -> assert false
+  | UnpartitionnedCall _ -> assert false
+  | PartitionnedCall _ -> assert false
+  | ISumReinitCompute (_, _, _, _, _, range, _) -> range
+  | Compute (_,_,_,range,_) -> range
+  | ISumReinitConstruct _ -> assert false
+  | Construct _ -> assert false
 ;;    
 
 let rec domain (e :spl) : intexpr = 
@@ -419,9 +419,12 @@ let rec domain (e :spl) : intexpr =
   | Diag (f) -> func_domain f (* by definition a diag range is equal to a diag domain. However the range of the function is larger but noone cares since its precomputed*)
   | ISum (_, _, spl) -> domain spl
   | RS (spl) -> domain spl
-  | UnpartitionnedCall _ -> raise InvalidDimException
-  | PartitionnedCall _ -> raise InvalidDimException
-  | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ | Construct _ -> assert false
+  | UnpartitionnedCall _ -> assert false
+  | PartitionnedCall _ -> assert false
+  | ISumReinitCompute (_, _, _, _, _, _, domain) -> domain
+  | Compute (_,_,_,_,domain) -> domain
+  | ISumReinitConstruct _ -> assert false
+  | Construct _ -> assert false
 ;;    
 
 (*********************************************
