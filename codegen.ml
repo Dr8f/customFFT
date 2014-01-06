@@ -41,6 +41,7 @@ type code =
 | If of boolrvalue * code * code
 | Loop of var * intrvalue * code
 | BufferAllocate of string * intrvalue
+| BufferDeallocate of string * intrvalue
 ;;
 
 let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_partitioned) : code =
@@ -89,10 +90,12 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
 			 in
 			 List.fold_left g [] (List.tl l) in
 		       let out_in_spl = (List.combine (List.combine (buffernames @ [ output ]) (input :: buffernames)) (List.rev l)) in
-		       let buffers = (List.combine (buffernames) (List.rev (List.tl l))) in
+		       let buffers = (List.combine (buffernames) (List.map Spl.range (List.rev (List.tl l)))) in
 		       Chain (
-			 (List.map (fun (output,spl)->(BufferAllocate(output,ValueOf(Spl.range spl)))) buffers )
-			 @ (List.map (fun ((output,input),spl)->(prepare_comp output input spl)) out_in_spl))
+			 (List.map (fun (output,size)->(BufferAllocate(output,ValueOf(size)))) buffers)
+			 @ (List.map (fun ((output,input),spl)->(prepare_comp output input spl)) out_in_spl)
+			 @ (List.map (fun (output,size)->(BufferDeallocate(output,ValueOf(size)))) buffers)
+		       )
     | Spl.ISum(i, count, content) -> Loop(Var(Int, Spl.string_of_intexpr i), ValueOf count, (prepare_comp output input content))
     | Spl.Compute(numchild, rs, hot,_,_) -> prepare_env_comp (Into(Var(Env(rs), "child"^(string_of_int numchild)))) rs hot output input
     | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
