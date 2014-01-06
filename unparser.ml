@@ -35,7 +35,7 @@ let rec string_of_envrvalue (envrvalue:envrvalue) : string =
 
 let rec string_of_envlvalue (envlvalue:envlvalue) : string = 
   match envlvalue with
-    Into Var(Env(rs),name) -> name(* "(reinterpret_cast<"^rs^" *>("^name^"))" *)
+    Into Var(Env(rs),name) -> "(reinterpret_cast<"^rs^" *>("^name^"))" 
   | Nth(Var(Env(rs), name),count) ->"(reinterpret_cast<"^rs^" *>("^name^")+"^(string_of_intrvalue count)^")"
 ;;
  
@@ -87,7 +87,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_boolrvalue cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
   | Loop(Var(Int,name), intrvalue, code) -> (white n)^"for(int "^name^" = 0; "^name^" < "^(string_of_intrvalue intrvalue)^"; "^name^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | Loop(Var(_,_), _, _) -> assert false
-  | EnvAllocateConstruct(lvalue, rvalue) -> (white n) ^ (string_of_envlvalue lvalue) ^ " = new "^ (string_of_envrvalue rvalue) ^ ";\n"
+  | EnvAllocateConstruct(var, rvalue) -> (white n) ^ var ^ " = new "^ (string_of_envrvalue rvalue) ^ ";\n"
   | EnvArrayAllocate(name,rs,int) -> (white n)^name^" = static_cast<"^rs^"*> (::operator new (sizeof("^rs^"["^(string_of_intrvalue int)^"])));\n"
   | EnvArrayConstruct(lvalue,rvalue) -> (white n)^"new ("^(string_of_envlvalue lvalue)^") "^(string_of_envrvalue rvalue)^";\n"
   | MethodCall(lvalue, methodname,args, output, input) -> (white n) ^ (string_of_envlvalue lvalue) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_intrvalue args)))^");\n" 

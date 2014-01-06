@@ -35,7 +35,7 @@ type code =
 | Noop
 | Error of string
 | IntAssign of var * intrvalue 
-| EnvAllocateConstruct of envlvalue * envrvalue
+| EnvAllocateConstruct of string * envrvalue
 | EnvArrayAllocate of string * string * intrvalue
 | EnvArrayConstruct of envlvalue * envrvalue
 | MethodCall of envlvalue * string * intrvalue list * string * string
@@ -80,8 +80,8 @@ let collect_freedoms ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_part
 ;;
 
 let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_partitioned) : code =
-  let prepare_env_cons (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) : code =
-    EnvAllocateConstruct (envlvalue, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args))
+  let prepare_env_cons (var:string) (rs:string) (args:Spl.intexpr list) : code =
+    EnvAllocateConstruct (var, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args))
   in
 
   let prepare_env_cons_loop (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) : code =
@@ -91,7 +91,7 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
   let rec prepare_cons (e:Spl.spl) : code =
     match e with
     | Spl.Compose l -> Chain (List.map prepare_cons (List.rev l)) 
-    | Spl.Construct(numchild, rs, cold) -> prepare_env_cons (Into(Var(Env(rs), "child"^(string_of_int numchild)))) rs cold
+    | Spl.Construct(numchild, rs, cold) -> prepare_env_cons ("child"^(string_of_int numchild)) rs cold
     | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit) ->
       let name = "child"^(string_of_int numchild) in
       let loopvar = Var(Int, Spl.string_of_intexpr i) in 
