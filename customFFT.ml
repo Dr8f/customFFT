@@ -20,13 +20,11 @@ let cppcode = (Unparser.string_of_code 0 code)
 print_string cppcode
 ;;
 
-open Printf
-
-let file = "result.cpp"
+let file = "result/result.cpp"
 
 let () =
   let oc = open_out file in    
-  fprintf oc "%s\n" cppcode;   
+  Printf.fprintf oc "%s\n" cppcode;   
   close_out oc;                
 
 

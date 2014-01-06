@@ -102,12 +102,12 @@ let string_of_code (n:int) (code : code) : string =
   "#include <new>\n"
   ^ "#include <string>\n"
   ^ "#include <stdlib.h>\n"
-  ^ "static bool isNotPrime(int a) {return true;} /*FIXME*/\n"
-  ^ "static int divisor(int a) {return 1;} /*FIXME*/\n"
+  ^ "static bool isNotPrime(int ) {return true;} /*FIXME*/\n"
+  ^ "static int divisor(int ) {return 1;} /*FIXME*/\n"
   ^ "static void error(std::string s) {throw s;}\n"
-  ^ "double * LIB_MALLOC(size_t size) {return (double *)malloc(size);}"
-  ^ "void LIB_FREE(void *ptr, size_t size) {free(ptr);}"
-  ^ "struct RS {};\n\n"
+  ^ "double * LIB_MALLOC(size_t size) {return (double *)malloc(size);}\n"
+  ^ "void LIB_FREE(void *ptr, size_t) {free(ptr);}\n"
+  ^ "struct RS { virtual ~RS(){}};\n\n"
   ^ (cpp_string_of_code Prototype n code)
   ^ (cpp_string_of_code Implementation n code)
 ;;
