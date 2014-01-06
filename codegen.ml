@@ -35,8 +35,9 @@ type code =
 | Noop
 | Error of string
 | IntAssign of var * intrvalue 
-| EnvAssign of envlvalue * envrvalue
+| EnvAllocateConstruct of envlvalue * envrvalue
 | EnvArrayAllocate of string * string * intrvalue
+| EnvLoopConstruct of envlvalue * envrvalue
 | MethodCall of envlvalue * string * intrvalue list * string * string
 | If of boolrvalue * code * code
 | Loop of var * intrvalue * code
@@ -80,7 +81,11 @@ let collect_freedoms ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_part
 
 let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_partitioned) : code =
   let prepare_env_cons (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) : code =
-    EnvAssign (envlvalue, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args))
+    EnvAllocateConstruct (envlvalue, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args))
+  in
+
+  let prepare_env_cons_loop (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) : code =
+    EnvLoopConstruct (envlvalue, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args))
   in
 
   let rec prepare_cons (e:Spl.spl) : code =
@@ -92,7 +97,7 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
       let loopvar = Var(Int, Spl.string_of_intexpr i) in 
       Chain([
 	EnvArrayAllocate(name, rs, (ValueOf count));
-	Loop(loopvar, ValueOf count, (prepare_env_cons (Nth(Var(Env(rs), name), (ContentsOf(loopvar)))) rs (cold@reinit))) 
+	Loop(loopvar, ValueOf count, (prepare_env_cons_loop (Nth(Var(Env(rs), name), (ContentsOf(loopvar)))) rs (cold@reinit))) 
       ])
     | _ -> Error("UNIMPLEMENTED")
   in
