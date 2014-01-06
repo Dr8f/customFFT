@@ -47,18 +47,24 @@ let rec string_of_boolrvalue (boolrvalue:boolrvalue) : string =
 
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
   match code with
-    Class(name,cold,reinit,hot,cons,comp,output,input) -> 
+    Class(name,cold,reinit,hot,cons,comp,output,input,children,freedoms) -> 
       let cons_args = (List.map (fun var -> 
 	let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
       ) (cold@reinit)) in
       let comp_args = (List.map (fun var -> 
 	let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
       ) hot) in
+      let freedoms_args = (List.map (fun var -> 
+	let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
+      ) freedoms) in
       (match unparse_type with
 	Prototype -> (white n) ^ "struct "^name^" : public RS {\n" 
 	  ^ (white (n+4)) ^ "int _rule;\n" 
 	  ^ (white (n+4)) ^ "char *_dat;\n" 
-	  ^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") cons_args))^ (white (n+4))
+	  ^ (String.concat "" (List.map (fun x -> (white (n+4))^"RS *"^x^";\n") children))
+	  ^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") cons_args))
+	  ^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") freedoms_args))
+	  ^ (white (n+4))
       | Implementation -> (white n) ^ name ^ "::")
       ^ name ^ "(" ^ (String.concat ", " cons_args)^")" ^ (match unparse_type with
 	Prototype -> ";\n"

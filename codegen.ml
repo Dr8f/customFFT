@@ -30,7 +30,7 @@ type envlvalue =
 ;;
 
 type code =
-  Class of string(*name*) * var list(*cold args*) * var list(*reinit args*) * var list(*hot args*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*)
+  Class of string(*name*) * var list(*cold args*) * var list(*reinit args*) * var list(*hot args*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * string list (*childX*) * var list (*freedoms*)
 | Chain of code list
 | Noop
 | Error of string
@@ -42,6 +42,40 @@ type code =
 | Loop of var * intrvalue * code
 | BufferAllocate of string * intrvalue
 | BufferDeallocate of string * intrvalue
+;;
+
+(* let meta_collect_code_on_code (f : code -> 'a list) : (code -> 'a list) = *)
+(*   let z (g : code -> 'a list) (e : code) : 'a list = *)
+(*     match e with *)
+(*     | Class(_,_,_,_,cons,comp,_,_,_,_) -> (g cons) @ (g comp) *)
+(*     | Chain l -> List.flatten (List.map g l) *)
+(*     | If(_,a,b) -> (g a)@(g b) *)
+(*     | Loop(_,_,c) -> g c *)
+(*     | _ -> [] *)
+(*   in *)
+(*   Spl.recursion_collect f z *)
+(* ;; *)
+
+let collect_children ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_partitioned) : string list =
+  let res = ref [] in  
+  let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
+    Spl.meta_iter_spl_on_spl (function
+    | Spl.Construct(numchild, _, _) -> res := ("child"^(string_of_int numchild))::!res
+    | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit) -> res := ("child"^(string_of_int numchild))::!res
+    | _ -> ()
+    ) desc_cons;    
+  in
+  List.iter g breakdowns;
+  !res
+;;
+
+let collect_freedoms ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_partitioned) : var list =
+  let res = ref [] in  
+  let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
+    res := (List.map (fun (l,r)->Var(Int,Spl.string_of_intexpr l)) freedoms) @ !res    
+  in
+  List.iter g breakdowns;
+  !res  
 ;;
 
 let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_partitioned) : code =
@@ -74,6 +108,7 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
   in
   List.fold_left g (Error("no error")) breakdowns
 ;;
+
 
 let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_partitioned) (output:string) (input:string): code =
   let prepare_env_comp (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) (output:string) (input:string): code =
@@ -130,7 +165,9 @@ let code_of_lib (lib : lib) : code =
 	   cons_code_of_rstep_partitioned rstep_partitioned,
 	   comp_code_of_rstep_partitioned rstep_partitioned output input,
 	   output,
-	   input
+	   input,
+	   collect_children rstep_partitioned,
+	   collect_freedoms rstep_partitioned
     )
   in
   Chain (List.map f lib)
