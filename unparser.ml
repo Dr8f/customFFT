@@ -68,7 +68,9 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
       | Implementation -> (white n) ^ name ^ "::")
       ^ name ^ "(" ^ (String.concat ", " cons_args)^")" ^ (match unparse_type with
 	Prototype -> ";\n"
-      | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
+      | Implementation -> " : \n"
+	^ (String.concat (", \n") ((List.map (fun x -> let Var(ctype, name) = x in (white (n+4))^name^"("^name^")") (cold@reinit)) )) ^ "\n"
+	^ (white n) ^"{\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
       ^ (match unparse_type with
       | Prototype -> (white (n+4))^"void "
       | Implementation -> (white (n))^"void "^name ^ "::")
