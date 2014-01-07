@@ -76,7 +76,10 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
 	Prototype -> ";\n"
       | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) comp)^(white n)^"}\n")
       ^ (match unparse_type with
-	Prototype -> (white n) ^ "};\n\n"
+	Prototype -> (white n) ^ "private:" ^ "\n"
+	  ^ (white (n+4)) ^ name ^ "(const " ^ name ^ "&);" ^ "\n"
+	  ^ (white (n+4)) ^ name ^ "& operator=(const " ^ name ^"&);" ^ "\n"
+	  ^ "};\n\n"
       | Implementation -> "\n")
 
 	
