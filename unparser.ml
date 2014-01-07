@@ -88,7 +88,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | Loop(Var(Int,name), intrvalue, code) -> (white n)^"for(int "^name^" = 0; "^name^" < "^(string_of_intrvalue intrvalue)^"; "^name^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | Loop(Var(_,_), _, _) -> assert false
   | EnvAllocateConstruct(var, rvalue) -> (white n) ^ var ^ " = new "^ (string_of_envrvalue rvalue) ^ ";\n"
-  | EnvArrayAllocate(name,rs,int) -> (white n)^name^" = static_cast<"^rs^"*> (::operator new (sizeof("^rs^"["^(string_of_intrvalue int)^"])));\n"
+  | EnvArrayAllocate(name,rs,int) -> (white n)^name^" = ("^rs^"*) malloc (sizeof("^rs^") * "^(string_of_intrvalue int)^");\n"
   | EnvArrayConstruct(lvalue,rvalue) -> (white n)^"new ("^(string_of_envlvalue lvalue)^") "^(string_of_envrvalue rvalue)^";\n"
   | MethodCall(lvalue, methodname,args, output, input) -> (white n) ^ (string_of_envlvalue lvalue) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_intrvalue args)))^");\n" 
   | BufferAllocate(buf, size) -> (white n)^"double * "^buf^" = LIB_MALLOC("^(string_of_intrvalue size)^");\n"
@@ -105,7 +105,7 @@ let string_of_code (n:int) (code : code) : string =
   ^ "static bool isNotPrime(int ) {return true;} /*FIXME*/\n"
   ^ "static int divisor(int ) {return 1;} /*FIXME*/\n"
   ^ "static void error(std::string s) {throw s;}\n"
-  ^ "double * LIB_MALLOC(size_t size) {return (double *)malloc(size);}\n"
+  ^ "double * LIB_MALLOC(size_t size) {return (double *)malloc(size * sizeof(double));}\n"
   ^ "void LIB_FREE(void *ptr, size_t) {free(ptr);}\n"
   ^ "struct RS { virtual ~RS(){}};\n\n"
   ^ (cpp_string_of_code Prototype n code)
