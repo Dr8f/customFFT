@@ -107,12 +107,16 @@ let string_of_code (n:int) (code : code) : string =
   "#include <new>\n"
   ^ "#include <string>\n"
   ^ "#include <stdlib.h>\n"
+  ^ "#include <complex>\n\n"
   ^ "static bool isNotPrime(int ) {return true;} /*FIXME*/\n"
   ^ "static int divisor(int ) {return 1;} /*FIXME*/\n"
   ^ "static void error(std::string s) {throw s;}\n"
   ^ "double * LIB_MALLOC(size_t size) {return (double *)malloc(size * sizeof(double));}\n"
   ^ "void LIB_FREE(void *ptr, size_t) {free(ptr);}\n"
-  ^ "struct RS { virtual ~RS(){}};\n\n"
+  ^ "struct RS { virtual ~RS(){}};\n"
+  ^ "template<class T> struct TFunc_TInt_T : public RS { virtual T at(int) = 0; };\n"
+  ^ "#define complex_t std::complex<double>\n"
+  ^ "struct TFunc_TInt_TComplex : public TFunc_TInt_T<complex_t> {};\n\n"
   ^ (cpp_string_of_code Prototype n code)
   ^ (cpp_string_of_code Implementation n code)
 ;;
