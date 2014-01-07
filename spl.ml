@@ -29,6 +29,8 @@ type idxfunc =
 | FD of intexpr * intexpr
 | FCompose of idxfunc list
 | Pre of idxfunc (* Precompute *)
+| PreWrap of int * idxfunc * intexpr (*domain*)
+| FArg of int * intexpr (*domain*)
 ;;
 
 type spl =
@@ -43,7 +45,7 @@ DFT of intexpr
 | G of idxfunc
 | Diag of idxfunc
 | ISum of intexpr * intexpr * spl
-| UnpartitionnedCall of string * intexpr IntMap.t * intexpr * intexpr
+| UnpartitionnedCall of string * intexpr IntMap.t * idxfunc IntMap.t * intexpr * intexpr
 | PartitionnedCall of int * string * intexpr list * intexpr list * intexpr list * intexpr * intexpr
 | Construct of int * string * intexpr list
 | ISumReinitConstruct of int * intexpr * intexpr * string * intexpr list * intexpr list 
@@ -69,7 +71,7 @@ let rec string_of_intexpr (e : intexpr) : string =
   | IDivPerfect(l,r) -> optional_short_print "IDivPerfect" ((string_of_intexpr l)^"/"^(string_of_intexpr r))
   | ICountWrap (l,r) -> "["^string_of_int l^"]"^string_of_intexpr r
   | IDivisor(l)->"divisor("^string_of_intexpr l^")"
-  | IFreedom i -> "f"^(string_of_int i)
+  | IFreedom i -> "d"^(string_of_int i)
   | ILoopCounter i -> "i" ^ (string_of_int i)
   | IArg i -> "u"^(string_of_int i)
 ;;
@@ -95,6 +97,12 @@ let rec string_of_idxfunc (e : idxfunc) : string =
   | FD(j,k) -> "d("^(string_of_intexpr j)^","^(string_of_intexpr k)^")"      
   | FCompose(list) -> optional_short_print "fCompose" (String.concat " . " (List.map string_of_idxfunc list))
   | Pre(l) -> "pre("^(string_of_idxfunc l)^")"
+  | PreWrap(i, l, d) -> "["^(string_of_int i)^"("^(string_of_intexpr d)^")]pre("^(string_of_idxfunc l)^")"
+  | FArg(i,d) -> "f"^(string_of_int i)^"("^(string_of_intexpr d)^")"
+;;
+
+let string_of_int_idxfunc ((e,f):int * idxfunc) : string =
+  "["^(string_of_int e)^"]"^(string_of_idxfunc f)
 ;;
 
 let rec string_of_spl (e : spl) : string =
@@ -110,8 +118,8 @@ let rec string_of_spl (e : spl) : string =
   | Diag (f) -> "Diag("^(string_of_idxfunc f)^")"
   | ISum (i, high, spl) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^","^(string_of_spl spl)^")"
   | RS(spl) -> "RS("^(string_of_spl spl)^")"
-  | UnpartitionnedCall(f, l, _, _) -> 
-    f^"("^(String.concat "," (List.map string_of_int_intexpr (IntMap.bindings l)))^")"
+  | UnpartitionnedCall(f, l, m, _, _) -> 
+    f^"("^(String.concat "," ((List.map string_of_int_intexpr (IntMap.bindings l)) @ ((List.map string_of_int_idxfunc (IntMap.bindings m)))))^")" 
   | PartitionnedCall(childcount, f, cold, reinit, hot, _, _) -> 
     "child"^(string_of_int childcount)^"<"^f^">"^"("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr reinit)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr hot)) ^ ")"
   | Construct(childcount, f, cold) -> "Construct-child"^(string_of_int childcount)^"<"^f^">("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")"
@@ -209,6 +217,8 @@ let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f 
     | FD (a, b) -> let ga = g a in FD (ga, g b)
     | FCompose _ -> e
     | Pre _ -> e
+    | PreWrap (i,f,d) -> PreWrap(i,f, (g d)) (*FIXME*)
+    | FArg _ -> e (*FIXME*)
   in
   fun (e : spl) ->
     (meta_transform_spl_on_spl recursion_direction intexprs_in_spl) ((meta_transform_idxfunc_on_spl recursion_direction intexprs_in_idxfunc) e)
@@ -240,6 +250,8 @@ let meta_collect_idxfunc_on_idxfunc (f : idxfunc -> 'a list) : (idxfunc -> 'a li
       FH _ | FL _ | FD _ -> []
     | FCompose l ->  List.flatten (List.map g l)
     | Pre x -> g x
+    | PreWrap(i,x,d) -> g x (*FIXME*)
+    | FArg _ -> [] (* FIXME*)
   in
   recursion_collect f z
 ;;
@@ -383,6 +395,8 @@ let rec func_domain (e : idxfunc) : intexpr =
 | FD (n, _) -> n
 | FCompose (l) -> func_domain (List.hd (List.rev l))
 | Pre(l) -> func_domain l
+| PreWrap(_,l,d) -> d
+| FArg (_,d)->d
 ;;
 
 let rec range (e :spl) : intexpr = 

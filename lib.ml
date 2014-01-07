@@ -143,8 +143,21 @@ let wrap_intexprs_naively (e :spl) : spl =
   (meta_transform_intexpr_on_spl TopDown f) e
 ;;
 
+let wrap_precompute (e :spl) : spl =
+  let count = ref 0 in
+  let f (i : idxfunc) : idxfunc = 
+    match i with 
+      Pre f ->       
+	count := !count + 1; 
+	PreWrap(!count, f, (func_domain f))
+    | x -> x
+  in
+  (meta_transform_idxfunc_on_spl TopDown f) e  
+;;
+
 let wrap_intexprs (e : spl) : spl  =
-  let wrapup = wrap_intexprs_naively e in
+  let wrap_functions = wrap_precompute  e in
+  let wrapup = wrap_intexprs_naively wrap_functions in
   let constraints = extract_constraints_spl wrapup in
   let res = reconcile_constraints constraints wrapup in
   res
@@ -168,7 +181,12 @@ let unwrap (e:spl) : spl =
       ICountWrap(l,r)->IArg l
     | x -> x
   in
-  (meta_transform_intexpr_on_spl TopDown g) e
+  let h (e:idxfunc) : idxfunc = 
+    match e with
+      PreWrap(i,x,d)->Pre(FArg(i,d))
+    | x -> x
+  in
+  (meta_transform_idxfunc_on_spl TopDown h) ((meta_transform_intexpr_on_spl TopDown g) e)
 ;;
 
 let drop_RS : (spl -> spl) =
@@ -181,20 +199,37 @@ let drop_RS : (spl -> spl) =
 ;;
 
 let replace_by_a_call ((wrapped,(name,unwrapped)) : (spl * (string * spl))) : spl =
-  let collect_binds (spl:spl) : 'a list = 
-    let binds (i : intexpr) : 'a list =
+  let collect_binds (spl:spl) : intexpr list = 
+    let binds (i : intexpr) : intexpr list =
       match i with
 	ICountWrap _ -> [i]
       | _ -> []
     in
     ((meta_collect_intexpr_on_spl binds) spl) in
-  let rec mapify (binds : intexpr list) (map : 'a IntMap.t) : 'a IntMap.t =
+  let rec mapify (binds : intexpr list) (map : intexpr IntMap.t) : intexpr IntMap.t =
     match binds with
       [] -> map
     | ICountWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
     | _ -> failwith "type is not supported"
   in
-  UnpartitionnedCall(name, (mapify (collect_binds wrapped) IntMap.empty ), (range unwrapped), (domain unwrapped))
+
+  let fcollect_binds (spl:spl) : idxfunc list = 
+    let binds (i : idxfunc) : idxfunc list =
+      match i with
+	PreWrap _ -> [i]
+      | _ -> []
+    in
+    ((meta_collect_idxfunc_on_spl binds) spl) in
+  let rec fmapify (binds : idxfunc list) (map : idxfunc IntMap.t) : idxfunc IntMap.t =
+    match binds with
+      [] -> map
+    | PreWrap(p,expr,d)::tl -> fmapify tl (IntMap.add p expr map) 
+    | _ -> failwith "type is not supported"
+  in
+
+  let res = UnpartitionnedCall(name, (mapify (collect_binds wrapped) IntMap.empty), (fmapify (fcollect_binds wrapped) IntMap.empty), (range unwrapped), (domain unwrapped)) in 
+  (* print_string ("WIP REPLACING:\nwrapped:"^(string_of_spl wrapped)^"\nunwrapped:"^(string_of_spl unwrapped)^"\nres:"^(string_of_spl res)^"\n\n"); *)
+  res
 ;;
 
 let collect_args (rstep : spl) : IntExprSet.t = 
@@ -228,18 +263,31 @@ let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*in
   in
   List.iter register_name stems;
   while (List.length !under_consideration != 0) do
+    print_string "LOOP\n";
     let rstep = List.hd !under_consideration in
     under_consideration := List.tl !under_consideration;
+    print_string ("WIP RSTEP:\t\t"^(string_of_spl rstep)^"\n"); (* WIP: replace the pre marker by a f()*)
     let name = ensure_name rstep in
     let args = collect_args rstep in
     let (condition, freedoms, naive_desc) = algo rstep in
     let desc = apply_rewriting_rules (mark_RS(naive_desc)) in
+    print_string ("WIP DESC:\t\t"^(string_of_spl desc)^"\n"); (* WIP: replace the pre marker by a f()*)
     let rses = collect_RS desc in
     let wrapped_RSes = List.map wrap_intexprs rses in
+    print_string ("WIP DESC wrapped:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_RSes))^"\n\n"); (* WIP: replace the pre marker by a f()*)
+
     let new_steps = List.map unwrap wrapped_RSes in
+    print_string ("WIP DESC new steps:\n"^(String.concat ",\n" (List.map string_of_spl new_steps))^"\n\n"); (* WIP: replace the pre marker by a f()*)
+
     let new_names = List.map ensure_name new_steps in
+    print_string ("WIP DESC newnames:\n"^(String.concat ",\n" (new_names))^"\n\n"); (* WIP: replace the pre marker by a f()*)
+
     let extracts_with_calls = List.map replace_by_a_call (List.combine wrapped_RSes (List.combine new_names rses)) in
+    print_string ("WIP DESC extracts_with_calls:\n"^(String.concat ",\n" (List.map string_of_spl extracts_with_calls))^"\n\n"); (* WIP: replace the pre marker by a f()*)
+
     let desc_with_calls = drop_RS (reintegrate_RS desc extracts_with_calls) in
+    print_string ("WIP DESC with_calls:\n"^(string_of_spl desc_with_calls)^"\n\n"); (* WIP: replace the pre marker by a f()*)
+
     rsteps := !rsteps @ [(name, rstep, args, [(condition, freedoms, desc, desc_with_calls)])];
   done;
   !rsteps
@@ -250,7 +298,7 @@ let dependency_map_of_closure (closure : closure) : SpecArgSet.t SpecArgMap.t =
   let per_rstep ((name, _, _, breakdowns) : rstep_unpartitioned) : _=   
     let per_rule ((_,_,_,desc_with_calls):breakdown) : _ = 
       meta_iter_spl_on_spl ( function
-      | UnpartitionnedCall(callee,vars,_,_) ->
+      | UnpartitionnedCall(callee,vars,funcs,_,_) ->
 	let g (arg:int) (expr:intexpr) : _ =
     	  let key = (callee,arg) in
     	  let h (e:intexpr): _ =
@@ -281,7 +329,7 @@ let initial_hots_of_closure (closure: closure) : SpecArgSet.t =
   let per_rstep ((name, _, _, breakdowns) : rstep_unpartitioned) : _=   
     let per_rule ((_,_,_,desc_with_calls):breakdown) : _ = 
       meta_iter_spl_on_spl ( function
-      | UnpartitionnedCall(callee,vars,_,_) ->
+      | UnpartitionnedCall(callee,vars,funcs,_,_) ->
 	let g (arg:int) (expr:intexpr) : _ =
     	  let h (e:intexpr): _ =
     	    match e with
@@ -424,7 +472,7 @@ let lib_from_closure (closure: closure) : lib =
       let childcount = ref 0 in
       let h (e:spl) : spl =
 	match e with
-	| UnpartitionnedCall (callee, args, range, domain) ->
+	| UnpartitionnedCall (callee, args, funcs, range, domain) ->
 	  childcount := !childcount + 1;
   	  PartitionnedCall(!childcount, callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)), range, domain)
 	| x -> x
