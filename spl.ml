@@ -217,8 +217,8 @@ let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f 
     | FD (a, b) -> let ga = g a in FD (ga, g b)
     | FCompose _ -> e
     | Pre _ -> e
-    | PreWrap (i,f,d) -> PreWrap(i,f, (g d)) (*FIXME*)
-    | FArg _ -> e (*FIXME*)
+    | PreWrap (i,f,d) -> PreWrap(i,f, (g d))
+    | FArg _ -> e 
   in
   fun (e : spl) ->
     (meta_transform_spl_on_spl recursion_direction intexprs_in_spl) ((meta_transform_idxfunc_on_spl recursion_direction intexprs_in_idxfunc) e)
@@ -250,8 +250,8 @@ let meta_collect_idxfunc_on_idxfunc (f : idxfunc -> 'a list) : (idxfunc -> 'a li
       FH _ | FL _ | FD _ -> []
     | FCompose l ->  List.flatten (List.map g l)
     | Pre x -> g x
-    | PreWrap(i,x,d) -> g x (*FIXME*)
-    | FArg _ -> [] (* FIXME*)
+    | PreWrap(i,x,d) -> g x 
+    | FArg _ -> [] 
   in
   recursion_collect f z
 ;;
