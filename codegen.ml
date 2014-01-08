@@ -62,7 +62,7 @@ let collect_children ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_part
   let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
     Spl.meta_iter_spl_on_spl (function
     | Spl.Construct(numchild, _, _) -> res := ("child"^(string_of_int numchild))::!res
-    | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit) -> res := ("child"^(string_of_int numchild))::!res
+    | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) -> res := ("child"^(string_of_int numchild))::!res
     | _ -> ()
     ) desc_cons;    
   in
@@ -84,7 +84,7 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
     EnvAllocateConstruct (var, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args))
   in
 
-  let prepare_env_cons_loop (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) : code =
+  let prepare_env_cons_loop (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) (funcs:Spl.idxfunc list) : code = (*FIXME funcs not used, FIXME it should be parameterized*)
     EnvArrayConstruct (envlvalue, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args))
   in
 
@@ -92,12 +92,12 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
     match e with
     | Spl.Compose l -> Chain (List.map prepare_cons (List.rev l)) 
     | Spl.Construct(numchild, rs, cold) -> prepare_env_cons ("child"^(string_of_int numchild)) rs cold
-    | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit) ->
+    | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) ->
       let name = "child"^(string_of_int numchild) in
       let loopvar = Var(Int, Spl.string_of_intexpr i) in 
       Chain([
 	EnvArrayAllocate(name, rs, (ValueOf count));
-	Loop(loopvar, ValueOf count, (prepare_env_cons_loop (Nth(Var(Env(rs), name), (ContentsOf(loopvar)))) rs (cold@reinit))) 
+	Loop(loopvar, ValueOf count, (prepare_env_cons_loop (Nth(Var(Env(rs), name), (ContentsOf(loopvar)))) rs (cold@reinit) funcs))  
       ])
     | _ -> Error("UNIMPLEMENTED")
   in

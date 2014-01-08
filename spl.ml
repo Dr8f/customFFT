@@ -46,9 +46,9 @@ DFT of intexpr
 | Diag of idxfunc
 | ISum of intexpr * intexpr * spl
 | UnpartitionnedCall of string * intexpr IntMap.t * idxfunc IntMap.t * intexpr * intexpr
-| PartitionnedCall of int * string * intexpr list * intexpr list * intexpr list * intexpr * intexpr
+| PartitionnedCall of int * string * intexpr list * intexpr list * intexpr list * idxfunc list * intexpr * intexpr
 | Construct of int * string * intexpr list
-| ISumReinitConstruct of int * intexpr * intexpr * string * intexpr list * intexpr list 
+| ISumReinitConstruct of int * intexpr * intexpr * string * intexpr list * intexpr list * idxfunc list
 | Compute of int * string * intexpr list * intexpr * intexpr
 | ISumReinitCompute of int * intexpr * intexpr * string * intexpr list * intexpr * intexpr
 ;;
@@ -120,13 +120,13 @@ let rec string_of_spl (e : spl) : string =
   | RS(spl) -> "RS("^(string_of_spl spl)^")"
   | UnpartitionnedCall(f, l, m, _, _) -> 
     f^"("^(String.concat "," ((List.map string_of_int_intexpr (IntMap.bindings l)) @ ((List.map string_of_int_idxfunc (IntMap.bindings m)))))^")" 
-  | PartitionnedCall(childcount, f, cold, reinit, hot, _, _) -> 
-    "child"^(string_of_int childcount)^"<"^f^">"^"("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr reinit)) ^ ")"^"("^(String.concat "," (List.map string_of_intexpr hot)) ^ ")"
-  | Construct(childcount, f, cold) -> "Construct-child"^(string_of_int childcount)^"<"^f^">("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")"
-  | ISumReinitConstruct(childcount, i, high, f, cold, reinit) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", ReinitConstruct-child"^(string_of_int childcount)^"<"^f^">("^(String.concat "," (List.map string_of_intexpr cold)) ^ ")(" ^(String.concat "," (List.map string_of_intexpr reinit)) ^ "))"
+  | PartitionnedCall(childcount, f, cold, reinit, hot, funcs, _, _) -> 
+    "child"^(string_of_int childcount)^"<"^f^">"^"{"^(String.concat "," (List.map string_of_intexpr cold)) ^ "}"^"{"^(String.concat "," ((List.map string_of_intexpr reinit)@(List.map string_of_idxfunc funcs)))^"}"^"{"^(String.concat "," (List.map string_of_intexpr hot)) ^ "}"
+  | Construct(childcount, f, cold) -> "Construct-child"^(string_of_int childcount)^"<"^f^">{"^(String.concat "," (List.map string_of_intexpr cold)) ^ "}"
+  | ISumReinitConstruct(childcount, i, high, f, cold, reinit, funcs) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", ReinitConstruct-child"^(string_of_int childcount)^"<"^f^">{"^(String.concat "," (List.map string_of_intexpr cold)) ^ "}{" ^(String.concat "," ((List.map string_of_intexpr reinit)@(List.map string_of_idxfunc funcs))) ^ "})"
   | Compute(childcount, f, hot,_,_) ->
-    "child"^(string_of_int childcount)^"<"^f^">-Compute("^(String.concat "," (List.map string_of_intexpr hot)) ^ ")"
-  | ISumReinitCompute(childcount, i, high, f, hot, _, _) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", child"^(string_of_int childcount)^"<"^f^">-ReinitCompute(" ^(String.concat "," (List.map string_of_intexpr hot)) ^ "))"
+    "child"^(string_of_int childcount)^"<"^f^">-Compute{"^(String.concat "," (List.map string_of_intexpr hot)) ^ "}"
+  | ISumReinitCompute(childcount, i, high, f, hot, _, _) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", child"^(string_of_int childcount)^"<"^f^">-ReinitCompute{" ^(String.concat "," (List.map string_of_intexpr hot)) ^ "})"
 ;;
 
 
@@ -192,6 +192,23 @@ let meta_transform_idxfunc_on_spl (recursion_direction: recursion_direction) (f 
   | x -> x)
 ;;
 
+let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction) (f : intexpr -> intexpr) : (idxfunc -> idxfunc) =
+  let g = meta_transform_intexpr_on_intexpr recursion_direction f in
+  let rec z (e : idxfunc) : idxfunc = 
+    match e with
+    | FH (a, b, c, d) -> let ga = g a in
+  			 let gb = g b in
+  			 let gc = g c in
+  			 FH (ga, gb, gc, g d)
+    | FL (a, b) -> let ga = g a in FL (ga, g b)
+    | FD (a, b) -> let ga = g a in FD (ga, g b)
+    | FCompose a -> FCompose(List.map z a)
+    | Pre a -> Pre(z a) 
+    | PreWrap (i,f,d) -> PreWrap(i,(z f), (g d))
+    | FArg _ -> e 
+  in
+  meta_transform_idxfunc_on_idxfunc recursion_direction z
+;;
 
 let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f : intexpr -> intexpr) : (spl -> spl) = 
   let g = meta_transform_intexpr_on_intexpr recursion_direction f in
@@ -207,21 +224,8 @@ let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f 
     | PartitionnedCall _ -> e
     | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ | Construct _ -> assert false
   in
-  let intexprs_in_idxfunc (e : idxfunc) : idxfunc =
-    match e with 
-      FH (a, b, c, d) -> let ga = g a in 
-			 let gb = g b in
-			 let gc = g c in
-			 FH (ga, gb, gc, g d)
-    | FL (a, b) -> let ga = g a in FL (ga, g b)
-    | FD (a, b) -> let ga = g a in FD (ga, g b)
-    | FCompose _ -> e
-    | Pre _ -> e
-    | PreWrap (i,f,d) -> PreWrap(i,f, (g d))
-    | FArg _ -> e 
-  in
   fun (e : spl) ->
-    (meta_transform_spl_on_spl recursion_direction intexprs_in_spl) ((meta_transform_idxfunc_on_spl recursion_direction intexprs_in_idxfunc) e)
+    (meta_transform_spl_on_spl recursion_direction intexprs_in_spl) ((meta_transform_idxfunc_on_spl recursion_direction (meta_transform_intexpr_on_idxfunc recursion_direction g)) e)
 ;;
 
 

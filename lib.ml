@@ -8,6 +8,11 @@ module SplMap = Map.Make (struct
   let compare = Pervasives.compare
 end)
 
+module IdxFuncMap = Map.Make (struct
+  type t = idxfunc
+  let compare = Pervasives.compare
+end)
+
 module IntExprSet = Set.Make (struct
   type t = intexpr
   let compare = Pervasives.compare
@@ -124,43 +129,106 @@ let rec extract_constraints_spl (e : spl) : (intexpr * intexpr) list =
   | _ -> []    
 ;;
 
-let rec reconcile_constraints (constraints : (intexpr * intexpr) list) (spl : spl) : spl =
+let rec reconcile_constraints_on_spl ((constraints,spl) : (((intexpr * intexpr) list) * spl)) : spl =
   match constraints with
     (l,r) :: tl -> let f (e : intexpr) : intexpr = if (e=r) then l else e in
-		   reconcile_constraints (List.map (fun (l,r) -> (f l, f r)) tl) ((meta_transform_intexpr_on_spl TopDown f) spl)
+		   reconcile_constraints_on_spl ((List.map (fun (l,r) -> (f l, f r)) tl), ((meta_transform_intexpr_on_spl TopDown f) spl))
   | [] -> spl
 ;;
 
-let wrap_intexprs_naively (e :spl) : spl =
-  let count = ref 0 in
-  let f (i : intexpr) : intexpr = 
+let rec reconcile_constraints_on_idxfunc ((constraints,idxfunc) : (((intexpr * intexpr) list) * idxfunc)) : idxfunc =
+  match constraints with
+    (l,r) :: tl -> let f (e : intexpr) : intexpr = if (e=r) then l else e in
+		   reconcile_constraints_on_idxfunc ((List.map (fun (l,r) -> (f l, f r)) tl), ((meta_transform_intexpr_on_idxfunc TopDown f) idxfunc))
+  | [] -> idxfunc
+;;
+
+let wrap_intexprs (count : int ref) (i : intexpr) : intexpr =
     match i with 
       IMul _ | IPlus _ | IDivPerfect _ | IFreedom _ | ILoopCounter _ | IArg _ -> 
 	count := !count + 1;
 	ICountWrap(!count, i)
-    | x -> x
-  in
-  (meta_transform_intexpr_on_spl TopDown f) e
+    | x -> x  
 ;;
 
-let wrap_precompute (e :spl) : spl =
+let wrap_intexprs_on_spl (e :spl) : spl =
   let count = ref 0 in
-  let f (i : idxfunc) : idxfunc = 
+  (meta_transform_intexpr_on_spl TopDown (wrap_intexprs count)) e
+;;
+
+let wrap_intexprs_on_idxfunc (e :idxfunc) : idxfunc =
+  let count = ref 0 in
+  (meta_transform_intexpr_on_idxfunc TopDown (wrap_intexprs count)) e
+;;
+
+let unwrap_idxfunc (e:idxfunc) : idxfunc = 
+  let h (e:idxfunc) : idxfunc = 
+    match e with
+      PreWrap(i,x,d)->Pre(FArg(i,d))
+    | x -> x
+  in
+  (meta_transform_idxfunc_on_idxfunc TopDown h) e
+;;
+
+let unwrap_spl (e:spl) : spl =
+  let g (e:intexpr) : intexpr = 
+    match e with
+      ICountWrap(l,r)->IArg l
+    | x -> x
+  in
+  (meta_transform_idxfunc_on_spl TopDown unwrap_idxfunc) ((meta_transform_intexpr_on_spl TopDown g) e)
+;;
+
+let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (unwrapped : idxfunc) : idxfunc = 
+  let collect_binds (idxfunc:idxfunc) : intexpr list = 
+    let binds (i : intexpr) : intexpr list =
+      match i with
+	ICountWrap _ -> [i]
+      | _ -> []
+    in
+    ((meta_collect_intexpr_on_idxfunc binds) idxfunc) in
+  let rec mapify (binds : intexpr list) (map : intexpr IntMap.t) : intexpr IntMap.t =
+    match binds with
+      [] -> map
+    | ICountWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
+    | _ -> failwith "type is not supported"
+  in
+  (*FIXME new thing should ultimately replaces the PreWrap*)
+  PreWrap(0 (*FIXME should be name*), wrapped (*should be (mapify (collect_binds wrapped) IntMap.empty) *), (func_domain unwrapped) )
+;;
+
+let wrap_precomputations (e :spl) : spl =
+  let namemap = ref IdxFuncMap.empty in
+  let count = ref 0 in
+  let register_name (ffunc:idxfunc) : _ =
+    count := !count + 1;
+    let name = "lambda"^(string_of_int !count) in
+    namemap := IdxFuncMap.add ffunc name !namemap;
+    (* under_consideration := !under_consideration@[ffunc];     *)
+  in
+
+  let ensure_name (ffunc:idxfunc) : string =
+    if not(IdxFuncMap.mem ffunc !namemap) then (
+      register_name ffunc;
+    );
+    IdxFuncMap.find ffunc !namemap
+  in
+  let transf (i : idxfunc) : idxfunc = 
     match i with 
       Pre f ->       
-	count := !count + 1; 
-	PreWrap(!count, f, (func_domain f))
+	let wrapped_expr = (wrap_intexprs_on_idxfunc f) in
+	let func_constraints = (extract_constraints_func wrapped_expr) in
+	let reconciled = reconcile_constraints_on_idxfunc (func_constraints,wrapped_expr) in
+	let new_func = unwrap_idxfunc reconciled in
+	let new_name = ensure_name new_func in
+	print_string ("WIP there's a new lambda: "^ new_name^"\n");
+	(* let extracts_with_calls = replace_by_a_call_idxfunc reconciled new_name f in  *)
+	(* (\*FIXME FRED WAS HERE*\) *)
+	(* PreWrap(!count, reconciled, (func_domain f)) *)
+	  replace_by_a_call_idxfunc reconciled new_name f
     | x -> x
   in
-  (meta_transform_idxfunc_on_spl TopDown f) e  
-;;
-
-let wrap_intexprs (e : spl) : spl  =
-  let wrap_functions = wrap_precompute  e in
-  let wrapup = wrap_intexprs_naively wrap_functions in
-  let constraints = extract_constraints_spl wrapup in
-  let res = reconcile_constraints constraints wrapup in
-  res
+  (meta_transform_idxfunc_on_spl TopDown transf) e  
 ;;
 
 let reintegrate_RS (e: spl) (canonized : spl list) : spl =
@@ -175,19 +243,6 @@ let reintegrate_RS (e: spl) (canonized : spl list) : spl =
   (meta_transform_spl_on_spl TopDown f) e
 ;;
 
-let unwrap (e:spl) : spl =
-  let g (e:intexpr) : intexpr = 
-    match e with
-      ICountWrap(l,r)->IArg l
-    | x -> x
-  in
-  let h (e:idxfunc) : idxfunc = 
-    match e with
-      PreWrap(i,x,d)->Pre(FArg(i,d))
-    | x -> x
-  in
-  (meta_transform_idxfunc_on_spl TopDown h) ((meta_transform_intexpr_on_spl TopDown g) e)
-;;
 
 let drop_RS : (spl -> spl) =
   let g (e : spl) : spl = 
@@ -198,7 +253,7 @@ let drop_RS : (spl -> spl) =
   meta_transform_spl_on_spl BottomUp g
 ;;
 
-let replace_by_a_call ((wrapped,(name,unwrapped)) : (spl * (string * spl))) : spl =
+let replace_by_a_call_spl ((wrapped,(name,unwrapped)) : (spl * (string * spl))) : spl =
   let collect_binds (spl:spl) : intexpr list = 
     let binds (i : intexpr) : intexpr list =
       match i with
@@ -273,16 +328,29 @@ let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*in
     let desc = apply_rewriting_rules (mark_RS(naive_desc)) in
     print_string ("WIP DESC:\t\t"^(string_of_spl desc)^"\n"); (* WIP *)
     let rses = collect_RS desc in
-    let wrapped_RSes = List.map wrap_intexprs rses in
+
+
+    let wrapped_precomps = List.map wrap_precomputations rses in
+    print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (* WIP *)
+
+    let wrapped_intexpr = List.map wrap_intexprs_on_spl wrapped_precomps in
+    print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); (* WIP *)
+
+
+    let constraints = List.map extract_constraints_spl wrapped_intexpr in
+    let wrapped_RSes = List.map reconcile_constraints_on_spl (List.combine constraints wrapped_intexpr) in
+
+
+    (* let wrapped_RSes = List.map wrap_exprs rses in *)
     print_string ("WIP DESC wrapped:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_RSes))^"\n\n"); (* WIP *)
 
-    let new_steps = List.map unwrap wrapped_RSes in
+    let new_steps = List.map unwrap_spl wrapped_RSes in
     print_string ("WIP DESC new steps:\n"^(String.concat ",\n" (List.map string_of_spl new_steps))^"\n\n"); (* WIP *)
 
     let new_names = List.map ensure_name new_steps in
     print_string ("WIP DESC newnames:\n"^(String.concat ",\n" (new_names))^"\n\n"); (* WIP *)
 
-    let extracts_with_calls = List.map replace_by_a_call (List.combine wrapped_RSes (List.combine new_names rses)) in
+    let extracts_with_calls = List.map replace_by_a_call_spl (List.combine wrapped_RSes (List.combine new_names rses)) in
     print_string ("WIP DESC extracts_with_calls:\n"^(String.concat ",\n" (List.map string_of_spl extracts_with_calls))^"\n\n"); (* WIP *)
 
     let desc_with_calls = drop_RS (reintegrate_RS desc extracts_with_calls) in
@@ -474,20 +542,20 @@ let lib_from_closure (closure: closure) : lib =
 	match e with
 	| UnpartitionnedCall (callee, args, funcs, range, domain) -> (*FIXME funcs not taken into account *)
 	  childcount := !childcount + 1;
-  	  PartitionnedCall(!childcount, callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)), range, domain)
+  	  PartitionnedCall(!childcount, callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)), (List.map snd (IntMap.bindings funcs)), range, domain)
 	| x -> x
       in
       let partitioned = (meta_transform_spl_on_spl BottomUp h) desc_with_calls in
       let j (e:spl) : spl =
 	match e with
-	  ISum(_, _, PartitionnedCall(childcount, callee, cold, [], _,_,_)) -> Construct(childcount, callee, cold)
-	| ISum(i, high, PartitionnedCall(childcount, callee, cold, reinit, _,_,_)) -> ISumReinitConstruct(childcount, i, high, callee, cold, reinit)
+	  ISum(_, _, PartitionnedCall(childcount, callee, cold, [], _,[],_,_)) -> Construct(childcount, callee, cold)
+	| ISum(i, high, PartitionnedCall(childcount, callee, cold, reinit, _,funcs,_,_)) -> ISumReinitConstruct(childcount, i, high, callee, cold, reinit, funcs)
 	| x -> x
       in
       let k (e:spl) : spl =
 	match e with
-	  PartitionnedCall(childcount, callee, _, [], hot, range, domain) -> Compute(childcount, callee, hot, range, domain)
-	| ISum(i, high, PartitionnedCall(childcount, callee, _, _, hot,range, domain)) -> ISumReinitCompute(childcount, i, high, callee, hot, range, domain)
+	  PartitionnedCall(childcount, callee, _, [], hot, _, range, domain) -> Compute(childcount, callee, hot, range, domain)
+	| ISum(i, high, PartitionnedCall(childcount, callee, _, _, hot,_,range, domain)) -> ISumReinitCompute(childcount, i, high, callee, hot, range, domain)
 	| x -> x
       in
       (condition, freedoms, desc, partitioned, (meta_transform_spl_on_spl BottomUp j) partitioned, (meta_transform_spl_on_spl BottomUp k) partitioned) in
