@@ -196,7 +196,8 @@ let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (unwrapped : idxfu
     | ICountWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
     | _ -> failwith "type is not supported"
   in
-  PreWrap(name, wrapped, (func_domain unwrapped) )
+  print_string ("WIP ok, so what do we have here? a wrapped: "^(string_of_idxfunc wrapped)^"\n name: "^(name)^"\n"); (* FRED WAS HERE *)
+  PreWrap(name, wrapped, (func_domain unwrapped)) (*FIXME this is not really a call yet, it contains the structure and the structure should be saved*)
 ;;
 
 let wrap_precomputations (e :spl) : spl =
@@ -204,9 +205,8 @@ let wrap_precomputations (e :spl) : spl =
   let count = ref 0 in
   let register_name (ffunc:idxfunc) : _ =
     count := !count + 1;
-    let name = "FREDFUNCTION"^(string_of_int !count) in
+    let name = "FunctionalEnv"^(string_of_int !count) in
     namemap := IdxFuncMap.add ffunc name !namemap;
-    (* under_consideration := !under_consideration@[ffunc];     *)
   in
 
   let ensure_name (ffunc:idxfunc) : string =
@@ -223,11 +223,7 @@ let wrap_precomputations (e :spl) : spl =
 	let reconciled = reconcile_constraints_on_idxfunc (func_constraints,wrapped_expr) in
 	let new_func = unwrap_idxfunc reconciled in
 	let new_name = ensure_name new_func in
-	print_string ("WIP there's a new lambda: "^ new_name^"\n");
-	(* let extracts_with_calls = replace_by_a_call_idxfunc reconciled new_name f in  *)
-	(* (\*FIXME FRED WAS HERE*\) *)
-	(* PreWrap(!count, reconciled, (func_domain f)) *)
-	  replace_by_a_call_idxfunc reconciled new_name f
+	replace_by_a_call_idxfunc reconciled new_name f 
     | x -> x
   in
   (meta_transform_idxfunc_on_spl TopDown transf) e  
