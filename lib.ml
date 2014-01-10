@@ -161,10 +161,13 @@ let wrap_intexprs_on_idxfunc (e :idxfunc) : idxfunc =
   (meta_transform_intexpr_on_idxfunc TopDown (wrap_intexprs count)) e
 ;;
 
-let unwrap_idxfunc (e:idxfunc) : idxfunc = 
+let unwrap_idxfunc (e:idxfunc) : idxfunc =
+  let count = ref 0 in
   let h (e:idxfunc) : idxfunc = 
     match e with
-      PreWrap(i,x,d)->Pre(FArg(i,d))
+      PreWrap(n,x,d)->
+	count := !count + 1;
+	Pre(FArg(("lambda"^(string_of_int !count)),d))
     | x -> x
   in
   (meta_transform_idxfunc_on_idxfunc TopDown h) e
@@ -193,8 +196,7 @@ let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (unwrapped : idxfu
     | ICountWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
     | _ -> failwith "type is not supported"
   in
-  (*FIXME new thing should ultimately replaces the PreWrap*)
-  PreWrap(0 (*FIXME should be name*), wrapped (*should be (mapify (collect_binds wrapped) IntMap.empty) *), (func_domain unwrapped) )
+  PreWrap(name, wrapped, (func_domain unwrapped) )
 ;;
 
 let wrap_precomputations (e :spl) : spl =
@@ -202,7 +204,7 @@ let wrap_precomputations (e :spl) : spl =
   let count = ref 0 in
   let register_name (ffunc:idxfunc) : _ =
     count := !count + 1;
-    let name = "lambda"^(string_of_int !count) in
+    let name = "FREDFUNCTION"^(string_of_int !count) in
     namemap := IdxFuncMap.add ffunc name !namemap;
     (* under_consideration := !under_consideration@[ffunc];     *)
   in
@@ -274,15 +276,10 @@ let replace_by_a_call_spl ((wrapped,(name,unwrapped)) : (spl * (string * spl))) 
 	PreWrap _ -> [i]
       | _ -> []
     in
-    ((meta_collect_idxfunc_on_spl binds) spl) in
-  let rec fmapify (binds : idxfunc list) (map : idxfunc IntMap.t) : idxfunc IntMap.t =
-    match binds with
-      [] -> map
-    | PreWrap(p,expr,d)::tl -> fmapify tl (IntMap.add p expr map) 
-    | _ -> failwith "type is not supported"
+    ((meta_collect_idxfunc_on_spl binds) spl) 
   in
 
-  let res = UnpartitionnedCall(name, (mapify (collect_binds wrapped) IntMap.empty), (fmapify (fcollect_binds wrapped) IntMap.empty), (range unwrapped), (domain unwrapped)) in 
+  let res = UnpartitionnedCall(name, (mapify (collect_binds wrapped) IntMap.empty), (fcollect_binds wrapped), (range unwrapped), (domain unwrapped)) in 
   (* print_string ("WIP REPLACING:\nwrapped:"^(string_of_spl wrapped)^"\nunwrapped:"^(string_of_spl unwrapped)^"\nres:"^(string_of_spl res)^"\n\n"); *)
   res
 ;;
@@ -542,7 +539,7 @@ let lib_from_closure (closure: closure) : lib =
 	match e with
 	| UnpartitionnedCall (callee, args, funcs, range, domain) -> (*FIXME funcs not taken into account *)
 	  childcount := !childcount + 1;
-  	  PartitionnedCall(!childcount, callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)), (List.map snd (IntMap.bindings funcs)), range, domain)
+  	  PartitionnedCall(!childcount, callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)), funcs (* (List.map snd (IntMap.bindings funcs)) *), range, domain)
 	| x -> x
       in
       let partitioned = (meta_transform_spl_on_spl BottomUp h) desc_with_calls in

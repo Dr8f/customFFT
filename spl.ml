@@ -29,8 +29,8 @@ type idxfunc =
 | FD of intexpr * intexpr
 | FCompose of idxfunc list
 | Pre of idxfunc (* Precompute *)
-| PreWrap of int * idxfunc * intexpr (*domain*)
-| FArg of int * intexpr (*domain*)
+| PreWrap of string * idxfunc * intexpr (*domain*)
+| FArg of string * intexpr (*domain*)
 ;;
 
 type spl =
@@ -45,7 +45,7 @@ DFT of intexpr
 | G of idxfunc
 | Diag of idxfunc
 | ISum of intexpr * intexpr * spl
-| UnpartitionnedCall of string * intexpr IntMap.t * idxfunc IntMap.t * intexpr * intexpr
+| UnpartitionnedCall of string * intexpr IntMap.t * idxfunc list * intexpr * intexpr
 | PartitionnedCall of int * string * intexpr list * intexpr list * intexpr list * idxfunc list * intexpr * intexpr
 | Construct of int * string * intexpr list
 | ISumReinitConstruct of int * intexpr * intexpr * string * intexpr list * intexpr list * idxfunc list
@@ -97,12 +97,8 @@ let rec string_of_idxfunc (e : idxfunc) : string =
   | FD(j,k) -> "d("^(string_of_intexpr j)^","^(string_of_intexpr k)^")"      
   | FCompose(list) -> optional_short_print "fCompose" (String.concat " . " (List.map string_of_idxfunc list))
   | Pre(l) -> "pre("^(string_of_idxfunc l)^")"
-  | PreWrap(i, l, d) -> "["^(string_of_int i)^"("^(string_of_intexpr d)^")]pre("^(string_of_idxfunc l)^")"
-  | FArg(i,d) -> "f"^(string_of_int i)^"("^(string_of_intexpr d)^")"
-;;
-
-let string_of_int_idxfunc ((e,f):int * idxfunc) : string =
-  "["^(string_of_int e)^"]"^(string_of_idxfunc f)
+  | PreWrap(n, l, d) -> n^"("^(string_of_idxfunc l)^")"
+  | FArg(n, d) -> n
 ;;
 
 let rec string_of_spl (e : spl) : string =
@@ -119,7 +115,7 @@ let rec string_of_spl (e : spl) : string =
   | ISum (i, high, spl) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^","^(string_of_spl spl)^")"
   | RS(spl) -> "RS("^(string_of_spl spl)^")"
   | UnpartitionnedCall(f, l, m, _, _) -> 
-    f^"("^(String.concat "," ((List.map string_of_int_intexpr (IntMap.bindings l)) @ ((List.map string_of_int_idxfunc (IntMap.bindings m)))))^")" 
+    f^"("^(String.concat "," ((List.map string_of_int_intexpr (IntMap.bindings l)) @ (List.map string_of_idxfunc m)))^")" 
   | PartitionnedCall(childcount, f, cold, reinit, hot, funcs, _, _) -> 
     "child"^(string_of_int childcount)^"<"^f^">"^"{"^(String.concat "," (List.map string_of_intexpr cold)) ^ "}"^"{"^(String.concat "," ((List.map string_of_intexpr reinit)@(List.map string_of_idxfunc funcs)))^"}"^"{"^(String.concat "," (List.map string_of_intexpr hot)) ^ "}"
   | Construct(childcount, f, cold) -> "Construct-child"^(string_of_int childcount)^"<"^f^">{"^(String.concat "," (List.map string_of_intexpr cold)) ^ "}"
@@ -204,7 +200,7 @@ let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction)
     | FD (a, b) -> let ga = g a in FD (ga, g b)
     | FCompose a -> FCompose(List.map z a)
     | Pre a -> Pre(z a) 
-    | PreWrap (i,f,d) -> PreWrap(i,(z f), (g d))
+    | PreWrap (n,f,d) -> PreWrap(n,(z f), (g d))
     | FArg _ -> e 
   in
   meta_transform_idxfunc_on_idxfunc recursion_direction z
@@ -254,7 +250,7 @@ let meta_collect_idxfunc_on_idxfunc (f : idxfunc -> 'a list) : (idxfunc -> 'a li
       FH _ | FL _ | FD _ -> []
     | FCompose l ->  List.flatten (List.map g l)
     | Pre x -> g x
-    | PreWrap(i,x,d) -> g x 
+    | PreWrap(n,x,d) -> g x 
     | FArg _ -> [] 
   in
   recursion_collect f z
