@@ -184,12 +184,6 @@ let unwrap_spl (e:spl) : spl =
 ;;
 
 let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (domain : intexpr) : idxfunc = 
-  let printer (args:intexpr IntMap.t) : string =
-    String.concat ", " (List.map (fun ((i,e):int*intexpr) -> "( "^(string_of_int i)^ " = " ^(string_of_intexpr e)^")") (IntMap.bindings args));
-  in
-  let extractor (args:intexpr IntMap.t) : intexpr list =
-    List.map (fun ((i,e):int*intexpr) -> e) (IntMap.bindings args)
-  in
   let collect_binds (idxfunc:idxfunc) : intexpr list = 
     let binds (i : intexpr) : intexpr list =
       match i with
@@ -204,9 +198,16 @@ let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (domain : intexpr)
     | _ -> failwith "type is not supported"
   in
   let map = mapify (collect_binds wrapped) IntMap.empty in
-  let args = extractor map in
-  print_string ("WIP ok, so what do we have here?\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nnewcall: "^(String.concat ", " (List.map string_of_intexpr args))^"\nnewdef: "^(string_of_idxfunc ((meta_transform_intexpr_on_idxfunc TopDown unwrap_intexpr) wrapped))^"\n\n"); (* FRED WAS HERE *)
-  PreWrap(name, wrapped, domain) 
+  let args = List.map snd (IntMap.bindings map) in
+  let res =  PreWrap(name, args, domain) in
+  let newdef = ((meta_transform_intexpr_on_idxfunc TopDown unwrap_intexpr) wrapped) in
+  (* let printer (args:intexpr IntMap.t) : string = *)
+  (*   String.concat ", " (List.map (fun ((i,e):int*intexpr) -> "( "^(string_of_int i)^ " = " ^(string_of_intexpr e)^")") (IntMap.bindings args)); *)
+  (* in *)
+  (* print_string ("WIP ok, so what do we have here?\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nnewcall: "^(String.concat ", " (List.map string_of_intexpr args))^"\nnewdef: "^(string_of_idxfunc newdef)^"\nres: "^(string_of_idxfunc res)^"\n\n\n"); (\* FRED WAS HERE *\) *)
+  res
+
+    (*FIXME: one should save the newdef here in the freaking map*)
 ;;
 
 let wrap_precomputations (e :spl) : spl =
@@ -320,23 +321,23 @@ let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*in
   in
   List.iter register_name stems;
   while (List.length !under_consideration != 0) do
-    print_string "LOOP\n";
+    (* print_string "LOOP\n"; *)
     let rstep = List.hd !under_consideration in
     under_consideration := List.tl !under_consideration;
-    print_string ("WIP RSTEP:\t\t"^(string_of_spl rstep)^"\n"); (* WIP *)
+    (* print_string ("WIP RSTEP:\t\t"^(string_of_spl rstep)^"\n"); (\* WIP *\) *)
     let name = ensure_name rstep in
     let args = collect_args rstep in
     let (condition, freedoms, naive_desc) = algo rstep in
     let desc = apply_rewriting_rules (mark_RS(naive_desc)) in
-    print_string ("WIP DESC:\t\t"^(string_of_spl desc)^"\n"); (* WIP *)
+    (* print_string ("WIP DESC:\t\t"^(string_of_spl desc)^"\n"); (\* WIP *\) *)
     let rses = collect_RS desc in
 
 
     let wrapped_precomps = List.map wrap_precomputations rses in
-    print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (* WIP *)
+    (* print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (\* WIP *\) *)
 
     let wrapped_intexpr = List.map wrap_intexprs_on_spl wrapped_precomps in
-    print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); (* WIP *)
+    (* print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); (\* WIP *\) *)
 
 
     let constraints = List.map extract_constraints_spl wrapped_intexpr in
@@ -344,19 +345,19 @@ let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*in
 
 
     (* let wrapped_RSes = List.map wrap_exprs rses in *)
-    print_string ("WIP DESC wrapped:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_RSes))^"\n\n"); (* WIP *)
+    (* print_string ("WIP DESC wrapped:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_RSes))^"\n\n"); (\* WIP *\) *)
 
     let new_steps = List.map unwrap_spl wrapped_RSes in
-    print_string ("WIP DESC new steps:\n"^(String.concat ",\n" (List.map string_of_spl new_steps))^"\n\n"); (* WIP *)
+    (* print_string ("WIP DESC new steps:\n"^(String.concat ",\n" (List.map string_of_spl new_steps))^"\n\n"); (\* WIP *\) *)
 
     let new_names = List.map ensure_name new_steps in
-    print_string ("WIP DESC newnames:\n"^(String.concat ",\n" (new_names))^"\n\n"); (* WIP *)
+    (* print_string ("WIP DESC newnames:\n"^(String.concat ",\n" (new_names))^"\n\n"); (\* WIP *\) *)
 
     let extracts_with_calls = List.map replace_by_a_call_spl (List.combine wrapped_RSes (List.combine new_names rses)) in
-    print_string ("WIP DESC extracts_with_calls:\n"^(String.concat ",\n" (List.map string_of_spl extracts_with_calls))^"\n\n"); (* WIP *)
+    (* print_string ("WIP DESC extracts_with_calls:\n"^(String.concat ",\n" (List.map string_of_spl extracts_with_calls))^"\n\n"); (\* WIP *\) *)
 
     let desc_with_calls = drop_RS (reintegrate_RS desc extracts_with_calls) in
-    print_string ("WIP DESC with_calls:\n"^(string_of_spl desc_with_calls)^"\n\n"); (* WIP *)
+    (* print_string ("WIP DESC with_calls:\n"^(string_of_spl desc_with_calls)^"\n\n"); (\* WIP *\) *)
 
     rsteps := !rsteps @ [(name, rstep, args, [(condition, freedoms, desc, desc_with_calls)])];
   done;

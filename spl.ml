@@ -29,7 +29,7 @@ type idxfunc =
 | FD of intexpr * intexpr
 | FCompose of idxfunc list
 | Pre of idxfunc (* Precompute *)
-| PreWrap of string * idxfunc * intexpr (*domain*)
+| PreWrap of string * intexpr list * intexpr (*domain*)
 | FArg of string * intexpr (*domain*)
 ;;
 
@@ -97,7 +97,7 @@ let rec string_of_idxfunc (e : idxfunc) : string =
   | FD(j,k) -> "d("^(string_of_intexpr j)^","^(string_of_intexpr k)^")"      
   | FCompose(list) -> optional_short_print "fCompose" (String.concat " . " (List.map string_of_idxfunc list))
   | Pre(l) -> "pre("^(string_of_idxfunc l)^")"
-  | PreWrap(n, l, d) -> n^"("^(string_of_idxfunc l)^")"
+  | PreWrap(n, l, d) -> n^"("^(String.concat ", " (List.map string_of_intexpr l))^")"
   | FArg(n, d) -> n
 ;;
 
@@ -200,7 +200,7 @@ let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction)
     | FD (a, b) -> let ga = g a in FD (ga, g b)
     | FCompose a -> FCompose(List.map z a)
     | Pre a -> Pre(z a) 
-    | PreWrap (n,f,d) -> PreWrap(n,(z f), (g d))
+    | PreWrap (n,f,d) -> PreWrap(n,f, (g d)) (* FIXME f maybe*)
     | FArg _ -> e 
   in
   meta_transform_idxfunc_on_idxfunc recursion_direction z
@@ -250,7 +250,7 @@ let meta_collect_idxfunc_on_idxfunc (f : idxfunc -> 'a list) : (idxfunc -> 'a li
       FH _ | FL _ | FD _ -> []
     | FCompose l ->  List.flatten (List.map g l)
     | Pre x -> g x
-    | PreWrap(n,x,d) -> g x 
+    | PreWrap(n,x,d) -> [](*FIXME maybe g x *)
     | FArg _ -> [] 
   in
   recursion_collect f z
