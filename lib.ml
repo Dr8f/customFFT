@@ -183,7 +183,7 @@ let unwrap_spl (e:spl) : spl =
   (meta_transform_idxfunc_on_spl TopDown unwrap_idxfunc) ((meta_transform_intexpr_on_spl TopDown unwrap_intexpr) e)
 ;;
 
-let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (unwrapped : idxfunc) : idxfunc = 
+let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (domain : intexpr) : idxfunc = 
   let printer (args:intexpr IntMap.t) : string =
     String.concat ", " (List.map (fun ((i,e):int*intexpr) -> "( "^(string_of_int i)^ " = " ^(string_of_intexpr e)^")") (IntMap.bindings args));
   in
@@ -205,8 +205,8 @@ let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (unwrapped : idxfu
   in
   let map = mapify (collect_binds wrapped) IntMap.empty in
   let args = extractor map in
-  print_string ("WIP ok, so what do we have here?\nunwrapped: "^(string_of_idxfunc unwrapped)^"\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nnewcall: "^(String.concat ", " (List.map string_of_intexpr (extractor map)))^"\nnewdef: "^(string_of_idxfunc ((meta_transform_intexpr_on_idxfunc TopDown unwrap_intexpr) wrapped))^"\n\n"); (* FRED WAS HERE *)
-  PreWrap(name, wrapped, (func_domain unwrapped)) 
+  print_string ("WIP ok, so what do we have here?\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nnewcall: "^(String.concat ", " (List.map string_of_intexpr args))^"\nnewdef: "^(string_of_idxfunc ((meta_transform_intexpr_on_idxfunc TopDown unwrap_intexpr) wrapped))^"\n\n"); (* FRED WAS HERE *)
+  PreWrap(name, wrapped, domain) 
 ;;
 
 let wrap_precomputations (e :spl) : spl =
@@ -232,7 +232,7 @@ let wrap_precomputations (e :spl) : spl =
 	let reconciled = reconcile_constraints_on_idxfunc (func_constraints,wrapped_expr) in
 	let new_func = unwrap_idxfunc reconciled in
 	let new_name = ensure_name new_func in
-	replace_by_a_call_idxfunc reconciled new_name f 
+	replace_by_a_call_idxfunc reconciled new_name (func_domain f) 
     | x -> x
   in
   (meta_transform_idxfunc_on_spl TopDown transf) e  
