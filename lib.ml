@@ -204,7 +204,8 @@ let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (unwrapped : idxfu
     | _ -> failwith "type is not supported"
   in
   let map = mapify (collect_binds wrapped) IntMap.empty in
-  print_string ("WIP ok, so what do we have here?\nunwrapped: "^(string_of_idxfunc unwrapped)^"\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nnewcall: "^()^\nnewdef: "^(string_of_idxfunc ((meta_transform_intexpr_on_idxfunc TopDown unwrap_intexpr) wrapped))^"\n\n"); (* FRED WAS HERE *)
+  let args = extractor map in
+  print_string ("WIP ok, so what do we have here?\nunwrapped: "^(string_of_idxfunc unwrapped)^"\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nnewcall: "^(String.concat ", " (List.map string_of_intexpr (extractor map)))^"\nnewdef: "^(string_of_idxfunc ((meta_transform_intexpr_on_idxfunc TopDown unwrap_intexpr) wrapped))^"\n\n"); (* FRED WAS HERE *)
   PreWrap(name, wrapped, (func_domain unwrapped)) 
 ;;
 
