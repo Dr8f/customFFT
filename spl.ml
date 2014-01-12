@@ -200,8 +200,8 @@ let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction)
     | FD (a, b) -> let ga = g a in FD (ga, g b)
     | FCompose a -> FCompose(List.map z a)
     | Pre a -> Pre(z a) 
-    | PreWrap (n,f,d) -> PreWrap(n,f, (g d)) (* FIXME f maybe*)
-    | FArg _ -> e 
+    | PreWrap (n,f,d) -> PreWrap(n,(List.map g f), (g d))
+    | FArg (i,f) -> FArg(i, (g f)) 
   in
   meta_transform_idxfunc_on_idxfunc recursion_direction z
 ;;
@@ -247,11 +247,11 @@ let meta_collect_spl_on_spl (f : spl -> 'a list) : (spl -> 'a list) =
 let meta_collect_idxfunc_on_idxfunc (f : idxfunc -> 'a list) : (idxfunc -> 'a list) =
   let z (g : idxfunc -> 'a list) (e : idxfunc) : 'a list =
     match e with
-      FH _ | FL _ | FD _ -> []
+      FH _ | FL _ | FD _ -> f e
     | FCompose l ->  List.flatten (List.map g l)
     | Pre x -> g x
-    | PreWrap(n,x,d) -> [](*FIXME maybe g x *)
-    | FArg _ -> [] 
+    | PreWrap _ -> f e 
+    | FArg _ -> f e 
   in
   recursion_collect f z
 ;;

@@ -183,7 +183,19 @@ let unwrap_spl (e:spl) : spl =
   (meta_transform_idxfunc_on_spl TopDown unwrap_idxfunc) ((meta_transform_intexpr_on_spl TopDown unwrap_intexpr) e)
 ;;
 
-let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (domain : intexpr) : idxfunc = 
+let idxfuncmap = ref IdxFuncMap.empty
+;;
+
+let replace_by_a_call_idxfunc (f:idxfunc) : idxfunc = 
+  let ensure_name (ffunc:idxfunc) : string =
+    if not(IdxFuncMap.mem ffunc !idxfuncmap) then (
+      let name = "FunctionalEnv"^(string_of_int ((IdxFuncMap.cardinal !idxfuncmap)+1)) in
+      idxfuncmap := IdxFuncMap.add ffunc name !idxfuncmap;
+    );
+    let res = IdxFuncMap.find ffunc !idxfuncmap in
+    res
+  in
+
   let collect_binds (idxfunc:idxfunc) : intexpr list = 
     let binds (i : intexpr) : intexpr list =
       match i with
@@ -197,43 +209,26 @@ let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (domain : intexpr)
     | ICountWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
     | _ -> failwith "type is not supported"
   in
+  let wrap_naive = (wrap_intexprs_on_idxfunc f) in
+  let func_constraints = (extract_constraints_func wrap_naive) in
+  let wrapped = reconcile_constraints_on_idxfunc (func_constraints,wrap_naive) in
+  let domain = func_domain f in
+  let newdef = ((meta_transform_intexpr_on_idxfunc TopDown unwrap_intexpr) wrapped) in
+  let name = ensure_name newdef in
   let map = mapify (collect_binds wrapped) IntMap.empty in
   let args = List.map snd (IntMap.bindings map) in
   let res =  PreWrap(name, args, domain) in
-  let newdef = ((meta_transform_intexpr_on_idxfunc TopDown unwrap_intexpr) wrapped) in
-  (* let printer (args:intexpr IntMap.t) : string = *)
-  (*   String.concat ", " (List.map (fun ((i,e):int*intexpr) -> "( "^(string_of_int i)^ " = " ^(string_of_intexpr e)^")") (IntMap.bindings args)); *)
-  (* in *)
-  (* print_string ("WIP ok, so what do we have here?\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nnewcall: "^(String.concat ", " (List.map string_of_intexpr args))^"\nnewdef: "^(string_of_idxfunc newdef)^"\nres: "^(string_of_idxfunc res)^"\n\n\n"); (\* FRED WAS HERE *\) *)
+  let printer (args:intexpr IntMap.t) : string =
+    String.concat ", " (List.map (fun ((i,e):int*intexpr) -> "( "^(string_of_int i)^ " = " ^(string_of_intexpr e)^")") (IntMap.bindings args));
+  in
+  print_string ("WIP ok, so what do we have here?\nfunction: "^(string_of_idxfunc f)^"\nwrap_naive: "^(string_of_idxfunc wrap_naive)^"\nconstraints:"^(String.concat ", " (List.map (fun ((g,d):intexpr*intexpr) -> "( "^(string_of_intexpr g)^ " = " ^(string_of_intexpr d)^")") func_constraints))^"\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nnewcall: "^(String.concat ", " (List.map string_of_intexpr args))^"\nnewdef: "^(string_of_idxfunc newdef)^"\nres: "^(string_of_idxfunc res)^"\n\n\n"); (* FRED why is the second FH arg not parameterized? *)
   res
-
-    (*FIXME: one should save the newdef here in the freaking map*)
 ;;
 
 let wrap_precomputations (e :spl) : spl =
-  let namemap = ref IdxFuncMap.empty in
-  let count = ref 0 in
-  let register_name (ffunc:idxfunc) : _ =
-    count := !count + 1;
-    let name = "FunctionalEnv"^(string_of_int !count) in
-    namemap := IdxFuncMap.add ffunc name !namemap;
-  in
-
-  let ensure_name (ffunc:idxfunc) : string =
-    if not(IdxFuncMap.mem ffunc !namemap) then (
-      register_name ffunc;
-    );
-    IdxFuncMap.find ffunc !namemap
-  in
   let transf (i : idxfunc) : idxfunc = 
     match i with 
-      Pre f ->       
-	let wrapped_expr = (wrap_intexprs_on_idxfunc f) in
-	let func_constraints = (extract_constraints_func wrapped_expr) in
-	let reconciled = reconcile_constraints_on_idxfunc (func_constraints,wrapped_expr) in
-	let new_func = unwrap_idxfunc reconciled in
-	let new_name = ensure_name new_func in
-	replace_by_a_call_idxfunc reconciled new_name (func_domain f) 
+      Pre f -> replace_by_a_call_idxfunc f
     | x -> x
   in
   (meta_transform_idxfunc_on_spl TopDown transf) e  
