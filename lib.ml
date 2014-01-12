@@ -183,17 +183,15 @@ let unwrap_spl (e:spl) : spl =
   (meta_transform_idxfunc_on_spl TopDown unwrap_idxfunc) ((meta_transform_intexpr_on_spl TopDown unwrap_intexpr) e)
 ;;
 
-let idxfuncmap = ref IdxFuncMap.empty
-;;
-
-let replace_by_a_call_idxfunc (f:idxfunc) : idxfunc = 
-  let ensure_name (ffunc:idxfunc) : string =
-    if not(IdxFuncMap.mem ffunc !idxfuncmap) then (
-      let name = "FunctionalEnv"^(string_of_int ((IdxFuncMap.cardinal !idxfuncmap)+1)) in
-      idxfuncmap := IdxFuncMap.add ffunc name !idxfuncmap;
-    );
-    let res = IdxFuncMap.find ffunc !idxfuncmap in
-    res
+let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:string IdxFuncMap.t): idxfunc * string IdxFuncMap.t = 
+  let ensure_name (ffunc:idxfunc) (idxfuncmap:string IdxFuncMap.t) : string * string IdxFuncMap.t =
+    let newfuncmap=
+      if (IdxFuncMap.mem ffunc idxfuncmap) then idxfuncmap else (
+	let name = "FunctionalEnv"^(string_of_int ((IdxFuncMap.cardinal idxfuncmap)+1)) in
+	IdxFuncMap.add ffunc name idxfuncmap
+      ) in
+    let res = IdxFuncMap.find ffunc newfuncmap in
+    (res,newfuncmap)
   in
 
   let collect_binds (idxfunc:idxfunc) : intexpr list = 
@@ -214,7 +212,7 @@ let replace_by_a_call_idxfunc (f:idxfunc) : idxfunc =
   let wrapped = reconcile_constraints_on_idxfunc (func_constraints,wrap_naive) in
   let domain = func_domain f in
   let newdef = ((meta_transform_intexpr_on_idxfunc TopDown unwrap_intexpr) wrapped) in
-  let name = ensure_name newdef in
+  let (name,newfuncmap) = ensure_name newdef idxfuncmap in
   let map = mapify (collect_binds wrapped) IntMap.empty in
   let args = List.map snd (IntMap.bindings map) in
   let res =  PreWrap(name, args, domain) in
@@ -222,16 +220,21 @@ let replace_by_a_call_idxfunc (f:idxfunc) : idxfunc =
     String.concat ", " (List.map (fun ((i,e):int*intexpr) -> "( "^(string_of_int i)^ " = " ^(string_of_intexpr e)^")") (IntMap.bindings args));
   in
   print_string ("WIP ok, so what do we have here?\nfunction: "^(string_of_idxfunc f)^"\nwrap_naive: "^(string_of_idxfunc wrap_naive)^"\nconstraints:"^(String.concat ", " (List.map (fun ((g,d):intexpr*intexpr) -> "( "^(string_of_intexpr g)^ " = " ^(string_of_intexpr d)^")") func_constraints))^"\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nnewcall: "^(String.concat ", " (List.map string_of_intexpr args))^"\nnewdef: "^(string_of_idxfunc newdef)^"\nres: "^(string_of_idxfunc res)^"\n\n\n"); (* FRED why is the second FH arg not parameterized? *)
-  res
+  (res,newfuncmap)
 ;;
 
-let wrap_precomputations (e :spl) : spl =
+
+let wrap_precomputations ((init_func_map,e):string IdxFuncMap.t * spl) : string IdxFuncMap.t * spl =
+  let idxfuncmap = ref init_func_map in
   let transf (i : idxfunc) : idxfunc = 
     match i with 
-      Pre f -> replace_by_a_call_idxfunc f
+      Pre f -> 
+	let (call,newfuncmap) = replace_by_a_call_idxfunc f !idxfuncmap in
+	idxfuncmap:=newfuncmap;
+	call
     | x -> x
   in
-  (meta_transform_idxfunc_on_spl TopDown transf) e  
+  (!idxfuncmap,(meta_transform_idxfunc_on_spl TopDown transf) e)
 ;;
 
 let reintegrate_RS (e: spl) (canonized : spl list) : spl =
@@ -302,6 +305,8 @@ let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*in
   let rsteps = ref [] in
   let namemap = ref SplMap.empty in
   let count = ref 0 in
+  let idxfuncmap = ref IdxFuncMap.empty in
+
   let register_name (rstep:spl) : _ =
     count := !count + 1;
     let name = "RS"^(string_of_int !count) in
@@ -328,7 +333,13 @@ let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*in
     let rses = collect_RS desc in
 
 
-    let wrapped_precomps = List.map wrap_precomputations rses in
+    let (newidxmap,wrapped_precomps) = 
+      let f ((map,list):string IdxFuncMap.t * spl list) (spl:spl) : string IdxFuncMap.t * spl list = 
+	let (nm,nspl) = wrap_precomputations((map,spl)) in
+	(nm,nspl::list) in
+      List.fold_left f (!idxfuncmap,[]) rses in
+    idxfuncmap := newidxmap;
+
     (* print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (\* WIP *\) *)
 
     let wrapped_intexpr = List.map wrap_intexprs_on_spl wrapped_precomps in
