@@ -183,6 +183,10 @@ let unwrap_spl (e:spl) : spl =
 ;;
 
 let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (unwrapped : idxfunc) : idxfunc = 
+  let printer (args:intexpr IntMap.t) : string =
+    String.concat ", " (List.map (fun ((i,e):int*intexpr) -> "( "^(string_of_int i)^ " = " ^(string_of_intexpr e)^")") (IntMap.bindings args));
+    (* List.map snd (List.filter (fun ((i,expr):int*intexpr) -> IntExprSet.mem (IArg i) set) (IntMap.bindings args)) *)
+  in
   let collect_binds (idxfunc:idxfunc) : intexpr list = 
     let binds (i : intexpr) : intexpr list =
       match i with
@@ -196,8 +200,8 @@ let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (unwrapped : idxfu
     | ICountWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
     | _ -> failwith "type is not supported"
   in
-  print_string ("WIP ok, so what do we have here? a wrapped: "^(string_of_idxfunc wrapped)^"\n name: "^(name)^"\n"); (* FRED WAS HERE *)
-  PreWrap(name, wrapped, (func_domain unwrapped)) (*FIXME this is not really a call yet, it contains the structure and the structure should be saved*)
+  print_string ("WIP ok, so what do we have here?\nunwrapped: "^(string_of_idxfunc unwrapped)^"\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmapify: "^(printer (mapify (collect_binds wrapped) IntMap.empty))^"\n\n"); (* FRED WAS HERE *)
+  PreWrap(name, wrapped, (func_domain unwrapped)) 
 ;;
 
 let wrap_precomputations (e :spl) : spl =
