@@ -173,13 +173,14 @@ let unwrap_idxfunc (e:idxfunc) : idxfunc =
   (meta_transform_idxfunc_on_idxfunc TopDown h) e
 ;;
 
+let unwrap_intexpr (e:intexpr) : intexpr = 
+  match e with
+    ICountWrap(l,r)->IArg l
+  | x -> x
+in
+
 let unwrap_spl (e:spl) : spl =
-  let g (e:intexpr) : intexpr = 
-    match e with
-      ICountWrap(l,r)->IArg l
-    | x -> x
-  in
-  (meta_transform_idxfunc_on_spl TopDown unwrap_idxfunc) ((meta_transform_intexpr_on_spl TopDown g) e)
+  (meta_transform_idxfunc_on_spl TopDown unwrap_idxfunc) ((meta_transform_intexpr_on_spl TopDown unwrap_intexpr) e)
 ;;
 
 let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (unwrapped : idxfunc) : idxfunc = 
@@ -200,7 +201,8 @@ let replace_by_a_call_idxfunc (wrapped:idxfunc) (name:string) (unwrapped : idxfu
     | ICountWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
     | _ -> failwith "type is not supported"
   in
-  print_string ("WIP ok, so what do we have here?\nunwrapped: "^(string_of_idxfunc unwrapped)^"\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmapify: "^(printer (mapify (collect_binds wrapped) IntMap.empty))^"\n\n"); (* FRED WAS HERE *)
+  let map = mapify (collect_binds wrapped) IntMap.empty in
+  print_string ("WIP ok, so what do we have here?\nunwrapped: "^(string_of_idxfunc unwrapped)^"\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nnewcall: "^()^"\n\n"); (* FRED WAS HERE *)
   PreWrap(name, wrapped, (func_domain unwrapped)) 
 ;;
 
