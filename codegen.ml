@@ -161,10 +161,13 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 
 
 let code_of_lib ((funcs,rsteps) : lib) : code = 
-  let code_of_func (funcs) = 
-    Error("FIXME: Work in progress")
+  let code_of_func ((name, f, args, fargs) : envfunc) : code = 
+    FuncEnv(name, 
+	    List.map (function x -> Var(Int, Spl.string_of_intexpr x)) args,
+	    List.map (function x -> Var(Func, Spl.string_of_idxfunc x)) fargs,
+	    Error("FIXME: will spit some code"))
   in
-  let code_of_rstep (rstep_partitioned : rstep_partitioned) =
+  let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     let (name, rstep, cold, reinit, hot, funcs, breakdowns) = rstep_partitioned in 
     let output = "Y" in
     let input = "X" in

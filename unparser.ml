@@ -48,43 +48,60 @@ let rec string_of_boolrvalue (boolrvalue:boolrvalue) : string =
 
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
   match code with
-    Class(name,cold,reinit,hot,funcs,cons,comp,output,input,children,freedoms) -> 
-      let cons_args = (List.map (fun var -> 
-	let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
-      ) (cold@reinit@funcs)) in
-      let comp_args = (List.map (fun var -> 
-	let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
-      ) hot) in
-      let freedoms_args = (List.map (fun var -> 
-	let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
-      ) freedoms) in
-      (match unparse_type with
-	Prototype -> (white n) ^ "struct "^name^" : public RS {\n" 
-	  ^ (white (n+4)) ^ "int _rule;\n" 
-	  ^ (white (n+4)) ^ "char *_dat;\n" 
-	  ^ (String.concat "" (List.map (fun x -> (white (n+4))^"RS *"^x^";\n") children))
-	  ^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") cons_args))
-	  ^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") freedoms_args))
-	  ^ (white (n+4))
-      | Implementation -> (white n) ^ name ^ "::")
-      ^ name ^ "(" ^ (String.concat ", " cons_args)^")" ^ (match unparse_type with
-	Prototype -> ";\n"
+  | FuncEnv(name,args,fargs,code) ->
+    (match unparse_type with
+      Prototype ->    	
+	let cons_args = (List.map (fun var -> 
+	  let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name   (*FIXME why cons_args & cons_fargs, there seems to be some shit inside anyways*)
+	) (args)) in
+	let cons_fargs = (List.map (fun var -> 
+	  let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
+	) (fargs)) in
+    
+	"struct "^name^" : public func {\n"
+	^ "    "^name^"("^(String.concat "," ((cons_args)@(cons_fargs)))^"){};\n"
+	^ "    virtual complex_t at(int) {\n"^(cpp_string_of_code unparse_type (n+8) code)^"    }\n"
+	^ "};\n\n"
+    | Implementation -> "NONE yet, FIXME\n"
+  )
+      
+  | Class(name,cold,reinit,hot,funcs,cons,comp,output,input,children,freedoms) -> 
+    let cons_args = (List.map (fun var -> 
+      let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
+    ) (cold@reinit@funcs)) in
+    let comp_args = (List.map (fun var -> 
+      let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
+    ) hot) in
+    let freedoms_args = (List.map (fun var -> 
+      let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
+    ) freedoms) in
+    (match unparse_type with
+      Prototype -> (white n) ^ "struct "^name^" : public RS {\n" 
+	^ (white (n+4)) ^ "int _rule;\n" 
+	^ (white (n+4)) ^ "char *_dat;\n" 
+	^ (String.concat "" (List.map (fun x -> (white (n+4))^"RS *"^x^";\n") children))
+	^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") cons_args))
+	^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") freedoms_args))
+	^ (white (n+4))
+    | Implementation -> (white n) ^ name ^ "::")
+    ^ name ^ "(" ^ (String.concat ", " cons_args)^")" ^ (match unparse_type with
+      Prototype -> ";\n"
       | Implementation -> " : \n"
 	^ (String.concat (", \n") ((List.map (fun x -> let Var(ctype, name) = x in (white (n+4))^name^"("^name^")") (cold@reinit@funcs)) )) 
 	^ " {\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
-      ^ (match unparse_type with
-      | Prototype -> (white (n+4))^"void "
-      | Implementation -> (white (n))^"void "^name ^ "::")
-      ^ "compute(" ^ (String.concat ", " (("double* "^output)::("double* "^input)::comp_args)) ^ ")"^ (match unparse_type with
-	Prototype -> ";\n"
-      | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) comp)^(white n)^"}\n")
-      ^ (match unparse_type with
-	Prototype -> (white n) ^ "private:" ^ "\n"
-	  ^ (white (n+4)) ^ name ^ "(const " ^ name ^ "&);" ^ "\n"
-	  ^ (white (n+4)) ^ name ^ "& operator=(const " ^ name ^"&);" ^ "\n"
-	  ^ "};\n\n"
-      | Implementation -> "\n")
-
+    ^ (match unparse_type with
+    | Prototype -> (white (n+4))^"void "
+    | Implementation -> (white (n))^"void "^name ^ "::")
+    ^ "compute(" ^ (String.concat ", " (("double* "^output)::("double* "^input)::comp_args)) ^ ")"^ (match unparse_type with
+      Prototype -> ";\n"
+    | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) comp)^(white n)^"}\n")
+    ^ (match unparse_type with
+      Prototype -> (white n) ^ "private:" ^ "\n"
+	^ (white (n+4)) ^ name ^ "(const " ^ name ^ "&);" ^ "\n"
+	^ (white (n+4)) ^ name ^ "& operator=(const " ^ name ^"&);" ^ "\n"
+	^ "};\n\n"
+    | Implementation -> "\n")
+      
 	
   | Chain l -> String.concat "" (List.map (cpp_string_of_code unparse_type n) l)
   | IntAssign(Var(_, nameL), rvalue) -> (white n) ^ nameL ^ " = "^ (string_of_intrvalue rvalue) ^ ";\n"
@@ -119,19 +136,19 @@ let string_of_code (n:int) (code : code) : string =
   ^ "#define complex_t std::complex<double>\n"
   ^ "struct func : public TFunc_TInt_T<complex_t> {};\n\n"
 
-  ^ "struct Func_1 : public func {\n"
-  ^ "    Func_1(int a, int b, int c, int d, int e){};\n"
-  ^ "  virtual complex_t at(int) {\n"
-  ^ "        return 0; /*FIXME*/\n"
-  ^ "  }\n"
-  ^ "};\n"
-  ^ "\n"
-  ^ "struct Func_2 : public func {\n"
-  ^ "    Func_2(int a, int b, int c, int d, func* f){};\n"
-  ^ "  virtual complex_t at(int) {\n"
-  ^ "        return 0; /*FIXME*/\n"
-  ^ "  }\n"
-  ^ "};\n"
+  (* ^ "struct Func_1 : public func {\n" *)
+  (* ^ "    Func_1(int a, int b, int c, int d, int e){};\n" *)
+  (* ^ "  virtual complex_t at(int) {\n" *)
+  (* ^ "        return 0; /*FIXME*/\n" *)
+  (* ^ "  }\n" *)
+  (* ^ "};\n" *)
+  (* ^ "\n" *)
+  (* ^ "struct Func_2 : public func {\n" *)
+  (* ^ "    Func_2(int a, int b, int c, int d, func* f){};\n" *)
+  (* ^ "  virtual complex_t at(int) {\n" *)
+  (* ^ "        return 0; /*FIXME*/\n" *)
+  (* ^ "  }\n" *)
+  (* ^ "};\n" *)
 
 
 
