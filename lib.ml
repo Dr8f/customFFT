@@ -554,6 +554,18 @@ let lib_from_closure ((funcs, rsteps): closure) : lib =
 	| x -> x
       in
       (condition, freedoms, desc, partitioned, (meta_transform_spl_on_spl BottomUp j) partitioned, (meta_transform_spl_on_spl BottomUp k) partitioned) in
+
+    let lambda_args = 
+      let rec collect_lambdas (i : idxfunc) : idxfunc list =
+	match i with
+	  FArg _ -> [i]
+	| Pre f -> collect_lambdas f
+	| _ -> []
+      in
+      ((meta_collect_idxfunc_on_spl collect_lambdas) rstep) in
+    print_string ( "\n\nFRED:"^(string_of_spl rstep)^"\nRES: "^(String.concat ", " (List.map string_of_idxfunc lambda_args))^"\n\n");
+
+
     (name, rstep, (StringMap.find name cold), (StringMap.find name reinit), (StringMap.find name hot), (List.map g breakdowns))
   in
   (funcs,List.map f rsteps)
