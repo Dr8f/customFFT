@@ -117,7 +117,24 @@ let string_of_code (n:int) (code : code) : string =
   ^ "struct RS { virtual ~RS(){}};\n"
   ^ "template<class T> struct TFunc_TInt_T : public RS { virtual T at(int) = 0; };\n"
   ^ "#define complex_t std::complex<double>\n"
-  ^ "struct TFunc_TInt_TComplex : public TFunc_TInt_T<complex_t> {};\n\n"
+  ^ "struct func : public TFunc_TInt_T<complex_t> {};\n\n"
+
+  ^ "struct Func_1 : public func {\n"
+  ^ "    Func_1(int a, int b, int c, int d, int e){};\n"
+  ^ "  virtual complex_t at(int) {\n"
+  ^ "        return 0; /*FIXME*/\n"
+  ^ "  }\n"
+  ^ "};\n"
+  ^ "\n"
+  ^ "struct Func_2 : public func {\n"
+  ^ "    Func_2(int a, int b, int c, int d, func* f){};\n"
+  ^ "  virtual complex_t at(int) {\n"
+  ^ "        return 0; /*FIXME*/\n"
+  ^ "  }\n"
+  ^ "};\n"
+
+
+
   ^ (cpp_string_of_code Prototype n code)
   ^ (cpp_string_of_code Implementation n code)
 ;;
