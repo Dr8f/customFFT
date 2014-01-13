@@ -31,7 +31,7 @@ type closure = ( (idxfunc * string) list * rstep_unpartitioned list)
 type breakdown_enhanced = (boolexpr * (intexpr * intexpr) list * spl * spl * spl * spl)
 ;;
 
-type rstep_partitioned = (string * spl * IntExprSet.t * IntExprSet.t * IntExprSet.t * breakdown_enhanced list)
+type rstep_partitioned = (string * spl * IntExprSet.t * IntExprSet.t * IntExprSet.t * idxfunc list * breakdown_enhanced list)
 ;;
 
 type lib = ((idxfunc * string) list * rstep_partitioned list)
@@ -563,10 +563,9 @@ let lib_from_closure ((funcs, rsteps): closure) : lib =
 	| _ -> []
       in
       ((meta_collect_idxfunc_on_spl collect_lambdas) rstep) in
-    print_string ( "\n\nFRED:"^(string_of_spl rstep)^"\nRES: "^(String.concat ", " (List.map string_of_idxfunc lambda_args))^"\n\n");
 
 
-    (name, rstep, (StringMap.find name cold), (StringMap.find name reinit), (StringMap.find name hot), (List.map g breakdowns))
+    (name, rstep, (StringMap.find name cold), (StringMap.find name reinit), (StringMap.find name hot), lambda_args, (List.map g breakdowns))
   in
   (funcs,List.map f rsteps)
 ;;
