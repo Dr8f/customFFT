@@ -25,7 +25,7 @@ type breakdown = (boolexpr * (intexpr * intexpr) list * spl * spl)
 type rstep_unpartitioned = (string * spl * IntExprSet.t * breakdown list )
 ;;
 
-type closure = rstep_unpartitioned list
+type closure = ( (idxfunc * string) list * rstep_unpartitioned list)
 ;;
 
 type breakdown_enhanced = (boolexpr * (intexpr * intexpr) list * spl * spl * spl * spl)
@@ -34,7 +34,7 @@ type breakdown_enhanced = (boolexpr * (intexpr * intexpr) list * spl * spl * spl
 type rstep_partitioned = (string * spl * IntExprSet.t * IntExprSet.t * IntExprSet.t * breakdown_enhanced list)
 ;;
 
-type lib = rstep_partitioned list
+type lib = ((idxfunc * string) list * rstep_partitioned list)
 ;;
 
 type specified_arg = string * int
@@ -74,8 +74,9 @@ let string_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns ): 
   ^"\n"
 ;;
 
-let string_of_lib (lib: lib) : string =
-  String.concat "" (List.map string_of_rstep_partitioned lib)
+let string_of_lib ((funcs,rsteps): lib) : string = (*FIXME print the funcs*)
+  (String.concat "" (List.map (function (idxfunc,name) -> "NAME\t\t\t"^name^"\nFUNC\t\t\t"^(string_of_idxfunc idxfunc)^"\n\n") funcs)) ^ (
+  String.concat "" (List.map string_of_rstep_partitioned rsteps))
 ;;
 
 
@@ -327,17 +328,15 @@ let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*in
         
     let wrapped_precomps = List.map wrap_precomputations rses in
 
-    (* print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (\* WIP *\) *)
+    print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (* WIP *)
 
     let wrapped_intexpr = List.map wrap_intexprs_on_spl wrapped_precomps in
-    (* print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); (\* WIP *\) *)
+    print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); (* WIP *)
 
 
     let constraints = List.map extract_constraints_spl wrapped_intexpr in
     let wrapped_RSes = List.map reconcile_constraints_on_spl (List.combine constraints wrapped_intexpr) in
 
-
-    (* let wrapped_RSes = List.map wrap_exprs rses in *)
     (* print_string ("WIP DESC wrapped:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_RSes))^"\n\n"); (\* WIP *\) *)
 
     let new_steps = List.map unwrap_spl wrapped_RSes in
@@ -354,10 +353,10 @@ let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*in
 
     rsteps := !rsteps @ [(name, rstep, args, [(condition, freedoms, desc, desc_with_calls)])];
   done;
-  !rsteps (* FRED, FIXME: we should return the idxfuncmap here*)
+  ((IdxFuncMap.bindings !idxfuncmap), !rsteps)
 ;;
 
-let dependency_map_of_closure (closure : closure) : SpecArgSet.t SpecArgMap.t =
+let dependency_map_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t SpecArgMap.t =
   let depmap = ref SpecArgMap.empty in 
   let per_rstep ((name, _, _, breakdowns) : rstep_unpartitioned) : _=   
     let per_rule ((_,_,_,desc_with_calls):breakdown) : _ = 
@@ -384,11 +383,11 @@ let dependency_map_of_closure (closure : closure) : SpecArgSet.t SpecArgMap.t =
     in
     List.iter per_rule breakdowns
   in
-  List.iter per_rstep closure;
+  List.iter per_rstep rsteps;
   (!depmap)
 ;;
 
-let initial_hots_of_closure (closure: closure) : SpecArgSet.t =
+let initial_hots_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t =
   let hot_set = ref SpecArgSet.empty in
   let per_rstep ((name, _, _, breakdowns) : rstep_unpartitioned) : _=   
     let per_rule ((_,_,_,desc_with_calls):breakdown) : _ = 
@@ -408,13 +407,13 @@ let initial_hots_of_closure (closure: closure) : SpecArgSet.t =
     in
     List.iter per_rule breakdowns
   in
-  List.iter per_rstep closure;
+  List.iter per_rstep rsteps;
   !hot_set
 ;;
 
 
 
-let initial_colds_of_closure (closure: closure) : SpecArgSet.t =
+let initial_colds_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t =
   let cold_set = ref SpecArgSet.empty in
 
   let init_rstep ((name, rstep, args, breakdowns) : rstep_unpartitioned) : _=
@@ -442,7 +441,7 @@ let initial_colds_of_closure (closure: closure) : SpecArgSet.t =
     in
     List.iter init_rule breakdowns
   in
-  List.iter init_rstep closure;
+  List.iter init_rstep rsteps;
   !cold_set
 ;;
 
@@ -503,10 +502,10 @@ let filter_by_rstep (name:string) (s:SpecArgSet.t) : IntExprSet.t =
   !res
 ;;
 
-let partition_map_of_closure (closure: closure) : (IntExprSet.t StringMap.t * IntExprSet.t StringMap.t * IntExprSet.t StringMap.t) = 
-  let dependency_map = dependency_map_of_closure closure in
-  let initial_colds = initial_colds_of_closure closure in
-  let initial_hots = initial_hots_of_closure closure in
+let partition_map_of_rsteps (rsteps: rstep_unpartitioned list) : (IntExprSet.t StringMap.t * IntExprSet.t StringMap.t * IntExprSet.t StringMap.t) = 
+  let dependency_map = dependency_map_of_rsteps rsteps in
+  let initial_colds = initial_colds_of_rsteps rsteps in
+  let initial_hots = initial_hots_of_rsteps rsteps in
   let all_colds = backward_propagation initial_colds dependency_map in
   let all_hots = forward_propagation initial_hots dependency_map in
 
@@ -522,15 +521,15 @@ let partition_map_of_closure (closure: closure) : (IntExprSet.t StringMap.t * In
     colds := StringMap.add name (IntExprSet.diff necessarily_colds reinit) !colds;
     hots := StringMap.add name (IntExprSet.diff (IntExprSet.union necessarily_hots not_constrained) reinit) !hots (* as hot as possible *)
   in
-  List.iter partition_args closure;
+  List.iter partition_args rsteps;
   (!colds,!reinits,!hots)
 ;;
 
-let lib_from_closure (closure: closure) : lib =
+let lib_from_closure ((funcs, rsteps): closure) : lib =
   let filter_by (args:intexpr IntMap.t) (set:IntExprSet.t) : intexpr list =
     List.map snd (List.filter (fun ((i,expr):int*intexpr) -> IntExprSet.mem (IArg i) set) (IntMap.bindings args))
   in
-  let (cold,reinit,hot) = partition_map_of_closure closure in
+  let (cold,reinit,hot) = partition_map_of_rsteps rsteps in
   let f ((name, rstep, _, breakdowns) : rstep_unpartitioned) : rstep_partitioned =
     let g ((condition, freedoms, desc, desc_with_calls):breakdown) : breakdown_enhanced = 
       let childcount = ref 0 in
@@ -557,7 +556,7 @@ let lib_from_closure (closure: closure) : lib =
       (condition, freedoms, desc, partitioned, (meta_transform_spl_on_spl BottomUp j) partitioned, (meta_transform_spl_on_spl BottomUp k) partitioned) in
     (name, rstep, (StringMap.find name cold), (StringMap.find name reinit), (StringMap.find name hot), (List.map g breakdowns))
   in
-  List.map f closure
+  (funcs,List.map f rsteps)
 ;;
 
 let make_lib (functionalities: spl list) (algo: spl -> boolexpr * (intexpr*intexpr) list * spl) : lib =

@@ -200,8 +200,8 @@ let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction)
     | FD (a, b) -> let ga = g a in FD (ga, g b)
     | FCompose a -> FCompose(List.map z a)
     | Pre a -> Pre(z a) 
-    | PreWrap (n,f,d) -> PreWrap(n,(List.map g f), (g d))
-    | FArg (i,f) -> FArg(i, (g f)) 
+    | PreWrap (n,f,d) -> PreWrap(n, f, (g d)) (*f is not parameterized because we don't want to parameterize inside the call*)
+    | FArg (i,f) ->  FArg(i, (g f)) 
   in
   meta_transform_idxfunc_on_idxfunc recursion_direction z
 ;;

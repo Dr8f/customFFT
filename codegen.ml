@@ -158,7 +158,7 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
 
 
 
-let code_of_lib (lib : lib) : code = 
+let code_of_lib ((funcs,rsteps) : lib) : code = 
   let f (rstep_partitioned : rstep_partitioned) =
     let (name, rstep, cold, reinit, hot, breakdowns) = rstep_partitioned in 
     let output = "Y" in
@@ -175,6 +175,6 @@ let code_of_lib (lib : lib) : code =
 	   collect_freedoms rstep_partitioned
     )
   in
-  Chain (List.map f lib)
+  Chain (List.map f rsteps) (*FIXME use funcs*)
 ;;
 
