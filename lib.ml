@@ -25,7 +25,10 @@ type breakdown = (boolexpr * (intexpr * intexpr) list * spl * spl)
 type rstep_unpartitioned = (string * spl * IntExprSet.t * breakdown list )
 ;;
 
-type closure = ( (idxfunc * string) list * rstep_unpartitioned list)
+type envfunc = (string * idxfunc * intexpr list * idxfunc list)
+;;
+
+type closure = ( envfunc list * rstep_unpartitioned list)
 ;;
 
 type breakdown_enhanced = (boolexpr * (intexpr * intexpr) list * spl * spl * spl * spl)
@@ -34,7 +37,7 @@ type breakdown_enhanced = (boolexpr * (intexpr * intexpr) list * spl * spl * spl
 type rstep_partitioned = (string * spl * IntExprSet.t * IntExprSet.t * IntExprSet.t * idxfunc list * breakdown_enhanced list)
 ;;
 
-type lib = ((idxfunc * string) list * rstep_partitioned list)
+type lib = ( envfunc list * rstep_partitioned list)
 ;;
 
 type specified_arg = string * int
@@ -75,9 +78,16 @@ let string_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdo
   ^"\n"
 ;;
 
-let string_of_lib ((funcs,rsteps): lib) : string = (*FIXME print the funcs*)
-  (String.concat "" (List.map (function (idxfunc,name) -> "NAME\t\t\t"^name^"\nFUNC\t\t\t"^(string_of_idxfunc idxfunc)^"\n\n") funcs)) ^ (
-  String.concat "" (List.map string_of_rstep_partitioned rsteps))
+let string_of_envfunc ((name, idxfunc, args, fargs):envfunc) : string = 
+  "NAME\t\t\t"^name^"\n"
+  ^"FUNC\t\t\t"^(string_of_idxfunc idxfunc)^"\n"
+  ^"ARGS\t\t\t"^(String.concat ", " (List.map string_of_intexpr args))^"\n"
+  ^"FARGS\t\t\t"^(String.concat ", " (List.map string_of_idxfunc fargs))^"\n"
+  ^"\n"
+;;
+
+let string_of_lib ((funcs,rsteps): lib) : string = 
+  (String.concat "" (List.map string_of_envfunc funcs)) ^ (String.concat "" (List.map string_of_rstep_partitioned rsteps))
 ;;
 
 
@@ -198,13 +208,14 @@ let collect_intexpr_binds (i : intexpr) : intexpr list =
     | _ -> []
 ;;
 
-let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:string IdxFuncMap.t ref): idxfunc = 
-  let ensure_name (ffunc:idxfunc) : string =
+let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:envfunc IdxFuncMap.t ref): idxfunc = 
+  let ensure_name (ffunc:idxfunc) (args:intexpr list) (fargs:idxfunc list) : string =
     if not(IdxFuncMap.mem ffunc !idxfuncmap) then (
       let name = "Func_"^(string_of_int ((IdxFuncMap.cardinal !idxfuncmap)+1)) in
-      idxfuncmap := IdxFuncMap.add ffunc name !idxfuncmap
+      idxfuncmap := IdxFuncMap.add ffunc (name,ffunc,args,fargs) !idxfuncmap
     );
-    IdxFuncMap.find ffunc !idxfuncmap
+    let (name,_,_,_) = IdxFuncMap.find ffunc !idxfuncmap in
+    name
   in
 
   let collect_farg (i : idxfunc) : idxfunc list =
@@ -218,10 +229,10 @@ let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:string IdxFuncMap.t ref): 
   let wrapped = reconcile_constraints_on_idxfunc (func_constraints,wrap_naive) in
   let domain = func_domain f in
   let newdef = ((meta_transform_intexpr_on_idxfunc TopDown unwrap_intexpr) wrapped) in
-  let name = ensure_name newdef in
   let map = mapify ((meta_collect_intexpr_on_idxfunc collect_intexpr_binds) wrapped) IntMap.empty in
   let args = List.map snd (IntMap.bindings map) in
   let fargs = ((meta_collect_idxfunc_on_idxfunc collect_farg) f) in 
+  let name = ensure_name newdef args fargs in
   let res =  PreWrap(name, args, fargs, domain) in 
   let printer (args:intexpr IntMap.t) : string =
     String.concat ", " (List.map (fun ((i,e):int*intexpr) -> "( "^(string_of_int i)^ " = " ^(string_of_intexpr e)^")") (IntMap.bindings args));
@@ -343,7 +354,8 @@ let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*in
 
     rsteps := !rsteps @ [(name, rstep, args, [(condition, freedoms, desc, desc_with_calls)])];
   done;
-  ((IdxFuncMap.bindings !idxfuncmap), !rsteps)
+
+  (List.map snd (IdxFuncMap.bindings !idxfuncmap), !rsteps)
 ;;
 
 let dependency_map_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t SpecArgMap.t =
@@ -351,7 +363,7 @@ let dependency_map_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t S
   let per_rstep ((name, _, _, breakdowns) : rstep_unpartitioned) : _=   
     let per_rule ((_,_,_,desc_with_calls):breakdown) : _ = 
       meta_iter_spl_on_spl ( function
-      | UnpartitionnedCall(callee,vars,funcs,_,_) -> (*FIXME funcs not taken into account *)
+      | UnpartitionnedCall(callee,vars,_,_,_) ->
 	let g (arg:int) (expr:intexpr) : _ =
     	  let key = (callee,arg) in
     	  let h (e:intexpr): _ =
@@ -382,7 +394,7 @@ let initial_hots_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t =
   let per_rstep ((name, _, _, breakdowns) : rstep_unpartitioned) : _=   
     let per_rule ((_,_,_,desc_with_calls):breakdown) : _ = 
       meta_iter_spl_on_spl ( function
-      | UnpartitionnedCall(callee,vars,funcs,_,_) -> (*FIXME funcs not taken into account *)
+      | UnpartitionnedCall(callee, vars, _, _, _) ->
 	let g (arg:int) (expr:intexpr) : _ =
     	  let h (e:intexpr): _ =
     	    match e with

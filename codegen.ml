@@ -32,6 +32,7 @@ type envlvalue =
 
 type code =
   Class of string(*name*) * var list(*cold args*) * var list(*reinit args*) * var list(*hot args*) * var list(*funcs*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * string list (*childX*) * var list (*freedoms*)
+| FuncEnv of string(*name*) * var list(*args*) * var list(*funcs*) * code
 | Chain of code list
 | Noop
 | Error of string
@@ -160,7 +161,10 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 
 
 let code_of_lib ((funcs,rsteps) : lib) : code = 
-  let f (rstep_partitioned : rstep_partitioned) =
+  let code_of_func (funcs) = 
+    Error("FIXME: Work in progress")
+  in
+  let code_of_rstep (rstep_partitioned : rstep_partitioned) =
     let (name, rstep, cold, reinit, hot, funcs, breakdowns) = rstep_partitioned in 
     let output = "Y" in
     let input = "X" in
@@ -177,6 +181,6 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
 	   collect_freedoms rstep_partitioned
     )
   in
-  Chain (List.map f rsteps) (*FIXME use funcs*)
+  Chain ((List.map code_of_func funcs)@(List.map code_of_rstep rsteps))
 ;;
 
