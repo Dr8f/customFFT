@@ -187,7 +187,7 @@ let unwrap_spl (e:spl) : spl =
 let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:string IdxFuncMap.t ref): idxfunc = 
   let ensure_name (ffunc:idxfunc) : string =
     if not(IdxFuncMap.mem ffunc !idxfuncmap) then (
-      let name = "FunctionalEnv"^(string_of_int ((IdxFuncMap.cardinal !idxfuncmap)+1)) in
+      let name = "Func_"^(string_of_int ((IdxFuncMap.cardinal !idxfuncmap)+1)) in
       idxfuncmap := IdxFuncMap.add ffunc name !idxfuncmap
     );
     IdxFuncMap.find ffunc !idxfuncmap
@@ -535,9 +535,9 @@ let lib_from_closure ((funcs, rsteps): closure) : lib =
       let childcount = ref 0 in
       let h (e:spl) : spl =
 	match e with
-	| UnpartitionnedCall (callee, args, funcs, range, domain) -> (*FIXME funcs not taken into account *)
+	| UnpartitionnedCall (callee, args, funcs, range, domain) -> 
 	  childcount := !childcount + 1;
-  	  PartitionnedCall(!childcount, callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)), funcs (* (List.map snd (IntMap.bindings funcs)) *), range, domain)
+  	  PartitionnedCall(!childcount, callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)), funcs, range, domain)
 	| x -> x
       in
       let partitioned = (meta_transform_spl_on_spl BottomUp h) desc_with_calls in

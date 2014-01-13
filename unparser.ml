@@ -30,7 +30,7 @@ let rec string_of_intrvalue (intrvalue:intrvalue) : string =
 
 let rec string_of_envrvalue (envrvalue:envrvalue) : string = 
   match envrvalue with
-    CreateEnv(name,args) -> name^"("^(String.concat ", " (List.map string_of_intrvalue args))^")"
+    CreateEnv(name,args,funcs) -> name^"("^(String.concat ", " ((List.map string_of_intrvalue args)@(List.map (function (f:idxfunc) -> "new "^(string_of_idxfunc f)) funcs)))^")"
 ;;
 
 let rec string_of_envlvalue (envlvalue:envlvalue) : string = 
