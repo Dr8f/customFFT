@@ -248,8 +248,8 @@ let meta_collect_idxfunc_on_idxfunc (f : idxfunc -> 'a list) : (idxfunc -> 'a li
   let z (g : idxfunc -> 'a list) (e : idxfunc) : 'a list =
     match e with
       FH _ | FL _ | FD _ -> f e
-    | FCompose l ->  List.flatten (List.map g l)
-    | Pre x -> g x
+    | FCompose l ->  List.flatten (List.map f l)
+    | Pre x -> f x
     | PreWrap _ -> f e 
     | FArg _ -> f e 
   in

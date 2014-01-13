@@ -185,6 +185,25 @@ let unwrap_spl (e:spl) : spl =
   (meta_transform_idxfunc_on_spl TopDown unwrap_idxfunc) ((meta_transform_intexpr_on_spl TopDown unwrap_intexpr) e)
 ;;
 
+let rec mapify (binds : intexpr list) (map : intexpr IntMap.t) : intexpr IntMap.t =
+  match binds with
+    [] -> map
+  | ICountWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
+  | _ -> failwith "type is not supported"
+;;
+
+let collect_intexpr_binds (i : intexpr) : intexpr list =
+    match i with
+      ICountWrap _ -> [i]
+    | _ -> []
+;;
+
+let collect_idxfunc_binds (i : idxfunc) : idxfunc list =
+    match i with
+      FArg _ -> [i]
+    | _ -> []
+;;
+
 let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:string IdxFuncMap.t ref): idxfunc = 
   let ensure_name (ffunc:idxfunc) : string =
     if not(IdxFuncMap.mem ffunc !idxfuncmap) then (
@@ -194,32 +213,20 @@ let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:string IdxFuncMap.t ref): 
     IdxFuncMap.find ffunc !idxfuncmap
   in
 
-  let collect_binds (idxfunc:idxfunc) : intexpr list = 
-    let binds (i : intexpr) : intexpr list =
-      match i with
-	ICountWrap _ -> [i]
-      | _ -> []
-    in
-    ((meta_collect_intexpr_on_idxfunc binds) idxfunc) in
-  let rec mapify (binds : intexpr list) (map : intexpr IntMap.t) : intexpr IntMap.t =
-    match binds with
-      [] -> map
-    | ICountWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
-    | _ -> failwith "type is not supported"
-  in
   let wrap_naive = (wrap_intexprs_on_idxfunc f) in
   let func_constraints = (extract_constraints_func wrap_naive) in
   let wrapped = reconcile_constraints_on_idxfunc (func_constraints,wrap_naive) in
   let domain = func_domain f in
   let newdef = ((meta_transform_intexpr_on_idxfunc TopDown unwrap_intexpr) wrapped) in
   let name = ensure_name newdef in
-  let map = mapify (collect_binds wrapped) IntMap.empty in
+  let map = mapify ((meta_collect_intexpr_on_idxfunc collect_intexpr_binds) wrapped) IntMap.empty in
   let args = List.map snd (IntMap.bindings map) in
-  let res =  PreWrap(name, args, domain) in
+  let fargs = ((meta_collect_idxfunc_on_idxfunc collect_idxfunc_binds) f) in 
+  let res =  PreWrap(name, args, domain) in (*FRED FIXME: use fargs*)
   let printer (args:intexpr IntMap.t) : string =
     String.concat ", " (List.map (fun ((i,e):int*intexpr) -> "( "^(string_of_int i)^ " = " ^(string_of_intexpr e)^")") (IntMap.bindings args));
   in
-  print_string ("WIP ok, so what do we have here?\nfunction: "^(string_of_idxfunc f)^"\nwrap_naive: "^(string_of_idxfunc wrap_naive)^"\nconstraints:"^(String.concat ", " (List.map (fun ((g,d):intexpr*intexpr) -> "( "^(string_of_intexpr g)^ " = " ^(string_of_intexpr d)^")") func_constraints))^"\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nnewcall: "^(String.concat ", " (List.map string_of_intexpr args))^"\nnewdef: "^(string_of_idxfunc newdef)^"\nres: "^(string_of_idxfunc res)^"\n\n\n");
+  print_string ("WIP ok, so what do we have here?\nfunction: "^(string_of_idxfunc f)^"\nwrap_naive: "^(string_of_idxfunc wrap_naive)^"\nconstraints:"^(String.concat ", " (List.map (fun ((g,d):intexpr*intexpr) -> "( "^(string_of_intexpr g)^ " = " ^(string_of_intexpr d)^")") func_constraints))^"\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nnewcall: "^(String.concat ", " ((List.map string_of_intexpr args)@(List.map string_of_idxfunc fargs)))^"\nnewdef: "^(string_of_idxfunc newdef)^"\nres: "^(string_of_idxfunc res)^"\n\n\n");
   res
 ;;
 
@@ -247,30 +254,7 @@ let drop_RS : (spl -> spl) =
 ;;
 
 let replace_by_a_call_spl ((wrapped,(name,unwrapped)) : (spl * (string * spl))) : spl =
-  let collect_binds (spl:spl) : intexpr list = 
-    let binds (i : intexpr) : intexpr list =
-      match i with
-	ICountWrap _ -> [i]
-      | _ -> []
-    in
-    ((meta_collect_intexpr_on_spl binds) spl) in
-  let rec mapify (binds : intexpr list) (map : intexpr IntMap.t) : intexpr IntMap.t =
-    match binds with
-      [] -> map
-    | ICountWrap(p,expr)::tl -> mapify tl (IntMap.add p expr map)
-    | _ -> failwith "type is not supported"
-  in
-
-  let fcollect_binds (spl:spl) : idxfunc list = 
-    let binds (i : idxfunc) : idxfunc list =
-      match i with
-	PreWrap _ -> [i]
-      | _ -> []
-    in
-    ((meta_collect_idxfunc_on_spl binds) spl) 
-  in
-
-  let res = UnpartitionnedCall(name, (mapify (collect_binds wrapped) IntMap.empty), (fcollect_binds wrapped), (range unwrapped), (domain unwrapped)) in 
+  let res = UnpartitionnedCall(name, (mapify (meta_collect_intexpr_on_spl collect_intexpr_binds wrapped) IntMap.empty), (meta_collect_idxfunc_on_spl collect_idxfunc_binds wrapped), (range unwrapped), (domain unwrapped)) in 
   (* print_string ("WIP REPLACING:\nwrapped:"^(string_of_spl wrapped)^"\nunwrapped:"^(string_of_spl unwrapped)^"\nres:"^(string_of_spl res)^"\n\n"); *)
   res
 ;;
@@ -329,10 +313,10 @@ let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*in
         
     let wrapped_precomps = List.map wrap_precomputations rses in
 
-    print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (* WIP *)
+    (* print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (\* WIP *\) *)
 
     let wrapped_intexpr = List.map wrap_intexprs_on_spl wrapped_precomps in
-    print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); (* WIP *)
+    (* print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); (\* WIP *\) *)
 
 
     let constraints = List.map extract_constraints_spl wrapped_intexpr in
