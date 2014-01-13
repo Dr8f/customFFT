@@ -167,7 +167,7 @@ let unwrap_idxfunc (e:idxfunc) : idxfunc =
   let count = ref 0 in
   let h (e:idxfunc) : idxfunc = 
     match e with
-      PreWrap(n,x,d)->
+      PreWrap(n,x,funcs,d)->
 	count := !count + 1;
 	Pre(FArg(("lambda"^(string_of_int !count)),d))
     | x -> x
@@ -198,12 +198,6 @@ let collect_intexpr_binds (i : intexpr) : intexpr list =
     | _ -> []
 ;;
 
-let collect_idxfunc_binds (i : idxfunc) : idxfunc list =
-    match i with
-      FArg _ -> [i]
-    | _ -> []
-;;
-
 let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:string IdxFuncMap.t ref): idxfunc = 
   let ensure_name (ffunc:idxfunc) : string =
     if not(IdxFuncMap.mem ffunc !idxfuncmap) then (
@@ -211,6 +205,12 @@ let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:string IdxFuncMap.t ref): 
       idxfuncmap := IdxFuncMap.add ffunc name !idxfuncmap
     );
     IdxFuncMap.find ffunc !idxfuncmap
+  in
+
+  let collect_farg (i : idxfunc) : idxfunc list =
+    match i with
+      FArg _ -> [i]
+    | _ -> []
   in
 
   let wrap_naive = (wrap_intexprs_on_idxfunc f) in
@@ -221,8 +221,8 @@ let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:string IdxFuncMap.t ref): 
   let name = ensure_name newdef in
   let map = mapify ((meta_collect_intexpr_on_idxfunc collect_intexpr_binds) wrapped) IntMap.empty in
   let args = List.map snd (IntMap.bindings map) in
-  let fargs = ((meta_collect_idxfunc_on_idxfunc collect_idxfunc_binds) f) in 
-  let res =  PreWrap(name, args, domain) in (*FRED FIXME: use fargs*)
+  let fargs = ((meta_collect_idxfunc_on_idxfunc collect_farg) f) in 
+  let res =  PreWrap(name, args, fargs, domain) in 
   let printer (args:intexpr IntMap.t) : string =
     String.concat ", " (List.map (fun ((i,e):int*intexpr) -> "( "^(string_of_int i)^ " = " ^(string_of_intexpr e)^")") (IntMap.bindings args));
   in
@@ -254,6 +254,11 @@ let drop_RS : (spl -> spl) =
 ;;
 
 let replace_by_a_call_spl ((wrapped,(name,unwrapped)) : (spl * (string * spl))) : spl =
+  let collect_idxfunc_binds (i : idxfunc) : idxfunc list =
+    match i with
+      PreWrap _ -> [i]
+    | _ -> []
+  in
   let res = UnpartitionnedCall(name, (mapify (meta_collect_intexpr_on_spl collect_intexpr_binds wrapped) IntMap.empty), (meta_collect_idxfunc_on_spl collect_idxfunc_binds wrapped), (range unwrapped), (domain unwrapped)) in 
   (* print_string ("WIP REPLACING:\nwrapped:"^(string_of_spl wrapped)^"\nunwrapped:"^(string_of_spl unwrapped)^"\nres:"^(string_of_spl res)^"\n\n"); *)
   res

@@ -29,7 +29,7 @@ type idxfunc =
 | FD of intexpr * intexpr
 | FCompose of idxfunc list
 | Pre of idxfunc (* Precompute *)
-| PreWrap of string * intexpr list * intexpr (*domain*)
+| PreWrap of string * intexpr list * idxfunc list * intexpr (*domain*)
 | FArg of string * intexpr (*domain*)
 ;;
 
@@ -97,7 +97,7 @@ let rec string_of_idxfunc (e : idxfunc) : string =
   | FD(j,k) -> "d("^(string_of_intexpr j)^","^(string_of_intexpr k)^")"      
   | FCompose(list) -> optional_short_print "fCompose" (String.concat " . " (List.map string_of_idxfunc list))
   | Pre(l) -> "pre("^(string_of_idxfunc l)^")"
-  | PreWrap(n, l, d) -> n^"("^(String.concat ", " (List.map string_of_intexpr l))^")"
+  | PreWrap(n, l, funcs, d) -> n^"("^(String.concat ", " ((List.map string_of_intexpr l)@(List.map string_of_idxfunc funcs)))^")"
   | FArg(n, d) -> n
 ;;
 
@@ -200,7 +200,7 @@ let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction)
     | FD (a, b) -> let ga = g a in FD (ga, g b)
     | FCompose a -> FCompose(List.map z a)
     | Pre a -> Pre(z a) 
-    | PreWrap (n,f,d) -> PreWrap(n, f, (g d)) (*f is not parameterized because we don't want to parameterize inside the call*)
+    | PreWrap (n,f,funcs,d) -> PreWrap(n, f, funcs, (g d)) (*f is not parameterized because we don't want to parameterize inside the call*)
     | FArg (i,f) ->  FArg(i, (g f)) 
   in
   meta_transform_idxfunc_on_idxfunc recursion_direction z
@@ -395,7 +395,7 @@ let rec func_domain (e : idxfunc) : intexpr =
 | FD (n, _) -> n
 | FCompose (l) -> func_domain (List.hd (List.rev l))
 | Pre(l) -> func_domain l
-| PreWrap(_,l,d) -> d
+| PreWrap(_,_,_,d) -> d
 | FArg (_,d)->d
 ;;
 
