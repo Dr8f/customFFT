@@ -14,6 +14,7 @@ let rec white (n:int) : string =
 let rec string_of_ctype (t : ctype) : string =
   match t with
   |Int -> "int"
+  |Func -> "func*"
   (* |Env(rs) -> "env<" ^ rs ^ ">" *)
 ;;
 
@@ -47,10 +48,10 @@ let rec string_of_boolrvalue (boolrvalue:boolrvalue) : string =
 
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
   match code with
-    Class(name,cold,reinit,hot,cons,comp,output,input,children,freedoms) -> 
+    Class(name,cold,reinit,hot,funcs,cons,comp,output,input,children,freedoms) -> 
       let cons_args = (List.map (fun var -> 
 	let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
-      ) (cold@reinit)) in
+      ) (cold@reinit@funcs)) in
       let comp_args = (List.map (fun var -> 
 	let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
       ) hot) in
@@ -69,7 +70,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
       ^ name ^ "(" ^ (String.concat ", " cons_args)^")" ^ (match unparse_type with
 	Prototype -> ";\n"
       | Implementation -> " : \n"
-	^ (String.concat (", \n") ((List.map (fun x -> let Var(ctype, name) = x in (white (n+4))^name^"("^name^")") (cold@reinit)) ))
+	^ (String.concat (", \n") ((List.map (fun x -> let Var(ctype, name) = x in (white (n+4))^name^"("^name^")") (cold@reinit@funcs)) )) 
 	^ " {\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
       ^ (match unparse_type with
       | Prototype -> (white (n+4))^"void "

@@ -64,12 +64,13 @@ let string_of_breakdown_enhanced ((condition, freedoms, desc, desc_with_calls, d
   ^"DESCEND - CALLS COMP\t"^(string_of_spl desc_with_calls_comp)^"\n"
 ;;
 
-let string_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns ): rstep_partitioned) : string =
+let string_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdowns ): rstep_partitioned) : string =
   "NAME\t\t\t"^name^"\n"
   ^"RS\t\t\t"^(string_of_spl rstep)^"\n"
   ^"COLD\t\t\t"^(String.concat ", " (List.map string_of_intexpr (IntExprSet.elements cold)))^"\n"
   ^"REINIT\t\t\t"^(String.concat ", " (List.map string_of_intexpr (IntExprSet.elements reinit)))^"\n"
   ^"HOT\t\t\t"^(String.concat ", " (List.map string_of_intexpr (IntExprSet.elements hot)))^"\n"
+  ^"FUNCS\t\t\t"^(String.concat ", " (List.map string_of_idxfunc funcs))^"\n"
   ^(String.concat "" (List.map string_of_breakdown_enhanced breakdowns))^"\n"
   ^"\n"
 ;;

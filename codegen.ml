@@ -4,6 +4,7 @@ open Lib
 type ctype = 
   Int
 | Env of string
+| Func
 ;;
 
 type var = 
@@ -30,7 +31,7 @@ type envlvalue =
 ;;
 
 type code =
-  Class of string(*name*) * var list(*cold args*) * var list(*reinit args*) * var list(*hot args*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * string list (*childX*) * var list (*freedoms*)
+  Class of string(*name*) * var list(*cold args*) * var list(*reinit args*) * var list(*hot args*) * var list(*funcs*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * string list (*childX*) * var list (*freedoms*)
 | Chain of code list
 | Noop
 | Error of string
@@ -57,7 +58,7 @@ type code =
 (*   Spl.recursion_collect f z *)
 (* ;; *)
 
-let collect_children ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_partitioned) : string list =
+let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : string list =
   let res = ref [] in  
   let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
     Spl.meta_iter_spl_on_spl (function
@@ -70,7 +71,7 @@ let collect_children ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_part
   !res
 ;;
 
-let collect_freedoms ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_partitioned) : var list =
+let collect_freedoms ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : var list =
   let res = ref [] in  
   let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
     res := (List.map (fun (l,r)->Var(Int,Spl.string_of_intexpr l)) freedoms) @ !res    
@@ -79,7 +80,7 @@ let collect_freedoms ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_part
   !res  
 ;;
 
-let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_partitioned) : code =
+let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : code =
   let prepare_env_cons (var:string) (rs:string) (args:Spl.intexpr list) : code =
     EnvAllocateConstruct (var, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args, []))
   in
@@ -115,7 +116,7 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
 ;;
 
 
-let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns ) : rstep_partitioned) (output:string) (input:string): code =
+let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) (output:string) (input:string): code =
   let prepare_env_comp (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) (output:string) (input:string): code =
     MethodCall (envlvalue, "compute", (List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args), output, input)
   in
@@ -160,13 +161,14 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, breakdowns 
 
 let code_of_lib ((funcs,rsteps) : lib) : code = 
   let f (rstep_partitioned : rstep_partitioned) =
-    let (name, rstep, cold, reinit, hot, breakdowns) = rstep_partitioned in 
+    let (name, rstep, cold, reinit, hot, funcs, breakdowns) = rstep_partitioned in 
     let output = "Y" in
     let input = "X" in
     Class (name,
 	   List.map (function x -> Var(Int, Spl.string_of_intexpr x)) (IntExprSet.elements cold),
 	   List.map (function x -> Var(Int, Spl.string_of_intexpr x)) (IntExprSet.elements reinit),
 	   List.map (function x -> Var(Int, Spl.string_of_intexpr x)) (IntExprSet.elements hot),
+	   List.map (function x -> Var(Func, Spl.string_of_idxfunc x)) funcs,
 	   cons_code_of_rstep_partitioned rstep_partitioned,
 	   comp_code_of_rstep_partitioned rstep_partitioned output input,
 	   output,
