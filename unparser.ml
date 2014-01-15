@@ -47,34 +47,32 @@ let rec string_of_boolrvalue (boolrvalue:boolrvalue) : string =
 ;;
 
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
+  let make_signatures (l:'a list) : string list =
+    List.map (fun var -> let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name) (l)
+  in
   match code with
   | FuncEnv(name,args,fargs,code) ->
     (match unparse_type with
-      Prototype ->    	
-	let cons_args = (List.map (fun var -> 
-	  let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name   (*FIXME why cons_args & cons_fargs, there seems to be some shit inside anyways*)
-	) (args)) in
-	let cons_fargs = (List.map (fun var -> 
-	  let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
-	) (fargs)) in
-    
-	"struct "^name^" : public func {\n"
-	^ "    "^name^"("^(String.concat "," ((cons_args)@(cons_fargs)))^"){};\n"
-	^ "    virtual complex_t at(int) {\n"^(cpp_string_of_code unparse_type (n+8) code)^"    }\n"
-	^ "};\n\n"
-    | Implementation -> "NONE yet, FIXME\n"
-  )
+      Prototype ->    	   
+	"struct "^name^" : public func {\n"^(white (n+4))
+    | Implementation -> name^"::"
+    )^name^"("^(String.concat ", " ((make_signatures args)@(make_signatures fargs)))^")"^
+      (match unparse_type with
+	Prototype -> ";\n"^(white (n+4))^"virtual "
+      | Implementation -> "{\n}\n\n"^(white n)
+      )
+    ^"complex_t "^(match unparse_type with
+      Prototype -> ""
+    | Implementation -> name^"::"
+    )^"at(int i)"^(match unparse_type with
+      Prototype -> ";\n"^"};\n\n"
+    | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^"}\n\n"
+    )
       
   | Class(name,cold,reinit,hot,funcs,cons,comp,output,input,children,freedoms) -> 
-    let cons_args = (List.map (fun var -> 
-      let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
-    ) (cold@reinit@funcs)) in
-    let comp_args = (List.map (fun var -> 
-      let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
-    ) hot) in
-    let freedoms_args = (List.map (fun var -> 
-      let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name
-    ) freedoms) in
+    let cons_args = make_signatures (cold@reinit@funcs) in
+    let comp_args = make_signatures hot in
+    let freedoms_args = make_signatures freedoms in
     (match unparse_type with
       Prototype -> (white n) ^ "struct "^name^" : public RS {\n" 
 	^ (white (n+4)) ^ "int _rule;\n" 
@@ -116,9 +114,6 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | MethodCall(lvalue, methodname,args, output, input) -> (white n) ^ (string_of_envlvalue lvalue) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_intrvalue args)))^");\n" 
   | BufferAllocate(buf, size) -> (white n)^"double * "^buf^" = LIB_MALLOC("^(string_of_intrvalue size)^");\n"
   | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^buf^", "^(string_of_intrvalue size)^");\n"
-
-(* ^rs^"("^(String.concat ", " (List.map string_of_intrvalue args))^");\n" *)
-
 ;;
 
 let string_of_code (n:int) (code : code) : string = 
