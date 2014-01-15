@@ -230,7 +230,7 @@ let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:envfunc IdxFuncMap.t ref):
   let domain = func_domain f in
   let newdef = ((meta_transform_intexpr_on_idxfunc TopDown unwrap_intexpr) wrapped) in
   let map = mapify ((meta_collect_intexpr_on_idxfunc collect_intexpr_binds) wrapped) IntMap.empty in
-  let args = List.map snd (IntMap.bindings map) in (*(List.map (function x -> IArg x) (List.map fst (IntMap.bindings map)))*)
+  let args = List.map snd (IntMap.bindings map) in (*FIXME (List.map (function x -> IArg x) (List.map fst (IntMap.bindings map)))*)
   let fargs = ((meta_collect_idxfunc_on_idxfunc collect_farg) f) in 
   let name = ensure_name newdef args fargs in
   let res =  PreWrap(name, args, fargs, domain) in 
