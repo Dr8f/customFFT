@@ -45,6 +45,7 @@ type code =
 | Loop of var * intrvalue * code
 | BufferAllocate of string * intrvalue
 | BufferDeallocate of string * intrvalue
+| Return of int
 ;;
 
 (* let meta_collect_code_on_code (f : code -> 'a list) : (code -> 'a list) = *)
@@ -162,10 +163,14 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 
 let code_of_lib ((funcs,rsteps) : lib) : code = 
   let code_of_func ((name, f, args, fargs) : envfunc) : code = 
+    let code_of_at (f : Spl.idxfunc) (output : int) (input : int) : code =
+      Error("FIXME: should spit some code, taking 0 as input var and putting it output ")
+    in
     FuncEnv(name, 
 	    List.map (function x -> Var(Int, Spl.string_of_intexpr x)) args,
 	    List.map (function x -> Var(Func, Spl.string_of_idxfunc x)) fargs,
-	    Error("FIXME: will spit some code"))
+	    Chain (code_of_at f 0 0 :: [Return(0)])
+    )
   in
   let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     let (name, rstep, cold, reinit, hot, funcs, breakdowns) = rstep_partitioned in 
