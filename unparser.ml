@@ -128,13 +128,35 @@ let string_of_code (n:int) (code : code) : string =
   ^ "static bool isNotPrime(int ) {return true;} /*FIXME*/\n"
   ^ "static int divisor(int ) {return 1;} /*FIXME*/\n"
   ^ "static void error(std::string s) {throw s;}\n"
-  ^ "#define complex_t std::complex<double>\n"
+  ^ "#define complex_t std::complex<float>\n"
   ^ "complex_t * LIB_MALLOC(size_t size) {return (complex_t *)malloc(size * sizeof(complex_t));}\n"
   ^ "void LIB_FREE(void *ptr, size_t) {free(ptr);}\n"
+  ^ "#define PI    3.14159265358979323846f\n"
+  ^ "#define __I__ (complex_t(0,1))\n"
+  ^ "static complex_t sp_omega(int N, int k) { return cosf(2*PI*k/N) + __I__ * sinf(2*PI*k/N); }\n"
   ^ "struct RS { virtual ~RS(){}};\n"
   ^ "template<class T> struct TFunc_TInt_T : public RS { virtual T at(int) = 0; };\n"
   ^ "struct func : public TFunc_TInt_T<complex_t> {};\n\n"
+
+  ^ "/*\n"
+  ^ "d(u1,u2) . h(u3,u1,u5,u6)\n"
+  ^ "complex_t Func_1::at(int i){\n"
+  ^ "    int x = u5 + u6 * i;\n"
+  ^ "    return sp_omega(u1, -(x % u2) * (x / u2));\n"
+  ^ "}\n"
+  ^ "\n"
+  ^ "lambda1 . h(u2,u1,u4,u5)\n"
+  ^ "complex_t Func_2::at(int i){\n"
+  ^ "    int x = u4 + i*u5;\n"
+  ^ "    return lambda1->at(x);\n"
+  ^ "}\n"
+  ^ "*/\n\n"
+
   ^ (cpp_string_of_code Prototype n code)
   ^ (cpp_string_of_code Implementation n code)
+
+    
+
+
 ;;
 

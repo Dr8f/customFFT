@@ -25,8 +25,11 @@ type boolexpr =
 
 type idxfunc = 
   FH of intexpr * intexpr * intexpr * intexpr
+(* FH(domain, range, base, stride) maps I(src) to I(dest) so that FH(d,r,b,s)(i) = b + i*s *)
 | FL of intexpr * intexpr
 | FD of intexpr * intexpr
+(* FD(n,k) maps I(n) to a diag of w(n, - 0*0) ... w(n, - (k-1)*0) w(n, - 0*1) ... w(n, - (k-1)*1) ... ... w(n, - (k-1) * (n/k-1)) where w(n, x) = exp(2 Pi * I * x /n) *)
+(* thus FD(n,k)(i) = w(n, -(i mod k) * (i\k)) *)
 | FCompose of idxfunc list
 | Pre of idxfunc (* Precompute *)
 | PreWrap of string * intexpr list * idxfunc list * intexpr (*domain*)
@@ -94,7 +97,7 @@ let rec string_of_idxfunc (e : idxfunc) : string =
   match e with
     FH(src, dest, j,k) -> "h("^(string_of_intexpr src)^","^(string_of_intexpr dest)^","^(string_of_intexpr j)^","^(string_of_intexpr k)^")"
   | FL(j,k) -> "l("^(string_of_intexpr j)^","^(string_of_intexpr k)^")"      
-  | FD(j,k) -> "d("^(string_of_intexpr j)^","^(string_of_intexpr k)^")"      
+  | FD(n,k) -> "d("^(string_of_intexpr n)^","^(string_of_intexpr k)^")"      
   | FCompose(list) -> optional_short_print "fCompose" (String.concat " . " (List.map string_of_idxfunc list))
   | Pre(l) -> "pre("^(string_of_idxfunc l)^")"
   | PreWrap(n, l, funcs, d) -> n^"("^(String.concat ", " ((List.map string_of_intexpr l)@(List.map string_of_idxfunc funcs)))^")"
