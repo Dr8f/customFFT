@@ -54,12 +54,16 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | FuncEnv(name,args,fargs,code) ->
     (match unparse_type with
       Prototype ->    	   
-	"struct "^name^" : public func {\n"^(white (n+4))
+	"struct "^name^" : public func {\n"
+	^(String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") (make_signatures (args@fargs))))
+	^(white (n+4))
     | Implementation -> name^"::"
     )^name^"("^(String.concat ", " ((make_signatures args)@(make_signatures fargs)))^")"^
       (match unparse_type with
 	Prototype -> ";\n"^(white (n+4))^"virtual "
-      | Implementation -> "{\n}\n\n"^(white n)
+      | Implementation -> " : \n"
+	^ (String.concat (", \n") ((List.map (fun x -> let Var(ctype, name) = x in (white (n+4))^name^"("^name^")") (args@fargs)) ))
+	^ "{\n}\n\n"^(white n)
       )
     ^"complex_t "^(match unparse_type with
       Prototype -> ""
