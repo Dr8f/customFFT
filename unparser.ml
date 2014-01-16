@@ -94,7 +94,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     ^ (match unparse_type with
     | Prototype -> (white (n+4))^"void "
     | Implementation -> (white (n))^"void "^name ^ "::")
-    ^ "compute(" ^ (String.concat ", " (("double* "^output)::("double* "^input)::comp_args)) ^ ")"^ (match unparse_type with
+    ^ "compute(" ^ (String.concat ", " (("complex_t* "^output)::("complex_t* "^input)::comp_args)) ^ ")"^ (match unparse_type with
       Prototype -> ";\n"
     | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) comp)^(white n)^"}\n")
     ^ (match unparse_type with
@@ -116,7 +116,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | EnvArrayAllocate(name,rs,int) -> (white n)^name^" = ("^rs^"*) malloc (sizeof("^rs^") * "^(string_of_intrvalue int)^");\n"
   | EnvArrayConstruct(lvalue,rvalue) -> (white n)^"new ("^(string_of_envlvalue lvalue)^") "^(string_of_envrvalue rvalue)^";\n"
   | MethodCall(lvalue, methodname,args, output, input) -> (white n) ^ (string_of_envlvalue lvalue) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_intrvalue args)))^");\n" 
-  | BufferAllocate(buf, size) -> (white n)^"double * "^buf^" = LIB_MALLOC("^(string_of_intrvalue size)^");\n"
+  | BufferAllocate(buf, size) -> (white n)^"complex_t * "^buf^" = LIB_MALLOC("^(string_of_intrvalue size)^");\n"
   | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^buf^", "^(string_of_intrvalue size)^");\n"
 ;;
 
@@ -128,29 +128,12 @@ let string_of_code (n:int) (code : code) : string =
   ^ "static bool isNotPrime(int ) {return true;} /*FIXME*/\n"
   ^ "static int divisor(int ) {return 1;} /*FIXME*/\n"
   ^ "static void error(std::string s) {throw s;}\n"
-  ^ "double * LIB_MALLOC(size_t size) {return (double *)malloc(size * sizeof(double));}\n"
+  ^ "#define complex_t std::complex<double>\n"
+  ^ "complex_t * LIB_MALLOC(size_t size) {return (complex_t *)malloc(size * sizeof(complex_t));}\n"
   ^ "void LIB_FREE(void *ptr, size_t) {free(ptr);}\n"
   ^ "struct RS { virtual ~RS(){}};\n"
   ^ "template<class T> struct TFunc_TInt_T : public RS { virtual T at(int) = 0; };\n"
-  ^ "#define complex_t std::complex<double>\n"
   ^ "struct func : public TFunc_TInt_T<complex_t> {};\n\n"
-
-  (* ^ "struct Func_1 : public func {\n" *)
-  (* ^ "    Func_1(int a, int b, int c, int d, int e){};\n" *)
-  (* ^ "  virtual complex_t at(int) {\n" *)
-  (* ^ "        return 0; /*FIXME*/\n" *)
-  (* ^ "  }\n" *)
-  (* ^ "};\n" *)
-  (* ^ "\n" *)
-  (* ^ "struct Func_2 : public func {\n" *)
-  (* ^ "    Func_2(int a, int b, int c, int d, func* f){};\n" *)
-  (* ^ "  virtual complex_t at(int) {\n" *)
-  (* ^ "        return 0; /*FIXME*/\n" *)
-  (* ^ "  }\n" *)
-  (* ^ "};\n" *)
-
-
-
   ^ (cpp_string_of_code Prototype n code)
   ^ (cpp_string_of_code Implementation n code)
 ;;
