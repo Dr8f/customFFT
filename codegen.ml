@@ -163,13 +163,25 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 
 let code_of_lib ((funcs,rsteps) : lib) : code = 
   let code_of_func ((name, f, args, fargs) : envfunc) : code = 
-    let code_of_at (f : Spl.idxfunc) (output : int) (input : int) : code =
-      Error("FIXME: should spit some code, taking 0 as input var and putting it output ")
+    let count = ref 0 in
+    let code_of_at (f : Spl.idxfunc) : code =
+      let g (func:Spl.idxfunc) (code:code list): code list =
+	count := !count + 1;
+	code@[
+	  match func with 
+	  |Spl.FH(_,_,b,s) -> IntAssign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), ValueOf(Spl.IPlus([b;Spl.IMul([s;Spl.ITmp(!count-1)])])))
+	  |Spl.FD(n,k) -> IntAssign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), (*FIXME*)ContentsOf(Var(Int,"FD x"^(string_of_int (!count-1)))))
+	  |Spl.FArg(name,_) -> IntAssign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), (*FIXME*)ContentsOf(Var(Int,"FARG x"^(string_of_int (!count-1)))))
+	]
+      in
+      match f with
+      |Spl.FCompose l -> Chain(List.fold_right g l [])
     in
     FuncEnv(name, 
 	    List.map (function x -> Var(Int, Spl.string_of_intexpr x)) args,
 	    List.map (function x -> Var(Func, Spl.string_of_idxfunc x)) fargs,
-	    Chain (code_of_at f 0 0 :: [Return(0)])
+	    let code = (code_of_at f) in
+	    Chain ( code :: [Return(!count)])
     )
   in
   let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =

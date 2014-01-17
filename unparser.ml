@@ -68,7 +68,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     ^"complex_t "^(match unparse_type with
       Prototype -> ""
     | Implementation -> name^"::"
-    )^"at(int i)"^(match unparse_type with (*FIXME*)
+    )^"at(int x0)"^(match unparse_type with
       Prototype -> ";\n"^"};\n\n"
     | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^"}\n\n"
     )
@@ -118,7 +118,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | MethodCall(lvalue, methodname,args, output, input) -> (white n) ^ (string_of_envlvalue lvalue) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_intrvalue args)))^");\n" 
   | BufferAllocate(buf, size) -> (white n)^"complex_t * "^buf^" = LIB_MALLOC("^(string_of_intrvalue size)^");\n"
   | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^buf^", "^(string_of_intrvalue size)^");\n"
-  | Return(i) -> (white n)^"return y"^(string_of_int i)^";\n"
+  | Return(i) -> (white n)^"return x"^(string_of_int i)^";\n"
 ;;
 
 let string_of_code (n:int) (code : code) : string = 
