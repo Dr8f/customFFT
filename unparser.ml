@@ -23,29 +23,26 @@ type unparse_type =
 | Implementation
 ;;
 
-let rec string_of_intrvalue (intrvalue:intrvalue) : string = 
-  match intrvalue with
+let rec string_of_rvalue (rvalue:rvalue) : string = 
+  match rvalue with
     ContentsOf Var(_, name) -> name
-  | ValueOf intexpr -> string_of_intexpr intexpr
+  | IntexprValueOf intexpr -> string_of_intexpr intexpr
+  | Equal(a,b) -> "(" ^ (string_of_rvalue a) ^ " == " ^ (string_of_rvalue b) ^ ")"
+  | BoolValueOf(boolexpr) -> string_of_boolexpr boolexpr
+
 ;;
 
 let rec string_of_envrvalue (envrvalue:envrvalue) : string = 
   match envrvalue with
-    CreateEnv(name,args,funcs) -> name^"("^(String.concat ", " ((List.map string_of_intrvalue args)@(List.map (function (f:idxfunc) -> "new "^(string_of_idxfunc f)) funcs)))^")"
+    CreateEnv(name,args,funcs) -> name^"("^(String.concat ", " ((List.map string_of_rvalue args)@(List.map (function (f:idxfunc) -> "new "^(string_of_idxfunc f)) funcs)))^")"
 ;;
 
 let rec string_of_envlvalue (envlvalue:envlvalue) : string = 
   match envlvalue with
     Into Var(Env(rs),name) -> "(reinterpret_cast<"^rs^" *>("^name^"))" 
-  | Nth(Var(Env(rs), name),count) ->"(reinterpret_cast<"^rs^" *>("^name^")+"^(string_of_intrvalue count)^")"
+  | Nth(Var(Env(rs), name),count) ->"(reinterpret_cast<"^rs^" *>("^name^")+"^(string_of_rvalue count)^")"
 ;;
  
-let rec string_of_boolrvalue (boolrvalue:boolrvalue) : string =
-  match boolrvalue with
-    Equal(a,b) -> "(" ^ (string_of_intrvalue a) ^ " == " ^ (string_of_intrvalue b) ^ ")"
-  | BoolValueOf(boolexpr) -> string_of_boolexpr boolexpr
-;;
-
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
   let make_signatures (l:'a list) : string list =
     List.map (fun var -> let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name) (l)
@@ -106,18 +103,18 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
       
 	
   | Chain l -> String.concat "" (List.map (cpp_string_of_code unparse_type n) l)
-  | IntAssign(Var(_, nameL), rvalue) -> (white n) ^ nameL ^ " = "^ (string_of_intrvalue rvalue) ^ ";\n"
+  | Assign(Var(_, nameL), rvalue) -> (white n) ^ nameL ^ " = "^ (string_of_rvalue rvalue) ^ ";\n"
   | Noop -> (white n)^"/* noop */\n"
   | Error str -> (white n)^"error(\""^str^"\");\n"
-  | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_boolrvalue cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
-  | Loop(Var(Int,name), intrvalue, code) -> (white n)^"for(int "^name^" = 0; "^name^" < "^(string_of_intrvalue intrvalue)^"; "^name^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
+  | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_rvalue cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
+  | Loop(Var(Int,name), rvalue, code) -> (white n)^"for(int "^name^" = 0; "^name^" < "^(string_of_rvalue rvalue)^"; "^name^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | Loop(Var(_,_), _, _) -> assert false
   | EnvAllocateConstruct(var, rvalue) -> (white n) ^ var ^ " = new "^ (string_of_envrvalue rvalue) ^ ";\n"
-  | EnvArrayAllocate(name,rs,int) -> (white n)^name^" = ("^rs^"*) malloc (sizeof("^rs^") * "^(string_of_intrvalue int)^");\n"
+  | EnvArrayAllocate(name,rs,int) -> (white n)^name^" = ("^rs^"*) malloc (sizeof("^rs^") * "^(string_of_rvalue int)^");\n"
   | EnvArrayConstruct(lvalue,rvalue) -> (white n)^"new ("^(string_of_envlvalue lvalue)^") "^(string_of_envrvalue rvalue)^";\n"
-  | MethodCall(lvalue, methodname,args, output, input) -> (white n) ^ (string_of_envlvalue lvalue) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_intrvalue args)))^");\n" 
-  | BufferAllocate(buf, size) -> (white n)^"complex_t * "^buf^" = LIB_MALLOC("^(string_of_intrvalue size)^");\n"
-  | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^buf^", "^(string_of_intrvalue size)^");\n"
+  | MethodCall(lvalue, methodname,args, output, input) -> (white n) ^ (string_of_envlvalue lvalue) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_rvalue args)))^");\n" 
+  | BufferAllocate(buf, size) -> (white n)^"complex_t * "^buf^" = LIB_MALLOC("^(string_of_rvalue size)^");\n"
+  | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^buf^", "^(string_of_rvalue size)^");\n"
   | Return(i) -> (white n)^"return t"^(string_of_int i)^";\n"
 ;;
 
