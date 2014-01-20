@@ -9,9 +9,9 @@ type ctype =
 
 type lvalue = 
 |Var of ctype * string
-;;
-
-type rvalue = 
+|Nth of lvalue * rvalue
+|Cast of lvalue * ctype
+and rvalue = 
   ContentsOf of lvalue
 | Equal of rvalue * rvalue
 | IntexprValueOf of Spl.intexpr
@@ -21,10 +21,6 @@ type rvalue =
 | New of rvalue
 ;;
 
-type envlvalue = 
-  Into of lvalue
-| Nth of lvalue * rvalue
-;;
 
 type code =
   Class of string(*name*) * lvalue list(*cold args*) * lvalue list(*reinit args*) * lvalue list(*hot args*) * lvalue list(*funcs*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * string list (*childX*) * lvalue list (*freedoms*)
@@ -34,8 +30,8 @@ type code =
 | Error of string
 | Assign of lvalue * rvalue 
 | EnvArrayAllocate of string * string * rvalue
-| EnvArrayConstruct of envlvalue * rvalue
-| MethodCall of envlvalue * string * rvalue list * string * string
+| PlacementNew of lvalue * rvalue
+| MethodCall of lvalue * string * rvalue list * string * string
 | If of rvalue * code * code
 | Loop of lvalue * rvalue * code
 | BufferAllocate of string * rvalue
@@ -82,8 +78,8 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
     Assign(Var(Env(var),var), New(CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args)))
   in
 
-  let prepare_env_cons_loop (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) (funcs:Spl.idxfunc list) : code = 
-    EnvArrayConstruct (envlvalue, CreateEnv(rs, (List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args)@(List.map (fun(x)->New(IdxfuncValueOf x)) funcs)))
+  let prepare_env_cons_loop (lvalue:lvalue) (rs:string) (args:Spl.intexpr list) (funcs:Spl.idxfunc list) : code = 
+    PlacementNew(lvalue, CreateEnv(rs, (List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args)@(List.map (fun(x)->New(IdxfuncValueOf x)) funcs)))
   in
 
   let rec prepare_cons (e:Spl.spl) : code =
@@ -114,8 +110,9 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 
 
 let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) (output:string) (input:string): code =
-  let prepare_env_comp (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) (output:string) (input:string): code =
-    MethodCall (envlvalue, "compute", (List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args), output, input)
+  let prepare_env_comp (ctype:ctype) (lvalue:lvalue) (rs:string) (args:Spl.intexpr list) (output:string) (input:string): code =
+    (* FIXME add a cast to ctype here*)
+    MethodCall (Cast(lvalue,ctype), "compute", (List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args), output, input)
   in
 
   let rec prepare_comp (output:string) (input:string) (e:Spl.spl): code =
@@ -135,10 +132,10 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 			 @ (List.map (fun (output,size)->(BufferDeallocate(output,IntexprValueOf(size)))) buffers)
 		       )
     | Spl.ISum(i, count, content) -> Loop(Var(Int, Spl.string_of_intexpr i), IntexprValueOf count, (prepare_comp output input content))
-    | Spl.Compute(numchild, rs, hot,_,_) -> prepare_env_comp (Into(Var(Env(rs), "child"^(string_of_int numchild)))) rs hot output input
+    | Spl.Compute(numchild, rs, hot,_,_) -> prepare_env_comp (Env(rs)) (Var(Env(rs), "child"^(string_of_int numchild))) rs hot output input
     | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
       let loopvar = Var(Int, Spl.string_of_intexpr i) in
-      Loop(loopvar, IntexprValueOf count, (prepare_env_comp (Nth(Var(Env(rs), "child"^(string_of_int numchild)), (ContentsOf(loopvar)))) rs hot output input))
+      Loop(loopvar, IntexprValueOf count, (prepare_env_comp (Env(rs)) (Nth(Var(Env(rs), "child"^(string_of_int numchild)), (ContentsOf(loopvar)))) rs hot output input))
     | _ -> Error("UNIMPLEMENTED")
   in
   let rulecount = ref 0 in
