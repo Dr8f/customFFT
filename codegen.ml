@@ -20,7 +20,7 @@ type rvalue =
 ;;
 
 type envrvalue = 
-CreateEnv of string * rvalue list * rvalue list
+CreateEnv of string * rvalue list
 ;;
 
 type envlvalue = 
@@ -82,11 +82,11 @@ let collect_freedoms ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rst
 
 let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : code =
   let prepare_env_cons (var:string) (rs:string) (args:Spl.intexpr list) : code =
-    EnvAllocateConstruct (var, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args, []))
+    EnvAllocateConstruct (var, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args))
   in
 
   let prepare_env_cons_loop (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) (funcs:Spl.idxfunc list) : code = 
-    EnvArrayConstruct (envlvalue, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args, List.map (fun(x)->IdxfuncValueOf x) funcs)) 
+    EnvArrayConstruct (envlvalue, CreateEnv(rs, (List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args)@(List.map (fun(x)->IdxfuncValueOf x) funcs)))
   in
 
   let rec prepare_cons (e:Spl.spl) : code =

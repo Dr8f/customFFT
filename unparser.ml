@@ -29,14 +29,12 @@ let rec string_of_rvalue (rvalue:rvalue) : string =
   | IntexprValueOf intexpr -> string_of_intexpr intexpr
   | Equal(a,b) -> "(" ^ (string_of_rvalue a) ^ " == " ^ (string_of_rvalue b) ^ ")"
   | BoolValueOf(boolexpr) -> string_of_boolexpr boolexpr
-
+  | IdxfuncValueOf(f)->"new "^string_of_idxfunc f
 ;;
 
 let rec string_of_envrvalue (envrvalue:envrvalue) : string = 
   match envrvalue with
-    CreateEnv(name,args,funcs) -> name^"("^(String.concat ", " (List.map string_of_rvalue (args@funcs)))^")"
-      
-(* name^"("^(String.concat ", " ((List.map string_of_rvalue args)@(List.map (function (f:idxfunc) -> "new "^(string_of_idxfunc f)) funcs)))^")" *)
+    CreateEnv(name,args) -> name^"("^(String.concat ", " (List.map string_of_rvalue (args)))^")"
 ;;
 
 let rec string_of_envlvalue (envlvalue:envlvalue) : string = 
