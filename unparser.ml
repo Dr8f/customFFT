@@ -29,12 +29,9 @@ let rec string_of_rvalue (rvalue:rvalue) : string =
   | IntexprValueOf intexpr -> string_of_intexpr intexpr
   | Equal(a,b) -> "(" ^ (string_of_rvalue a) ^ " == " ^ (string_of_rvalue b) ^ ")"
   | BoolValueOf(boolexpr) -> string_of_boolexpr boolexpr
-  | IdxfuncValueOf(f)->"new "^string_of_idxfunc f
-;;
-
-let rec string_of_envrvalue (envrvalue:envrvalue) : string = 
-  match envrvalue with
-    CreateEnv(name,args) -> name^"("^(String.concat ", " (List.map string_of_rvalue (args)))^")"
+  | IdxfuncValueOf(f)->string_of_idxfunc f
+  | CreateEnv(name,args) -> name^"("^(String.concat ", " (List.map string_of_rvalue (args)))^")"
+  | New(f) -> "new "^(string_of_rvalue f)
 ;;
 
 let rec string_of_envlvalue (envlvalue:envlvalue) : string = 
@@ -109,9 +106,8 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_rvalue cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
   | Loop(Var(Int,name), rvalue, code) -> (white n)^"for(int "^name^" = 0; "^name^" < "^(string_of_rvalue rvalue)^"; "^name^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | Loop(Var(_,_), _, _) -> assert false
-  | EnvAllocateConstruct(var, rvalue) -> (white n) ^ var ^ " = new "^ (string_of_envrvalue rvalue) ^ ";\n"
   | EnvArrayAllocate(name,rs,int) -> (white n)^name^" = ("^rs^"*) malloc (sizeof("^rs^") * "^(string_of_rvalue int)^");\n"
-  | EnvArrayConstruct(lvalue,rvalue) -> (white n)^"new ("^(string_of_envlvalue lvalue)^") "^(string_of_envrvalue rvalue)^";\n"
+  | EnvArrayConstruct(lvalue,rvalue) -> (white n)^"new ("^(string_of_envlvalue lvalue)^") "^(string_of_rvalue rvalue)^";\n"
   | MethodCall(lvalue, methodname,args, output, input) -> (white n) ^ (string_of_envlvalue lvalue) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_rvalue args)))^");\n" 
   | BufferAllocate(buf, size) -> (white n)^"complex_t * "^buf^" = LIB_MALLOC("^(string_of_rvalue size)^");\n"
   | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^buf^", "^(string_of_rvalue size)^");\n"
