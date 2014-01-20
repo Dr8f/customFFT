@@ -170,8 +170,8 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
 	code@[
 	  match func with 
 	  |Spl.FH(_,_,b,s) -> IntAssign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), ValueOf(Spl.IPlus([b;Spl.IMul([s;Spl.ITmp(!count-1)])])))
-	  |Spl.FD(n,k) -> IntAssign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), (*FIXME*)ContentsOf(Var(Int,"FD x"^(string_of_int (!count-1)))))
-	  |Spl.FArg(name,_) -> IntAssign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), (*FIXME*)ContentsOf(Var(Int,"FARG x"^(string_of_int (!count-1)))))
+	  |Spl.FD(n,k) -> IntAssign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), ContentsOf(Var(Int,"sp_omega("^(Spl.string_of_intexpr n)^", -(t"^(string_of_int (!count-1))^" % "^(Spl.string_of_intexpr k)^") * (t"^(string_of_int (!count-1))^ " / "^(Spl.string_of_intexpr k)^"))"))) (*FIXME horrendous piece of worthless code*)
+	  |Spl.FArg(name,_) -> IntAssign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), ContentsOf(Var(Int,name^"->at(t"^(string_of_int (!count-1))^")"))) (*FIXME ugliest code eva*)
 	]
       in
       match f with
