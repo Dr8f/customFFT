@@ -7,35 +7,33 @@ type ctype =
 | Func
 ;;
 
-type lvalue = 
-|Var of ctype * string
-|Nth of lvalue * rvalue
-|Cast of lvalue * ctype
-and rvalue = 
-  ContentsOf of lvalue
-| Equal of rvalue * rvalue
-| IntexprValueOf of Spl.intexpr
+type expr = 
+| Var of ctype * string
+| Nth of expr * expr
+| Cast of expr * ctype
+| Equal of expr * expr
+| IntValueOf of Spl.intexpr
 | BoolValueOf of Spl.boolexpr
 | IdxfuncValueOf of Spl.idxfunc
-| CreateEnv of string * rvalue list
-| New of rvalue
+| CreateEnv of string * expr list
+| New of expr
 ;;
 
 
 type code =
-  Class of string(*name*) * lvalue list(*cold args*) * lvalue list(*reinit args*) * lvalue list(*hot args*) * lvalue list(*funcs*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * string list (*childX*) * lvalue list (*freedoms*)
-| FuncEnv of string(*name*) * lvalue list(*args*) * lvalue list(*funcs*) * code
+  Class of string(*name*) * expr list(*cold args*) * expr list(*reinit args*) * expr list(*hot args*) * expr list(*funcs*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * string list (*childX*) * expr list (*freedoms*)
+| FuncEnv of string(*name*) * expr list(*args*) * expr list(*funcs*) * code
 | Chain of code list
 | Noop
 | Error of string
-| Assign of lvalue * rvalue 
-| EnvArrayAllocate of string * string * rvalue
-| PlacementNew of lvalue * rvalue
-| MethodCall of lvalue * string * rvalue list * string * string
-| If of rvalue * code * code
-| Loop of lvalue * rvalue * code
-| BufferAllocate of string * rvalue
-| BufferDeallocate of string * rvalue
+| Assign of expr * expr 
+| EnvArrayAllocate of string * string * expr
+| PlacementNew of expr * expr
+| MethodCall of expr * string * expr list * string * string
+| If of expr * code * code
+| Loop of expr * expr * code
+| BufferAllocate of string * expr
+| BufferDeallocate of string * expr
 | Return of int
 ;;
 
@@ -64,7 +62,7 @@ let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rst
   !res
 ;;
 
-let collect_freedoms ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : lvalue list =
+let collect_freedoms ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
   let res = ref [] in  
   let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
     res := (List.map (fun (l,r)->Var(Int,Spl.string_of_intexpr l)) freedoms) @ !res    
@@ -75,11 +73,11 @@ let collect_freedoms ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rst
 
 let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : code =
   let prepare_env_cons (var:string) (rs:string) (args:Spl.intexpr list) : code =
-    Assign(Var(Env(var),var), New(CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args)))
+    Assign(Var(Env(var),var), New(CreateEnv(rs, List.map (fun(x)->Var(Int,Spl.string_of_intexpr x)) args)))
   in
 
-  let prepare_env_cons_loop (lvalue:lvalue) (rs:string) (args:Spl.intexpr list) (funcs:Spl.idxfunc list) : code = 
-    PlacementNew(lvalue, CreateEnv(rs, (List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args)@(List.map (fun(x)->New(IdxfuncValueOf x)) funcs)))
+  let prepare_env_cons_loop (expr:expr) (rs:string) (args:Spl.intexpr list) (funcs:Spl.idxfunc list) : code = 
+    PlacementNew(expr, CreateEnv(rs, (List.map (fun(x)->Var(Int,Spl.string_of_intexpr x)) args)@(List.map (fun(x)->New(IdxfuncValueOf x)) funcs)))
   in
 
   let rec prepare_cons (e:Spl.spl) : code =
@@ -90,18 +88,18 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
       let name = "child"^(string_of_int numchild) in
       let loopvar = Var(Int, Spl.string_of_intexpr i) in 
       Chain([
-	EnvArrayAllocate(name, rs, (IntexprValueOf count));
-	Loop(loopvar, IntexprValueOf count, (prepare_env_cons_loop (Nth(Var(Env(rs), name), (ContentsOf(loopvar)))) rs (cold@reinit) funcs))  
+	EnvArrayAllocate(name, rs, (IntValueOf count));
+	Loop(loopvar, IntValueOf count, (prepare_env_cons_loop (Nth(Var(Env(rs), name), (loopvar))) rs (cold@reinit) funcs))  
       ])
     | _ -> Error("UNIMPLEMENTED")
   in
   let rulecount = ref 0 in
   let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
-    let freedom_assigns = List.map (fun (l,r)->Assign(Var(Int,Spl.string_of_intexpr l), ContentsOf(Var(Int,Spl.string_of_intexpr r)))) freedoms in
+    let freedom_assigns = List.map (fun (l,r)->Assign(Var(Int,Spl.string_of_intexpr l), Var(Int,Spl.string_of_intexpr r))) freedoms in
     rulecount := !rulecount + 1;
     
     If((BoolValueOf condition), 
-       Chain( [Assign(Var(Int, "_rule"), IntexprValueOf(Spl.IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]), 
+       Chain( [Assign(Var(Int, "_rule"), IntValueOf(Spl.IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]), 
        Error("no applicable rules"))
       
   in
@@ -110,9 +108,9 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 
 
 let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) (output:string) (input:string): code =
-  let prepare_env_comp (ctype:ctype) (lvalue:lvalue) (rs:string) (args:Spl.intexpr list) (output:string) (input:string): code =
+  let prepare_env_comp (ctype:ctype) (expr:expr) (rs:string) (args:Spl.intexpr list) (output:string) (input:string): code =
     (* FIXME add a cast to ctype here*)
-    MethodCall (Cast(lvalue,ctype), "compute", (List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args), output, input)
+    MethodCall (Cast(expr,ctype), "compute", (List.map (fun(x)->Var(Int,Spl.string_of_intexpr x)) args), output, input)
   in
 
   let rec prepare_comp (output:string) (input:string) (e:Spl.spl): code =
@@ -127,23 +125,23 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 		       let out_in_spl = (List.combine (List.combine (buffernames @ [ output ]) (input :: buffernames)) (List.rev l)) in
 		       let buffers = (List.combine (buffernames) (List.map Spl.range (List.rev (List.tl l)))) in
 		       Chain (
-			 (List.map (fun (output,size)->(BufferAllocate(output,IntexprValueOf(size)))) buffers)
+			 (List.map (fun (output,size)->(BufferAllocate(output,IntValueOf(size)))) buffers)
 			 @ (List.map (fun ((output,input),spl)->(prepare_comp output input spl)) out_in_spl)
-			 @ (List.map (fun (output,size)->(BufferDeallocate(output,IntexprValueOf(size)))) buffers)
+			 @ (List.map (fun (output,size)->(BufferDeallocate(output,IntValueOf(size)))) buffers)
 		       )
-    | Spl.ISum(i, count, content) -> Loop(Var(Int, Spl.string_of_intexpr i), IntexprValueOf count, (prepare_comp output input content))
+    | Spl.ISum(i, count, content) -> Loop(Var(Int, Spl.string_of_intexpr i), IntValueOf count, (prepare_comp output input content))
     | Spl.Compute(numchild, rs, hot,_,_) -> prepare_env_comp (Env(rs)) (Var(Env(rs), "child"^(string_of_int numchild))) rs hot output input
     | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
       let loopvar = Var(Int, Spl.string_of_intexpr i) in
-      Loop(loopvar, IntexprValueOf count, (prepare_env_comp (Env(rs)) (Nth(Var(Env(rs), "child"^(string_of_int numchild)), (ContentsOf(loopvar)))) rs hot output input))
+      Loop(loopvar, IntValueOf count, (prepare_env_comp (Env(rs)) (Nth(Var(Env(rs), "child"^(string_of_int numchild)), (loopvar))) rs hot output input))
     | _ -> Error("UNIMPLEMENTED")
   in
   let rulecount = ref 0 in
   let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
-    let freedom_assigns = List.map (fun (l,r)->Assign(Var(Int,Spl.string_of_intexpr l), ContentsOf(Var(Int,Spl.string_of_intexpr r)))) freedoms in
+    let freedom_assigns = List.map (fun (l,r)->Assign(Var(Int,Spl.string_of_intexpr l), Var(Int,Spl.string_of_intexpr r))) freedoms in
     rulecount := !rulecount + 1;
     
-    If(Equal(ContentsOf(Var(Int, "_rule")), IntexprValueOf(Spl.IConstant !rulecount)),
+    If(Equal(Var(Int, "_rule"), IntValueOf(Spl.IConstant !rulecount)),
        prepare_comp output input desc_comp, 
        Error("internal error: no valid rule has been selected"))
       
@@ -161,9 +159,9 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
 	count := !count + 1;
 	code@[
 	  match func with 
-	  |Spl.FH(_,_,b,s) -> Assign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), IntexprValueOf(Spl.IPlus([b;Spl.IMul([s;Spl.ITmp(!count-1)])])))
-	  |Spl.FD(n,k) -> Assign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), ContentsOf(Var(Int,"sp_omega("^(Spl.string_of_intexpr n)^", -(t"^(string_of_int (!count-1))^" % "^(Spl.string_of_intexpr k)^") * (t"^(string_of_int (!count-1))^ " / "^(Spl.string_of_intexpr k)^"))"))) (*FIXME horrendous piece of worthless code*)
-	  |Spl.FArg(name,_) -> Assign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), ContentsOf(Var(Int,name^"->at(t"^(string_of_int (!count-1))^")"))) (*FIXME ugliest code eva*)
+	  |Spl.FH(_,_,b,s) -> Assign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), IntValueOf(Spl.IPlus([b;Spl.IMul([s;Spl.ITmp(!count-1)])])))
+	  |Spl.FD(n,k) -> Assign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), Var(Int,"sp_omega("^(Spl.string_of_intexpr n)^", -(t"^(string_of_int (!count-1))^" % "^(Spl.string_of_intexpr k)^") * (t"^(string_of_int (!count-1))^ " / "^(Spl.string_of_intexpr k)^"))")) (*FIXME horrendous piece of worthless code*)
+	  |Spl.FArg(name,_) -> Assign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), Var(Int,name^"->at(t"^(string_of_int (!count-1))^")")) (*FIXME ugliest code eva*)
 	]
       in
       match f with
