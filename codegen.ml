@@ -16,10 +16,11 @@ type rvalue =
 | Equal of rvalue * rvalue
 | IntexprValueOf of Spl.intexpr
 | BoolValueOf of Spl.boolexpr
+| IdxfuncValueOf of Spl.idxfunc
 ;;
 
 type envrvalue = 
-CreateEnv of string * rvalue list * Spl.idxfunc list
+CreateEnv of string * rvalue list * rvalue list
 ;;
 
 type envlvalue = 
@@ -85,7 +86,7 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
   in
 
   let prepare_env_cons_loop (envlvalue:envlvalue) (rs:string) (args:Spl.intexpr list) (funcs:Spl.idxfunc list) : code = 
-    EnvArrayConstruct (envlvalue, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args, funcs)) 
+    EnvArrayConstruct (envlvalue, CreateEnv(rs, List.map (fun(x)->ContentsOf(Var(Int,Spl.string_of_intexpr x))) args, List.map (fun(x)->IdxfuncValueOf x) funcs)) 
   in
 
   let rec prepare_cons (e:Spl.spl) : code =
