@@ -7,12 +7,12 @@ type ctype =
 | Func
 ;;
 
-type var = 
+type lvalue = 
 |Var of ctype * string
 ;;
 
 type rvalue = 
-  ContentsOf of var
+  ContentsOf of lvalue
 | Equal of rvalue * rvalue
 | IntexprValueOf of Spl.intexpr
 | BoolValueOf of Spl.boolexpr
@@ -22,22 +22,22 @@ type rvalue =
 ;;
 
 type envlvalue = 
-  Into of var
-| Nth of var * rvalue
+  Into of lvalue
+| Nth of lvalue * rvalue
 ;;
 
 type code =
-  Class of string(*name*) * var list(*cold args*) * var list(*reinit args*) * var list(*hot args*) * var list(*funcs*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * string list (*childX*) * var list (*freedoms*)
-| FuncEnv of string(*name*) * var list(*args*) * var list(*funcs*) * code
+  Class of string(*name*) * lvalue list(*cold args*) * lvalue list(*reinit args*) * lvalue list(*hot args*) * lvalue list(*funcs*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * string list (*childX*) * lvalue list (*freedoms*)
+| FuncEnv of string(*name*) * lvalue list(*args*) * lvalue list(*funcs*) * code
 | Chain of code list
 | Noop
 | Error of string
-| Assign of var * rvalue 
+| Assign of lvalue * rvalue 
 | EnvArrayAllocate of string * string * rvalue
 | EnvArrayConstruct of envlvalue * rvalue
 | MethodCall of envlvalue * string * rvalue list * string * string
 | If of rvalue * code * code
-| Loop of var * rvalue * code
+| Loop of lvalue * rvalue * code
 | BufferAllocate of string * rvalue
 | BufferDeallocate of string * rvalue
 | Return of int
@@ -68,7 +68,7 @@ let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rst
   !res
 ;;
 
-let collect_freedoms ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : var list =
+let collect_freedoms ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : lvalue list =
   let res = ref [] in  
   let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
     res := (List.map (fun (l,r)->Var(Int,Spl.string_of_intexpr l)) freedoms) @ !res    
