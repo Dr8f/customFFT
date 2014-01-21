@@ -104,7 +104,7 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
     rulecount := !rulecount + 1;
     
     If((BoolValueOf condition), 
-       Chain( [Assign(Var(Int, "_rule"), IntexprValueOf(Spl.IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]), 
+       Chain( [Assign(_rule, IntexprValueOf(Spl.IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]), 
        Error("no applicable rules"))
       
   in
