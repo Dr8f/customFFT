@@ -79,29 +79,36 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^"}\n\n"
     )
       
-  | Class(name,cons_args,comp_args,cons,comp,privates) -> 
+  | Class(name,super,cons_args,cons,comp_args,comp,privates) -> 
     (match unparse_type with
-      Prototype -> (white n) ^ "struct "^name^" : public RS {\n" 
+      Prototype -> 
+	(white n) ^ "struct "^name^" : public "^super^" {\n" 
 	^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") (make_signatures privates)))
 	^ (white (n+4))
-    | Implementation -> (white n) ^ name ^ "::")
-    ^ name ^ "(" ^ (String.concat ", " (make_signatures cons_args))^")" ^ (match unparse_type with
-      Prototype -> ";\n"
+    | Implementation -> 
+      (white n) ^ name ^ "::")
+    ^ name ^ "(" ^ (String.concat ", " (make_signatures cons_args))^")" ^ 
+      (match unparse_type with
+	Prototype -> ";\n"
       | Implementation -> " : \n"
 	^ (String.concat (", \n") ((List.map (fun x -> (white (n+4))^(string_of_expr x)^"("^(string_of_expr x)^")") cons_args) )) 
 	^ " {\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
-    ^ (match unparse_type with
-    | Prototype -> (white (n+4))^"void "
-    | Implementation -> (white (n))^"void "^name ^ "::")
-    ^ "compute(" ^ (String.concat ", " (make_signatures comp_args)) ^ ")"^ (match unparse_type with
-      Prototype -> ";\n"
-    | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) comp)^(white n)^"}\n")
-    ^ (match unparse_type with
-      Prototype -> (white n) ^ "private:" ^ "\n"
-	^ (white (n+4)) ^ name ^ "(const " ^ name ^ "&);" ^ "\n"
-	^ (white (n+4)) ^ name ^ "& operator=(const " ^ name ^"&);" ^ "\n"
-	^ "};\n\n"
-    | Implementation -> "\n")
+    ^ 
+      (match unparse_type with
+      | Prototype -> (white (n+4))^"void "
+      | Implementation -> (white (n))^"void "^name ^ "::")
+    ^ "compute(" ^ (String.concat ", " (make_signatures comp_args)) 
+    ^ ")"^ 
+      (match unparse_type with
+	Prototype -> ";\n"
+      | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) comp)^(white n)^"}\n")
+    ^ 
+      (match unparse_type with
+	Prototype -> (white n) ^ "private:" ^ "\n"
+	  ^ (white (n+4)) ^ name ^ "(const " ^ name ^ "&);" ^ "\n"
+	  ^ (white (n+4)) ^ name ^ "& operator=(const " ^ name ^"&);" ^ "\n"
+	  ^ "};\n\n"
+      | Implementation -> "\n")
       
 	
   | Chain l -> String.concat "" (List.map (cpp_string_of_code unparse_type n) l)
@@ -112,9 +119,9 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_expr cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
   | Loop(var, expr, code) -> (white n)^"for(int "^(string_of_intexpr var)^" = 0; "^(string_of_intexpr var)^" < "^(string_of_expr expr)^"; "^(string_of_intexpr var)^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | EnvArrayAllocate(expr,rs,int) -> (white n)^(string_of_expr expr)^" = ("^rs^"*) malloc (sizeof("^rs^") * "^(string_of_expr int)^");\n"
-  | MethodCall(expr, methodname,args, output, input) -> (white n) ^ (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_expr args)))^");\n" 
-  | BufferAllocate(buf, size) -> (white n)^"complex_t * "^buf^" = LIB_MALLOC("^(string_of_expr size)^");\n"
-  | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^buf^", "^(string_of_expr size)^");\n"
+  | MethodCall(expr, methodname,args, output, input) -> (white n) ^ (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " ((string_of_expr output)::(string_of_expr input)::(List.map string_of_expr args)))^");\n" 
+  | BufferAllocate(buf, size) -> (white n)^"complex_t * "^(string_of_expr buf)^" = LIB_MALLOC("^(string_of_expr size)^");\n"
+  | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^(string_of_expr buf)^", "^(string_of_expr size)^");\n"
   | Return(i) -> (white n)^"return t"^(string_of_int i)^";\n"
 ;;
 

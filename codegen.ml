@@ -24,7 +24,7 @@ type expr =
 
 
 type code =
-  Class of string(*name*) * expr list(*cons args*) * expr list(*comp args*) * code (*cons*) * code (*comp*) * expr list (*privates*)
+  Class of string(*name*) * string (*super*) * expr list(*cons args*) * code (*cons*) * expr list(*comp args*)  * code (*comp*) * expr list (*privates*)
 | FuncEnv of string(*name*) * expr list(*args*) * expr list(*funcs*) * code
 | Chain of code list
 | Noop
@@ -32,11 +32,11 @@ type code =
 | Assign of expr * expr 
 | EnvArrayAllocate of expr * string * expr
 | PlacementNew of expr * expr
-| MethodCall of expr * string * expr list * string * string
+| MethodCall of expr * string * expr list * expr * expr
 | If of expr * code * code
 | Loop of Spl.intexpr * expr * code
-| BufferAllocate of string * expr
-| BufferDeallocate of string * expr
+| BufferAllocate of expr * expr
+| BufferDeallocate of expr * expr
 | Return of int
 ;;
 
@@ -58,8 +58,11 @@ let _rule = Var(Int, "_rule")
 let _dat = Var(Ptr(Char), "_dat")
 ;;
 
+let _rs = "RS"
+;;
+
 let build_child_var (num:int) : expr =
-  Var(Ptr(Env("RS")),"child"^(string_of_int num))
+  Var(Ptr(Env(_rs)),"child"^(string_of_int num))
 ;;
 
 let expr_of_intexpr (intexpr : Spl.intexpr) : expr =
@@ -120,18 +123,18 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 ;;
 
 
-let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) (output:string) (input:string): code =
-  let prepare_env_comp (ctype:ctype) (expr:expr) (rs:string) (args:Spl.intexpr list) (output:string) (input:string): code =
+let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) (output:expr) (input:expr): code =
+  let prepare_env_comp (ctype:ctype) (expr:expr) (rs:string) (args:Spl.intexpr list) (output:expr) (input:expr): code =
     MethodCall (Cast(expr,Ptr(ctype)), "compute", (List.map expr_of_intexpr args), output, input)
   in
 
-  let rec prepare_comp (output:string) (input:string) (e:Spl.spl): code =
+  let rec prepare_comp (output:expr) (input:expr) (e:Spl.spl): code =
     match e with
     | Spl.Compose l -> let buffernames = 
 			 let count = ref 0 in
-			 let g (res:string list) (_:Spl.spl) : string list = 
+			 let g (res:expr list) (_:Spl.spl) : expr list = 
 			   count := !count + 1; 
-			   ("T"^(string_of_int !count)) :: res 
+			   (Var(Ptr(Complex), "T"^(string_of_int !count))) :: res 
 			 in
 			 List.fold_left g [] (List.tl l) in
 		       let out_in_spl = (List.combine (List.combine (buffernames @ [ output ]) (input :: buffernames)) (List.rev l)) in
@@ -186,13 +189,14 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
   in
   let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     let (name, rstep, cold, reinit, hot, funcs, breakdowns) = rstep_partitioned in 
-    let output = "Y" in
-    let input = "X" in
+    let output = Var(Ptr(Complex),"Y") in
+    let input = Var(Ptr(Complex),"X") in
     let cons_args = (List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))))@(List.map (function x -> IdxfuncValueOf x) funcs) in
     Class (name,
+	   _rs,
 	   cons_args,
-	   Var(Ptr(Complex),output)::Var(Ptr(Complex),input)::List.map expr_of_intexpr (IntExprSet.elements hot),
 	   cons_code_of_rstep_partitioned rstep_partitioned,
+	   output::input::List.map expr_of_intexpr (IntExprSet.elements hot),
 	   comp_code_of_rstep_partitioned rstep_partitioned output input,
 	   _rule::_dat::cons_args@(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned)
     )
