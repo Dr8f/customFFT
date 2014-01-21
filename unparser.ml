@@ -64,8 +64,8 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^"}\n\n"
     )
       
-  | Class(name,cold,reinit,hot,funcs,cons,comp,output,input,privates) -> 
-    let cons_args = make_signatures (cold@reinit@funcs) in
+  | Class(name,coldreinit,hot,funcs,cons,comp,output,input,privates) -> 
+    let cons_args = make_signatures (coldreinit@funcs) in
     (match unparse_type with
       Prototype -> (white n) ^ "struct "^name^" : public RS {\n" 
 	^ (white (n+4)) ^ "int _rule;\n" 
@@ -77,7 +77,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     ^ name ^ "(" ^ (String.concat ", " cons_args)^")" ^ (match unparse_type with
       Prototype -> ";\n"
       | Implementation -> " : \n"
-	^ (String.concat (", \n") ((List.map (fun x -> let Var(ctype, name) = x in (white (n+4))^name^"("^name^")") (cold@reinit@funcs)) )) 
+	^ (String.concat (", \n") ((List.map (fun x -> let Var(ctype, name) = x in (white (n+4))^name^"("^name^")") (coldreinit@funcs)) )) 
 	^ " {\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
     ^ (match unparse_type with
     | Prototype -> (white (n+4))^"void "

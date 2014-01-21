@@ -22,7 +22,7 @@ type expr =
 
 
 type code =
-  Class of string(*name*) * expr list(*cold args*) * expr list(*reinit args*) * expr list(*hot args*) * expr list(*funcs*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * expr list (*privates*)
+  Class of string(*name*) * expr list(*cons args*) * expr list(*hot args*) * expr list(*funcs*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * expr list (*privates*)
 | FuncEnv of string(*name*) * expr list(*args*) * expr list(*funcs*) * code
 | Chain of code list
 | Noop
@@ -179,8 +179,7 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
     let output = "Y" in
     let input = "X" in
     Class (name,
-	   List.map (function x -> Var(Int, Spl.string_of_intexpr x)) (IntExprSet.elements cold),
-	   List.map (function x -> Var(Int, Spl.string_of_intexpr x)) (IntExprSet.elements reinit),
+	   List.map (function x -> Var(Int, Spl.string_of_intexpr x)) (IntExprSet.elements (cold@reinit)),
 	   List.map (function x -> Var(Int, Spl.string_of_intexpr x)) (IntExprSet.elements hot),
 	   List.map (function x -> Var(Func, Spl.string_of_idxfunc x)) funcs,
 	   cons_code_of_rstep_partitioned rstep_partitioned,
