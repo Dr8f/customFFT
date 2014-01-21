@@ -9,6 +9,7 @@ type ctype =
 | Char
 | Complex
 | Deref of ctype
+| Void
 ;;
 
 type expr = 
@@ -23,9 +24,11 @@ type expr =
 | New of expr
 ;;
 
-
-type code =
-  Class of string(*name*) * string (*super*) * expr list(*cons args*) * code (*cons*) * expr list(*comp args*)  * code (*comp*) * expr list (*privates*)
+type cfunction = 
+  Function of ctype (*func type*) * string (*func name*) * expr list(*comp args*)  * code (*comp*)
+and
+code =
+  Class of string(*name*) * string (*super*) * expr list (*privates*) * expr list(*cons args*) * code (*cons*) * cfunction (*method*) (* ctype (\*func type*\) * string (\*func name*\) * expr list(\*comp args*\)  * code (\*comp*\) *)
 | FuncEnv of string(*name*) * expr list(*args*) * expr list(*funcs*) * code
 | Chain of code list
 | Noop
@@ -195,11 +198,15 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
     let cons_args = (List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))))@(List.map (function x -> IdxfuncValueOf x) funcs) in
     Class (name,
 	   _rs,
+	   _rule::_dat::cons_args@(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned),
 	   cons_args,
 	   cons_code_of_rstep_partitioned rstep_partitioned,
-	   output::input::List.map expr_of_intexpr (IntExprSet.elements hot),
-	   comp_code_of_rstep_partitioned rstep_partitioned output input,
-	   _rule::_dat::cons_args@(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned)
+	   Function(
+	     Void,
+	     "compute",
+	     output::input::List.map expr_of_intexpr (IntExprSet.elements hot),
+	     comp_code_of_rstep_partitioned rstep_partitioned output input
+	   )
     )
   in
   Chain ((List.map code_of_func funcs)@(List.map code_of_rstep rsteps))

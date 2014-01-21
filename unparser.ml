@@ -20,6 +20,7 @@ let rec string_of_ctype (t : ctype) : string =
   |Char -> "char"
   |Complex -> "complex_t"
   |Deref(Ptr(ctype)) -> string_of_ctype ctype
+  |Void -> "void"
 ;;
 
 type unparse_type =
@@ -80,7 +81,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^"}\n\n"
     )
       
-  | Class(name,super,cons_args,cons,comp_args,comp,privates) -> 
+  | Class(name,super,privates,cons_args,cons,Function(function_type,function_name,comp_args,comp)) -> 
     (match unparse_type with
       Prototype -> 
 	(white n) ^ "struct "^name^" : public "^super^" {\n" 
@@ -96,9 +97,9 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
 	^ " {\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
     ^ 
       (match unparse_type with
-      | Prototype -> (white (n+4))^"void "
-      | Implementation -> (white (n))^"void "^name ^ "::")
-    ^ "compute(" ^ (String.concat ", " (make_signatures comp_args)) 
+      | Prototype -> (white (n+4))^(string_of_ctype function_type)^" "
+      | Implementation -> (white (n))^(string_of_ctype function_type)^" "^name ^ "::")
+    ^ function_name^"(" ^ (String.concat ", " (make_signatures comp_args)) 
     ^ ")"^ 
       (match unparse_type with
 	Prototype -> ";\n"
