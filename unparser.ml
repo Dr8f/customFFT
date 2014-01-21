@@ -19,6 +19,7 @@ let rec string_of_ctype (t : ctype) : string =
   |Ptr(ctype)->(string_of_ctype ctype)^" *"
   |Char -> "char"
   |Complex -> "complex_t"
+  |Deref(Ptr(ctype)) -> string_of_ctype ctype
 ;;
 
 type unparse_type =
@@ -120,7 +121,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | Loop(var, expr, code) -> (white n)^"for(int "^(string_of_intexpr var)^" = 0; "^(string_of_intexpr var)^" < "^(string_of_expr expr)^"; "^(string_of_intexpr var)^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | EnvArrayAllocate(expr,rs,int) -> (white n)^(string_of_expr expr)^" = ("^rs^"*) malloc (sizeof("^rs^") * "^(string_of_expr int)^");\n"
   | MethodCall(expr, methodname,args, output, input) -> (white n) ^ (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " ((string_of_expr output)::(string_of_expr input)::(List.map string_of_expr args)))^");\n" 
-  | BufferAllocate(buf, size) -> (white n)^"complex_t * "^(string_of_expr buf)^" = LIB_MALLOC("^(string_of_expr size)^");\n"
+  | BufferAllocate(buf, size) -> (white n)^(string_of_ctype(type_of_expr(buf)))^" "^(string_of_expr buf)^" = LIB_MALLOC("^(string_of_expr size)^" * sizeof("^(string_of_ctype (Deref(type_of_expr(buf))))^"));\n"
   | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^(string_of_expr buf)^", "^(string_of_expr size)^");\n"
   | Return(i) -> (white n)^"return t"^(string_of_int i)^";\n"
 ;;

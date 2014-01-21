@@ -8,6 +8,7 @@ type ctype =
 | Ptr of ctype
 | Char
 | Complex
+| Deref of ctype
 ;;
 
 type expr = 
