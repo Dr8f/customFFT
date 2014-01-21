@@ -58,6 +58,9 @@ let build_child_var (num:int) : expr =
 let _rule = Var(Int, "_rule")
 ;;
 
+let _dat = Var(Ptr(Char), "_dat")
+;;
+
 (*FIXME: we should probably collect that from the code itself*)
 let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
   let res = ref [] in  
@@ -74,7 +77,7 @@ let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rst
 let collect_freedoms ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
   let res = ref [] in  
   let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
-    res := (List.map (fun (l,r)->Var(Int,Spl.string_of_intexpr l)) freedoms) @ !res    
+    res := (List.map (fun (l,r)->IntexprValueOf l) freedoms) @ !res    
   in
   List.iter g breakdowns;
   !res  
@@ -87,7 +90,7 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
     | Spl.Construct(numchild, rs, args) -> Assign(build_child_var(numchild), New(CreateEnv(rs, List.map (fun(x)->IntexprValueOf(x)) args)))
     | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) ->
       let child = build_child_var(numchild) in
-      let loopvar = Var(Int, Spl.string_of_intexpr i) in 
+      let loopvar = IntexprValueOf i in  (*FIXME we should carry on with the loopvar spl type*)
       Chain([
 	EnvArrayAllocate(child, rs, (IntexprValueOf count));
 	Loop(loopvar, IntexprValueOf count, (
@@ -100,7 +103,7 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
   in
   let rulecount = ref 0 in
   let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
-    let freedom_assigns = List.map (fun (l,r)->Assign(Var(Int,Spl.string_of_intexpr l), Var(Int,Spl.string_of_intexpr r))) freedoms in
+    let freedom_assigns = List.map (fun (l,r)->Assign(IntexprValueOf l, IntexprValueOf r)) freedoms in
     rulecount := !rulecount + 1;
     
     If((BoolValueOf condition), 
@@ -133,7 +136,7 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 			 @ (List.map (fun ((output,input),spl)->(prepare_comp output input spl)) out_in_spl)
 			 @ (List.map (fun (output,size)->(BufferDeallocate(output,IntexprValueOf(size)))) buffers)
 		       )
-    | Spl.ISum(i, count, content) -> Loop(Var(Int, Spl.string_of_intexpr i), IntexprValueOf count, (prepare_comp output input content))
+    | Spl.ISum(i, count, content) -> Loop(IntexprValueOf i, IntexprValueOf count, (prepare_comp output input content))
     | Spl.Compute(numchild, rs, hot,_,_) -> prepare_env_comp (Env(rs)) (build_child_var(numchild)) rs hot output input
     | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
       let loopvar = IntexprValueOf(i) in
@@ -142,7 +145,7 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
   in
   let rulecount = ref 0 in
   let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
-    let freedom_assigns = List.map (fun (l,r)->Assign(Var(Int,Spl.string_of_intexpr l), Var(Int,Spl.string_of_intexpr r))) freedoms in
+    let freedom_assigns = List.map (fun (l,r)->Assign(IntexprValueOf l, IntexprValueOf r)) freedoms in
     rulecount := !rulecount + 1;
     
     If(Equal(_rule, IntexprValueOf(Spl.IConstant !rulecount)),
@@ -190,7 +193,7 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
 	   comp_code_of_rstep_partitioned rstep_partitioned output input,
 	   output,
 	   input,
-	   _rule::Var(Ptr(Char), "_dat")::(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned)
+	   _rule::_dat::(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned)
     )
   in
   Chain ((List.map code_of_func funcs)@(List.map code_of_rstep rsteps))
