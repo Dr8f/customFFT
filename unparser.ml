@@ -53,11 +53,12 @@ let rec type_of_expr (expr:expr) : ctype =
   (* | New(f) -> Env("FAIL")  *)
   (* | Nth(expr, count) -> Env("FAIL") *)
 ;;
+
+let make_signatures (l:'a list) : string list =
+  List.map (fun expr -> (string_of_ctype (type_of_expr expr))^" "^(string_of_expr expr)) (l)
+;;
  
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
-  let make_signatures (l:'a list) : string list =
-      List.map (fun expr -> (string_of_ctype (type_of_expr expr))^" "^(string_of_expr expr)) (l)
-  in
   match code with
   | FuncEnv(name,args,fargs,code) ->
     (match unparse_type with
@@ -95,7 +96,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
       | Implementation -> " : \n"
 	^ (String.concat (", \n") ((List.map (fun x -> (white (n+4))^(string_of_expr x)^"("^(string_of_expr x)^")") cons_args) )) 
 	^ " {\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
-    ^ (List.map (fun x -> cpp_string_of_cfunction unparse_type n x) methods)
+    ^ (String.concat "" (List.map (fun x -> cpp_string_of_cfunction unparse_type n name x) methods))
     ^ 
       (match unparse_type with
 	Prototype -> (white n) ^ "private:" ^ "\n"
@@ -118,7 +119,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^(string_of_expr buf)^", "^(string_of_expr size)^");\n"
   | Return(i) -> (white n)^"return t"^(string_of_int i)^";\n"
 and 
-    cpp_string_of_cfunction (unparse_type:unparse_type) (n:int) (code : code) : string =
+    cpp_string_of_cfunction (unparse_type:unparse_type) (n:int) (name:string) (Function(function_type, function_name, comp_args, comp):cfunction) : string =
   (match unparse_type with
   | Prototype -> (white (n+4))^(string_of_ctype function_type)^" "
   | Implementation -> (white (n))^(string_of_ctype function_type)^" "^name ^ "::")
