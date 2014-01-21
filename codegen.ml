@@ -33,7 +33,7 @@ type code =
 | PlacementNew of expr * expr
 | MethodCall of expr * string * expr list * string * string
 | If of expr * code * code
-| Loop of expr * expr * code
+| Loop of Spl.intexpr * expr * code
 | BufferAllocate of string * expr
 | BufferDeallocate of string * expr
 | Return of int
@@ -51,15 +51,20 @@ type code =
 (*   Spl.recursion_collect f z *)
 (* ;; *)
 
-let build_child_var (num:int) : expr =
-  Var(Ptr(Env("RS")),"child"^(string_of_int num))
-;;
-
 let _rule = Var(Int, "_rule")
 ;;
 
 let _dat = Var(Ptr(Char), "_dat")
 ;;
+
+let build_child_var (num:int) : expr =
+  Var(Ptr(Env("RS")),"child"^(string_of_int num))
+;;
+
+let expr_of_intexpr (intexpr : Spl.intexpr) : expr =
+  IntexprValueOf intexpr
+;;
+
 
 (*FIXME: we should probably collect that from the code itself*)
 let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
@@ -87,16 +92,15 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
   let rec prepare_cons (e:Spl.spl) : code =
     match e with
     | Spl.Compose l -> Chain (List.map prepare_cons (List.rev l)) 
-    | Spl.Construct(numchild, rs, args) -> Assign(build_child_var(numchild), New(CreateEnv(rs, List.map (fun(x)->IntexprValueOf(x)) args)))
+    | Spl.Construct(numchild, rs, args) -> Assign(build_child_var(numchild), New(CreateEnv(rs, List.map expr_of_intexpr args)))
     | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) ->
       let child = build_child_var(numchild) in
-      let loopvar = IntexprValueOf i in  (*FIXME we should carry on with the loopvar spl type*)
       Chain([
 	EnvArrayAllocate(child, rs, (IntexprValueOf count));
-	Loop(loopvar, IntexprValueOf count, (
+	Loop(i, IntexprValueOf count, (
 	  PlacementNew( 
-	    (Nth(Cast(child, Ptr(Env(rs))), loopvar)), 
-	    (CreateEnv(rs, (List.map (fun(x)->IntexprValueOf(x)) (cold@reinit))@(List.map (fun(x)->New(IdxfuncValueOf x)) funcs))))
+	    (Nth(Cast(child, Ptr(Env(rs))), IntexprValueOf i)), 
+	    (CreateEnv(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(IdxfuncValueOf x)) funcs))))
 	))
       ])	
     | _ -> Error("UNIMPLEMENTED")
@@ -117,7 +121,7 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 
 let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) (output:string) (input:string): code =
   let prepare_env_comp (ctype:ctype) (expr:expr) (rs:string) (args:Spl.intexpr list) (output:string) (input:string): code =
-    MethodCall (Cast(expr,Ptr(ctype)), "compute", (List.map (fun(x)->IntexprValueOf(x)) args), output, input)
+    MethodCall (Cast(expr,Ptr(ctype)), "compute", (List.map expr_of_intexpr args), output, input)
   in
 
   let rec prepare_comp (output:string) (input:string) (e:Spl.spl): code =
@@ -136,11 +140,10 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 			 @ (List.map (fun ((output,input),spl)->(prepare_comp output input spl)) out_in_spl)
 			 @ (List.map (fun (output,size)->(BufferDeallocate(output,IntexprValueOf(size)))) buffers)
 		       )
-    | Spl.ISum(i, count, content) -> Loop(IntexprValueOf i, IntexprValueOf count, (prepare_comp output input content))
+    | Spl.ISum(i, count, content) -> Loop(i, IntexprValueOf count, (prepare_comp output input content))
     | Spl.Compute(numchild, rs, hot,_,_) -> prepare_env_comp (Env(rs)) (build_child_var(numchild)) rs hot output input
     | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
-      let loopvar = IntexprValueOf(i) in
-      Loop(loopvar, IntexprValueOf count, (prepare_env_comp (Env(rs)) (Nth(build_child_var(numchild), loopvar)) rs hot output input))
+      Loop(i, IntexprValueOf count, (prepare_env_comp (Env(rs)) (Nth(build_child_var(numchild), IntexprValueOf(i))) rs hot output input))
     | _ -> Error("UNIMPLEMENTED")
   in
   let rulecount = ref 0 in
@@ -155,7 +158,6 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
   in
   List.fold_left g (Error("no error")) breakdowns
 ;;
-
 
 
 let code_of_lib ((funcs,rsteps) : lib) : code = 
@@ -175,7 +177,7 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
       |Spl.FCompose l -> Chain(List.fold_right g l [])
     in
     FuncEnv(name, 
-	    List.map (function x -> IntexprValueOf x) args,
+	    List.map expr_of_intexpr args,
 	    List.map (function x -> IdxfuncValueOf x) fargs,
 	    let code = (code_of_at f) in
 	    Chain ( code :: [Return(!count)])
@@ -186,8 +188,8 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
     let output = "Y" in
     let input = "X" in
     Class (name,
-	   List.map (function x -> IntexprValueOf x) ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))),
-	   List.map (function x -> IntexprValueOf x) (IntExprSet.elements hot),
+	   List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))),
+	   List.map expr_of_intexpr (IntExprSet.elements hot),
 	   List.map (function x -> IdxfuncValueOf x) funcs,
 	   cons_code_of_rstep_partitioned rstep_partitioned,
 	   comp_code_of_rstep_partitioned rstep_partitioned output input,

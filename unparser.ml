@@ -111,7 +111,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | Noop -> (white n)^"/* noop */\n"
   | Error str -> (white n)^"error(\""^str^"\");\n"
   | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_expr cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
-  | Loop(var, expr, code) -> (white n)^"for("^(string_of_ctype(type_of_expr var))^" "^(string_of_expr var)^" = 0; "^(string_of_expr var)^" < "^(string_of_expr expr)^"; "^(string_of_expr var)^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
+  | Loop(var, expr, code) -> (white n)^"for(int "^(string_of_intexpr var)^" = 0; "^(string_of_intexpr var)^" < "^(string_of_expr expr)^"; "^(string_of_intexpr var)^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | EnvArrayAllocate(expr,rs,int) -> (white n)^(string_of_expr expr)^" = ("^rs^"*) malloc (sizeof("^rs^") * "^(string_of_expr int)^");\n"
   | MethodCall(expr, methodname,args, output, input) -> (white n) ^ (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_expr args)))^");\n" 
   | BufferAllocate(buf, size) -> (white n)^"complex_t * "^buf^" = LIB_MALLOC("^(string_of_expr size)^");\n"
