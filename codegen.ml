@@ -6,6 +6,7 @@ type ctype =
 | Env of string
 | Func
 | Ptr of ctype
+| Char
 ;;
 
 type expr = 
@@ -52,6 +53,9 @@ type code =
 
 let build_child_var (num:int) : expr =
   Var(Ptr(Env("RS")),"child"^(string_of_int num))
+;;
+
+let _rule = Var(Int, "_rule")
 ;;
 
 (*FIXME: we should probably collect that from the code itself*)
@@ -141,7 +145,7 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
     let freedom_assigns = List.map (fun (l,r)->Assign(Var(Int,Spl.string_of_intexpr l), Var(Int,Spl.string_of_intexpr r))) freedoms in
     rulecount := !rulecount + 1;
     
-    If(Equal(Var(Int, "_rule"), IntexprValueOf(Spl.IConstant !rulecount)),
+    If(Equal(_rule, IntexprValueOf(Spl.IConstant !rulecount)),
        prepare_comp output input desc_comp, 
        Error("internal error: no valid rule has been selected"))
       
@@ -168,8 +172,8 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
       |Spl.FCompose l -> Chain(List.fold_right g l [])
     in
     FuncEnv(name, 
-	    List.map (function x -> Var(Int, Spl.string_of_intexpr x)) args,
-	    List.map (function x -> Var(Func, Spl.string_of_idxfunc x)) fargs,
+	    List.map (function x -> IntexprValueOf x) args,
+	    List.map (function x -> IdxfuncValueOf x) fargs,
 	    let code = (code_of_at f) in
 	    Chain ( code :: [Return(!count)])
     )
@@ -179,14 +183,14 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
     let output = "Y" in
     let input = "X" in
     Class (name,
-	   List.map (function x -> Var(Int, Spl.string_of_intexpr x)) (IntExprSet.elements (cold@reinit)),
-	   List.map (function x -> Var(Int, Spl.string_of_intexpr x)) (IntExprSet.elements hot),
-	   List.map (function x -> Var(Func, Spl.string_of_idxfunc x)) funcs,
+	   List.map (function x -> IntexprValueOf x) ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))),
+	   List.map (function x -> IntexprValueOf x) (IntExprSet.elements hot),
+	   List.map (function x -> IdxfuncValueOf x) funcs,
 	   cons_code_of_rstep_partitioned rstep_partitioned,
 	   comp_code_of_rstep_partitioned rstep_partitioned output input,
 	   output,
 	   input,
-	   (collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned)
+	   _rule::Var(Ptr(Char), "_dat")::(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned)
     )
   in
   Chain ((List.map code_of_func funcs)@(List.map code_of_rstep rsteps))

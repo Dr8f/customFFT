@@ -14,9 +14,10 @@ let rec white (n:int) : string =
 let rec string_of_ctype (t : ctype) : string =
   match t with
   |Int -> "int"
-  |Func -> "func*"
+  |Func -> "func*" (*FIXME this type is horrendous*)
   |Env(rs) -> rs
   |Ptr(ctype)->(string_of_ctype ctype)^" *"
+  |Char -> "char"
 ;;
 
 type unparse_type =
@@ -36,10 +37,23 @@ let rec string_of_expr (expr:expr) : string =
   | Var(_, name) -> name
   | Cast(expr, ctype) -> "(reinterpret_cast<"^(string_of_ctype ctype)^">("^(string_of_expr expr)^"))"  
 ;;
+
+let rec type_of_expr (expr:expr) : ctype =
+  match expr with
+  | IntexprValueOf _ -> Int
+  | Var(ctype, _) -> ctype
+  | IdxfuncValueOf(f) -> Func 
+  (* | Cast(expr, ctype) -> Env("FAIL") *)
+  (* | Equal(a,b) -> Env("FAIL") *)
+  (* | BoolValueOf(boolexpr) -> Env("FAIL") *)
+  (* | CreateEnv(name,args) -> Env("FAIL") *)
+  (* | New(f) -> Env("FAIL")  *)
+  (* | Nth(expr, count) -> Env("FAIL") *)
+;;
  
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
   let make_signatures (l:'a list) : string list =
-    List.map (fun var -> let Var(ctype, name) = var in (string_of_ctype (ctype))^" "^name) (l)
+      List.map (fun expr -> (string_of_ctype (type_of_expr expr))^" "^(string_of_expr expr)) (l)
   in
   match code with
   | FuncEnv(name,args,fargs,code) ->
@@ -53,7 +67,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
       (match unparse_type with
 	Prototype -> ";\n"^(white (n+4))^"virtual "
       | Implementation -> " : \n"
-	^ (String.concat (", \n") ((List.map (fun x -> let Var(ctype, name) = x in (white (n+4))^name^"("^name^")") (args@fargs)) ))
+	^ (String.concat (", \n") ((List.map (fun x -> (white (n+4))^(string_of_expr x)^"("^(string_of_expr x)^")") (args@fargs)) )) 
 	^ "{\n}\n\n"^(white n)
       )
     ^"complex_t "^(match unparse_type with
@@ -68,8 +82,6 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     let cons_args = make_signatures (coldreinit@funcs) in
     (match unparse_type with
       Prototype -> (white n) ^ "struct "^name^" : public RS {\n" 
-	^ (white (n+4)) ^ "int _rule;\n" 
-	^ (white (n+4)) ^ "char *_dat;\n" 
 	^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") (make_signatures privates)))
 	^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") cons_args))
 	^ (white (n+4))
@@ -77,7 +89,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     ^ name ^ "(" ^ (String.concat ", " cons_args)^")" ^ (match unparse_type with
       Prototype -> ";\n"
       | Implementation -> " : \n"
-	^ (String.concat (", \n") ((List.map (fun x -> let Var(ctype, name) = x in (white (n+4))^name^"("^name^")") (coldreinit@funcs)) )) 
+	^ (String.concat (", \n") ((List.map (fun x -> (white (n+4))^(string_of_expr x)^"("^(string_of_expr x)^")") (coldreinit@funcs)) )) 
 	^ " {\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
     ^ (match unparse_type with
     | Prototype -> (white (n+4))^"void "
@@ -102,7 +114,6 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | Loop(Var(Int,name), expr, code) -> (white n)^"for(int "^name^" = 0; "^name^" < "^(string_of_expr expr)^"; "^name^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | Loop(Var(_,_), _, _) -> assert false
   | EnvArrayAllocate(expr,rs,int) -> (white n)^(string_of_expr expr)^" = ("^rs^"*) malloc (sizeof("^rs^") * "^(string_of_expr int)^");\n"
-  (* | EnvArrayConstruct(expr,expr) -> (white n)^"new ("^(string_of_expr expr)^") "^(string_of_expr expr)^";\n" *)
   | MethodCall(expr, methodname,args, output, input) -> (white n) ^ (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_expr args)))^");\n" 
   | BufferAllocate(buf, size) -> (white n)^"complex_t * "^buf^" = LIB_MALLOC("^(string_of_expr size)^");\n"
   | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^buf^", "^(string_of_expr size)^");\n"
