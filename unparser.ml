@@ -60,28 +60,6 @@ let make_signatures (l:'a list) : string list =
  
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
   match code with
-  | FuncEnv(name,args,fargs,code) ->
-    (match unparse_type with
-      Prototype ->    	   
-	"struct "^name^" : public func {\n"
-	^(String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") (make_signatures (args@fargs))))
-	^(white (n+4))
-    | Implementation -> name^"::"
-    )^name^"("^(String.concat ", " ((make_signatures args)@(make_signatures fargs)))^")"^
-      (match unparse_type with
-	Prototype -> ";\n"^(white (n+4))^"virtual "
-      | Implementation -> " : \n"
-	^ (String.concat (", \n") ((List.map (fun x -> (white (n+4))^(string_of_expr x)^"("^(string_of_expr x)^")") (args@fargs)) )) 
-	^ "{\n}\n\n"^(white n)
-      )
-    ^"complex_t "^(match unparse_type with
-      Prototype -> ""
-    | Implementation -> name^"::"
-    )^"at(int t0)"^(match unparse_type with
-      Prototype -> ";\n"^"};\n\n"
-    | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^"}\n\n"
-    )
-      
   | Class(name,super,privates,methods) ->  
     (match unparse_type with
       Prototype -> 

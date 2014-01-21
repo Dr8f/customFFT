@@ -30,7 +30,6 @@ type cfunction =
 and
 code =
   Class of string(*name*) * string (*super*) * expr list (*privates*) * cfunction list (*methods*)
-| FuncEnv of string(*name*) * expr list(*args*) * expr list(*funcs*) * code
 | Chain of code list
 | Noop
 | Error of string
@@ -185,11 +184,23 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
       match f with
       |Spl.FCompose l -> Chain(List.fold_right g l [])
     in
-    FuncEnv(name, 
-	    List.map expr_of_intexpr args,
-	    List.map (function x -> IdxfuncValueOf x) fargs,
-	    let code = (code_of_at f) in
-	    Chain ( code :: [Return(!count)])
+    let code = (code_of_at f) in
+    let cons_args = (List.map expr_of_intexpr args)@(List.map (function x -> IdxfuncValueOf x) fargs) in
+    Class(name,
+	  "func",
+	  cons_args,
+	  [
+	    Constructor(
+	      cons_args,
+	      Noop
+	    );
+	    Function(
+	      Complex,
+	      "at",
+	      [Var(Int, "t0")], (*FIXME still horrendous*)
+	      Chain ( code :: [Return(!count)])
+	    )
+	  ]	    
     )
   in
   let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
