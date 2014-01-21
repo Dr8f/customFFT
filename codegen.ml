@@ -22,7 +22,7 @@ type expr =
 
 
 type code =
-  Class of string(*name*) * expr list(*cold args*) * expr list(*reinit args*) * expr list(*hot args*) * expr list(*funcs*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * string list (*childX*) * expr list (*freedoms*)
+  Class of string(*name*) * expr list(*cold args*) * expr list(*reinit args*) * expr list(*hot args*) * expr list(*funcs*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * expr list (*privates*)
 | FuncEnv of string(*name*) * expr list(*args*) * expr list(*funcs*) * code
 | Chain of code list
 | Noop
@@ -54,12 +54,12 @@ let build_child_var (num:int) : expr =
   Var(Ptr(Env("RS")),"child"^(string_of_int num))
 ;;
 
-let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : string list =
+(*FIXME: we should probably collect that from the code itself*)
+let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
   let res = ref [] in  
   let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
     Spl.meta_iter_spl_on_spl (function
-    | Spl.Construct(numchild, _, _) -> res := ("child"^(string_of_int numchild))::!res
-    | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) -> res := ("child"^(string_of_int numchild))::!res
+    | Spl.Construct(numchild, _, _) | Spl.ISumReinitConstruct(numchild, _, _, _, _, _, _) -> res := (build_child_var numchild)::!res 
     | _ -> ()
     ) desc_cons;    
   in
@@ -187,8 +187,7 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
 	   comp_code_of_rstep_partitioned rstep_partitioned output input,
 	   output,
 	   input,
-	   collect_children rstep_partitioned,
-	   collect_freedoms rstep_partitioned
+	   (collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned)
     )
   in
   Chain ((List.map code_of_func funcs)@(List.map code_of_rstep rsteps))

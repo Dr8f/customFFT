@@ -64,17 +64,14 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^"}\n\n"
     )
       
-  | Class(name,cold,reinit,hot,funcs,cons,comp,output,input,children,freedoms) -> 
+  | Class(name,cold,reinit,hot,funcs,cons,comp,output,input,privates) -> 
     let cons_args = make_signatures (cold@reinit@funcs) in
-    let comp_args = make_signatures hot in
-    let freedoms_args = make_signatures freedoms in
     (match unparse_type with
       Prototype -> (white n) ^ "struct "^name^" : public RS {\n" 
 	^ (white (n+4)) ^ "int _rule;\n" 
 	^ (white (n+4)) ^ "char *_dat;\n" 
-	^ (String.concat "" (List.map (fun x -> (white (n+4))^"RS *"^x^";\n") children))
+	^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") (make_signatures privates)))
 	^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") cons_args))
-	^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") freedoms_args))
 	^ (white (n+4))
     | Implementation -> (white n) ^ name ^ "::")
     ^ name ^ "(" ^ (String.concat ", " cons_args)^")" ^ (match unparse_type with
@@ -85,7 +82,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     ^ (match unparse_type with
     | Prototype -> (white (n+4))^"void "
     | Implementation -> (white (n))^"void "^name ^ "::")
-    ^ "compute(" ^ (String.concat ", " (("complex_t* "^output)::("complex_t* "^input)::comp_args)) ^ ")"^ (match unparse_type with
+    ^ "compute(" ^ (String.concat ", " (("complex_t* "^output)::("complex_t* "^input)::(make_signatures hot))) ^ ")"^ (match unparse_type with
       Prototype -> ";\n"
     | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) comp)^(white n)^"}\n")
     ^ (match unparse_type with
