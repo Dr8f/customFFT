@@ -81,7 +81,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^"}\n\n"
     )
       
-  | Class(name,super,privates,cons_args,cons,Function(function_type,function_name,comp_args,comp)) -> 
+  | Class(name,super,privates,cons_args,cons,methods) ->  (* Function(function_type,function_name,comp_args,comp) *) 
     (match unparse_type with
       Prototype -> 
 	(white n) ^ "struct "^name^" : public "^super^" {\n" 
@@ -95,15 +95,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
       | Implementation -> " : \n"
 	^ (String.concat (", \n") ((List.map (fun x -> (white (n+4))^(string_of_expr x)^"("^(string_of_expr x)^")") cons_args) )) 
 	^ " {\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
-    ^ 
-      (match unparse_type with
-      | Prototype -> (white (n+4))^(string_of_ctype function_type)^" "
-      | Implementation -> (white (n))^(string_of_ctype function_type)^" "^name ^ "::")
-    ^ function_name^"(" ^ (String.concat ", " (make_signatures comp_args)) 
-    ^ ")"^ 
-      (match unparse_type with
-	Prototype -> ";\n"
-      | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) comp)^(white n)^"}\n")
+    ^ (List.map (fun x -> cpp_string_of_cfunction unparse_type n x) methods)
     ^ 
       (match unparse_type with
 	Prototype -> (white n) ^ "private:" ^ "\n"
@@ -125,6 +117,17 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | BufferAllocate(buf, size) -> (white n)^(string_of_ctype(type_of_expr(buf)))^" "^(string_of_expr buf)^" = LIB_MALLOC("^(string_of_expr size)^" * sizeof("^(string_of_ctype (Deref(type_of_expr(buf))))^"));\n"
   | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^(string_of_expr buf)^", "^(string_of_expr size)^");\n"
   | Return(i) -> (white n)^"return t"^(string_of_int i)^";\n"
+and 
+    cpp_string_of_cfunction (unparse_type:unparse_type) (n:int) (code : code) : string =
+  (match unparse_type with
+  | Prototype -> (white (n+4))^(string_of_ctype function_type)^" "
+  | Implementation -> (white (n))^(string_of_ctype function_type)^" "^name ^ "::")
+  ^ function_name^"(" ^ (String.concat ", " (make_signatures comp_args)) 
+  ^ ")"^ 
+    (match unparse_type with
+      Prototype -> ";\n"
+    | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) comp)^(white n)^"}\n")
+    
 ;;
 
 let string_of_code (n:int) (code : code) : string = 

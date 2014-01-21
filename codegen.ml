@@ -28,7 +28,7 @@ type cfunction =
   Function of ctype (*func type*) * string (*func name*) * expr list(*comp args*)  * code (*comp*)
 and
 code =
-  Class of string(*name*) * string (*super*) * expr list (*privates*) * expr list(*cons args*) * code (*cons*) * cfunction (*method*) (* ctype (\*func type*\) * string (\*func name*\) * expr list(\*comp args*\)  * code (\*comp*\) *)
+  Class of string(*name*) * string (*super*) * expr list (*privates*) * expr list(*cons args*) * code (*cons*) * cfunction list (*methods*)
 | FuncEnv of string(*name*) * expr list(*args*) * expr list(*funcs*) * code
 | Chain of code list
 | Noop
@@ -201,12 +201,12 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
 	   _rule::_dat::cons_args@(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned),
 	   cons_args,
 	   cons_code_of_rstep_partitioned rstep_partitioned,
-	   Function(
+	   [Function(
 	     Void,
 	     "compute",
 	     output::input::List.map expr_of_intexpr (IntExprSet.elements hot),
 	     comp_code_of_rstep_partitioned rstep_partitioned output input
-	   )
+	   )]
     )
   in
   Chain ((List.map code_of_func funcs)@(List.map code_of_rstep rsteps))
