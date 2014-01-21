@@ -78,18 +78,16 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^"}\n\n"
     )
       
-  | Class(name,coldreinit,hot,funcs,cons,comp,output,input,privates) -> 
-    let cons_args = make_signatures (coldreinit@funcs) in
+  | Class(name,cons_args,hot,cons,comp,output,input,privates) -> 
     (match unparse_type with
       Prototype -> (white n) ^ "struct "^name^" : public RS {\n" 
 	^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") (make_signatures privates)))
-	^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") cons_args))
 	^ (white (n+4))
     | Implementation -> (white n) ^ name ^ "::")
-    ^ name ^ "(" ^ (String.concat ", " cons_args)^")" ^ (match unparse_type with
+    ^ name ^ "(" ^ (String.concat ", " (make_signatures cons_args))^")" ^ (match unparse_type with
       Prototype -> ";\n"
       | Implementation -> " : \n"
-	^ (String.concat (", \n") ((List.map (fun x -> (white (n+4))^(string_of_expr x)^"("^(string_of_expr x)^")") (coldreinit@funcs)) )) 
+	^ (String.concat (", \n") ((List.map (fun x -> (white (n+4))^(string_of_expr x)^"("^(string_of_expr x)^")") cons_args) )) 
 	^ " {\n"^(cpp_string_of_code unparse_type (n+4) cons)^(white n)^"}\n")
     ^ (match unparse_type with
     | Prototype -> (white (n+4))^"void "

@@ -23,7 +23,7 @@ type expr =
 
 
 type code =
-  Class of string(*name*) * expr list(*cons args*) * expr list(*hot args*) * expr list(*funcs*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * expr list (*privates*)
+  Class of string(*name*) * expr list(*cons args*) * expr list(*hot args*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * expr list (*privates*)
 | FuncEnv of string(*name*) * expr list(*args*) * expr list(*funcs*) * code
 | Chain of code list
 | Noop
@@ -187,17 +187,15 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
     let (name, rstep, cold, reinit, hot, funcs, breakdowns) = rstep_partitioned in 
     let output = "Y" in
     let input = "X" in
-    let coldreinit = List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))) in
-    let funcs = List.map (function x -> IdxfuncValueOf x) funcs in
+    let cons_args = (List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))))@(List.map (function x -> IdxfuncValueOf x) funcs) in
     Class (name,
-	   coldreinit,
+	   cons_args,
 	   List.map expr_of_intexpr (IntExprSet.elements hot),
-	   funcs,
 	   cons_code_of_rstep_partitioned rstep_partitioned,
 	   comp_code_of_rstep_partitioned rstep_partitioned output input,
 	   output,
 	   input,
-	   _rule::_dat::(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned) (*+ coldreinit + funcs*)
+	   _rule::_dat::cons_args@(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned)
     )
   in
   Chain ((List.map code_of_func funcs)@(List.map code_of_rstep rsteps))
