@@ -187,15 +187,17 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
     let (name, rstep, cold, reinit, hot, funcs, breakdowns) = rstep_partitioned in 
     let output = "Y" in
     let input = "X" in
+    let coldreinit = List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))) in
+    let funcs = List.map (function x -> IdxfuncValueOf x) funcs in
     Class (name,
-	   List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))),
+	   coldreinit,
 	   List.map expr_of_intexpr (IntExprSet.elements hot),
-	   List.map (function x -> IdxfuncValueOf x) funcs,
+	   funcs,
 	   cons_code_of_rstep_partitioned rstep_partitioned,
 	   comp_code_of_rstep_partitioned rstep_partitioned output input,
 	   output,
 	   input,
-	   _rule::_dat::(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned)
+	   _rule::_dat::(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned) (*+ coldreinit + funcs*)
     )
   in
   Chain ((List.map code_of_func funcs)@(List.map code_of_rstep rsteps))
