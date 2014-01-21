@@ -16,6 +16,7 @@ let rec string_of_ctype (t : ctype) : string =
   |Int -> "int"
   |Func -> "func*"
   |Env(rs) -> rs
+  |Ptr(ctype)->(string_of_ctype ctype)^" *"
 ;;
 
 type unparse_type =
@@ -25,15 +26,15 @@ type unparse_type =
 
 let rec string_of_expr (expr:expr) : string = 
   match expr with
-  | IntValueOf intexpr -> string_of_intexpr intexpr
+  | IntexprValueOf intexpr -> string_of_intexpr intexpr
   | Equal(a,b) -> "(" ^ (string_of_expr a) ^ " == " ^ (string_of_expr b) ^ ")"
   | BoolValueOf(boolexpr) -> string_of_boolexpr boolexpr
   | IdxfuncValueOf(f)->string_of_idxfunc f
   | CreateEnv(name,args) -> name^"("^(String.concat ", " (List.map string_of_expr (args)))^")"
-  | New(f) -> "new "^(string_of_expr f)
-  | Nth(Var(Env(rs), name),count) ->"(reinterpret_cast<"^rs^" *>("^name^")+"^(string_of_expr count)^")"
+  | New(f) -> "new "^(string_of_expr f) 
+  | Nth(expr, count) ->"("^(string_of_expr expr)^"+"^(string_of_expr count)^")"
   | Var(_, name) -> name
-  | Cast(expr, ctype) -> "(reinterpret_cast<"^(string_of_ctype ctype)^" *>("^(string_of_expr expr)^"))"  
+  | Cast(expr, ctype) -> "(reinterpret_cast<"^(string_of_ctype ctype)^">("^(string_of_expr expr)^"))"  
 ;;
  
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
@@ -103,7 +104,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_expr cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
   | Loop(Var(Int,name), expr, code) -> (white n)^"for(int "^name^" = 0; "^name^" < "^(string_of_expr expr)^"; "^name^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | Loop(Var(_,_), _, _) -> assert false
-  | EnvArrayAllocate(name,rs,int) -> (white n)^name^" = ("^rs^"*) malloc (sizeof("^rs^") * "^(string_of_expr int)^");\n"
+  | EnvArrayAllocate(expr,rs,int) -> (white n)^(string_of_expr expr)^" = ("^rs^"*) malloc (sizeof("^rs^") * "^(string_of_expr int)^");\n"
   (* | EnvArrayConstruct(expr,expr) -> (white n)^"new ("^(string_of_expr expr)^") "^(string_of_expr expr)^";\n" *)
   | MethodCall(expr, methodname,args, output, input) -> (white n) ^ (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " (output::input::(List.map string_of_expr args)))^");\n" 
   | BufferAllocate(buf, size) -> (white n)^"complex_t * "^buf^" = LIB_MALLOC("^(string_of_expr size)^");\n"
