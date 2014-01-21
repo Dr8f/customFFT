@@ -7,6 +7,7 @@ type ctype =
 | Func
 | Ptr of ctype
 | Char
+| Complex
 ;;
 
 type expr = 
@@ -23,7 +24,7 @@ type expr =
 
 
 type code =
-  Class of string(*name*) * expr list(*cons args*) * expr list(*hot args*) * code (*cons*) * code (*comp*) * string (*output*) * string (*input*) * expr list (*privates*)
+  Class of string(*name*) * expr list(*cons args*) * expr list(*comp args*) * code (*cons*) * code (*comp*) * expr list (*privates*)
 | FuncEnv of string(*name*) * expr list(*args*) * expr list(*funcs*) * code
 | Chain of code list
 | Noop
@@ -190,11 +191,9 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
     let cons_args = (List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))))@(List.map (function x -> IdxfuncValueOf x) funcs) in
     Class (name,
 	   cons_args,
-	   List.map expr_of_intexpr (IntExprSet.elements hot),
+	   Var(Ptr(Complex),output)::Var(Ptr(Complex),input)::List.map expr_of_intexpr (IntExprSet.elements hot),
 	   cons_code_of_rstep_partitioned rstep_partitioned,
 	   comp_code_of_rstep_partitioned rstep_partitioned output input,
-	   output,
-	   input,
 	   _rule::_dat::cons_args@(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned)
     )
   in

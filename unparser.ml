@@ -18,6 +18,7 @@ let rec string_of_ctype (t : ctype) : string =
   |Env(rs) -> rs
   |Ptr(ctype)->(string_of_ctype ctype)^" *"
   |Char -> "char"
+  |Complex -> "complex_t"
 ;;
 
 type unparse_type =
@@ -78,7 +79,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^"}\n\n"
     )
       
-  | Class(name,cons_args,hot,cons,comp,output,input,privates) -> 
+  | Class(name,cons_args,comp_args,cons,comp,privates) -> 
     (match unparse_type with
       Prototype -> (white n) ^ "struct "^name^" : public RS {\n" 
 	^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") (make_signatures privates)))
@@ -92,7 +93,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
     ^ (match unparse_type with
     | Prototype -> (white (n+4))^"void "
     | Implementation -> (white (n))^"void "^name ^ "::")
-    ^ "compute(" ^ (String.concat ", " (("complex_t* "^output)::("complex_t* "^input)::(make_signatures hot))) ^ ")"^ (match unparse_type with
+    ^ "compute(" ^ (String.concat ", " (make_signatures comp_args)) ^ ")"^ (match unparse_type with
       Prototype -> ";\n"
     | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) comp)^(white n)^"}\n")
     ^ (match unparse_type with
