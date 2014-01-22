@@ -43,7 +43,7 @@ code =
 | ArrayAllocate of expr (*pointer*) * ctype (*element type*) * expr (*element count*)
 | PlacementNew of expr (*address*) * expr (*content*)
 | If of expr (*condition*) * code (*true branch*) * code (*false branch*)
-| Loop of Spl.intexpr (*loop variable*) * expr (*count*) * code 
+| Loop of expr (*loop variable*) * expr (*count*) * code 
 | ArrayDeallocate of expr (*pointer*) * expr (*element count*)
 | Return of expr
 | Declare of expr
@@ -121,7 +121,7 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
       let child = build_child_var(numchild) in
       Chain([
 	ArrayAllocate(child, Env(rs), (IntexprValueOf count));
-	Loop(i, IntexprValueOf count, (
+	Loop(IntexprValueOf i, IntexprValueOf count, (
 	  PlacementNew( 
 	    (Nth(Cast(child, Ptr(Env(rs))), IntexprValueOf i)), 
 	    (CreateEnv(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(IdxfuncValueOf x)) funcs))))
@@ -166,10 +166,10 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 			 @ (List.map (fun ((output,input),spl)->(prepare_comp output input spl)) out_in_spl)
 			 @ (List.map (fun (output,size)->(ArrayDeallocate(output,IntexprValueOf(size)))) buffers)
 		       )
-    | Spl.ISum(i, count, content) -> Loop(i, IntexprValueOf count, (prepare_comp output input content))
+    | Spl.ISum(i, count, content) -> Loop(IntexprValueOf i, IntexprValueOf count, (prepare_comp output input content))
     | Spl.Compute(numchild, rs, hot,_,_) -> prepare_env_comp (Env(rs)) (build_child_var(numchild)) rs hot output input
     | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
-      Loop(i, IntexprValueOf count, (prepare_env_comp (Env(rs)) (Nth(build_child_var(numchild), IntexprValueOf(i))) rs hot output input))
+      Loop(IntexprValueOf i, IntexprValueOf count, (prepare_env_comp (Env(rs)) (Nth(build_child_var(numchild), IntexprValueOf(i))) rs hot output input))
     | _ -> Error("UNIMPLEMENTED")
   in
   let rulecount = ref 0 in

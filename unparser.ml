@@ -1,6 +1,3 @@
-open Spl
-;;
-
 open Codegen
 ;;
 
@@ -14,7 +11,7 @@ let rec white (n:int) : string =
 let rec string_of_ctype (t : ctype) : string =
   match t with
   |Int -> "int"
-  |Func -> "func*" (*FIXME this type is horrendous*)
+  |Func -> "func*"
   |Env(rs) -> rs
   |Ptr(ctype)->(string_of_ctype ctype)^" *"
   |Char -> "char"
@@ -29,10 +26,10 @@ type unparse_type =
 
 let rec string_of_expr (expr:expr) : string = 
   match expr with
-  | IntexprValueOf intexpr -> string_of_intexpr intexpr
+  | IntexprValueOf intexpr -> Spl.string_of_intexpr intexpr
+  | BoolValueOf(boolexpr) -> Spl.string_of_boolexpr boolexpr
+  | IdxfuncValueOf(f) -> Spl.string_of_idxfunc f
   | Equal(a,b) -> "(" ^ (string_of_expr a) ^ " == " ^ (string_of_expr b) ^ ")"
-  | BoolValueOf(boolexpr) -> string_of_boolexpr boolexpr
-  | IdxfuncValueOf(f)->string_of_idxfunc f
   | CreateEnv(name,args) -> name^"("^(String.concat ", " (List.map string_of_expr (args)))^")"
   | New(f) -> "new "^(string_of_expr f) 
   | Nth(expr, count) ->"("^(string_of_expr expr)^"+"^(string_of_expr count)^")"
@@ -52,12 +49,6 @@ let rec ctype_of_expr (expr:expr) : ctype =
   | IntexprValueOf _ -> Int
   | Var(ctype, _) -> ctype
   | IdxfuncValueOf(f) -> Func 
-  (* | Cast(expr, ctype) -> Env("FAIL") *)
-  (* | Equal(a,b) -> Env("FAIL") *)
-  (* | BoolValueOf(boolexpr) -> Env("FAIL") *)
-  (* | CreateEnv(name,args) -> Env("FAIL") *)
-  (* | New(f) -> Env("FAIL")  *)
-  (* | Nth(expr, count) -> Env("FAIL") *)
 ;;
 
 let make_signatures (l:'a list) : string list =
@@ -90,7 +81,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | Noop -> (white n)^"/* noop */\n"
   | Error str -> (white n)^"error(\""^str^"\");\n"
   | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_expr cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
-  | Loop(var, expr, code) -> (white n)^"for(int "^(string_of_intexpr var)^" = 0; "^(string_of_intexpr var)^" < "^(string_of_expr expr)^"; "^(string_of_intexpr var)^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
+  | Loop(var, expr, code) -> (white n)^"for(int "^(string_of_expr var)^" = 0; "^(string_of_expr var)^" < "^(string_of_expr expr)^"; "^(string_of_expr var)^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | ArrayAllocate(expr,elttype,int) -> (white n)^(string_of_expr expr)^" = ("^(string_of_ctype(Ptr(elttype)))^") malloc (sizeof("^(string_of_ctype(elttype))^") * "^(string_of_expr int)^");\n"
   | ArrayDeallocate(buf, size) -> (white n)^"free("^(string_of_expr buf)^");\n"
   | Return(expr) -> (white n)^"return "^(string_of_expr expr)^";\n"
@@ -109,16 +100,11 @@ and
 	  Prototype -> ";\n"
 	| Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n")
   | Constructor(args, code) ->
+    (white (n))^ name^"(" ^ (String.concat ", " (make_signatures args)) 
+    ^ ")"^ 
       (match unparse_type with
-      | Prototype -> (white (n+4))
-      | Implementation -> (white (n))^name ^ "::")
-      ^ name^"(" ^ (String.concat ", " (make_signatures args)) 
-      ^ ")"^ 
-	(match unparse_type with
-	  Prototype -> ";\n"
-	| Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n")
-    
-    
+	Prototype -> ";\n"
+      | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n")
 ;;
 
 let string_of_code (n:int) (code : code) : string = 
@@ -138,26 +124,7 @@ let string_of_code (n:int) (code : code) : string =
   ^ "struct RS { virtual ~RS(){}};\n"
   ^ "template<class T> struct TFunc_TInt_T : public RS { virtual T at(int) = 0; };\n"
   ^ "struct func : public TFunc_TInt_T<complex_t> {};\n\n"
-
-  ^ "/*\n"
-  ^ "d(u1,u2) . h(u3,u1,u5,u6)\n"
-  ^ "complex_t Func_1::at(int i){\n"
-  ^ "    int x = u5 + u6 * i;\n"
-  ^ "    return sp_omega(u1, -(x % u2) * (x / u2));\n"
-  ^ "}\n"
-  ^ "\n"
-  ^ "lambda1 . h(u2,u1,u4,u5)\n"
-  ^ "complex_t Func_2::at(int i){\n"
-  ^ "    int x = u4 + i*u5;\n"
-  ^ "    return lambda1->at(x);\n"
-  ^ "}\n"
-  ^ "*/\n\n"
-
   ^ (cpp_string_of_code Prototype n code)
   ^ (cpp_string_of_code Implementation n code)
-
-    
-
-
 ;;
 
