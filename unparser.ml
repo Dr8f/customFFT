@@ -39,6 +39,12 @@ let rec string_of_expr (expr:expr) : string =
   | Var(_, name) -> name
   | Cast(expr, ctype) -> "(reinterpret_cast<"^(string_of_ctype ctype)^">("^(string_of_expr expr)^"))"
   | MethodCall(expr, methodname,args) -> (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " (List.map string_of_expr args))^")"
+  | Plus(a,b) -> "("^(string_of_expr a)^" + "^(string_of_expr b)^")"
+  | Mul(a,b) -> "("^(string_of_expr a)^" * "^(string_of_expr b)^")"
+  | Omega(n,k) -> "omega("^(string_of_expr n)^", "^(string_of_expr k)^")"
+  | Mod(a,b) -> "("^(string_of_expr a)^" % "^(string_of_expr b)^")"
+  | Divide(a,b) -> "("^(string_of_expr a)^" / "^(string_of_expr b)^")"
+  | Minus(a) -> "-("^(string_of_expr a)^")"
 ;;
 
 let rec ctype_of_expr (expr:expr) : ctype =
@@ -128,7 +134,7 @@ let string_of_code (n:int) (code : code) : string =
   ^ "void LIB_FREE(void *ptr, size_t) {free(ptr);}\n"
   ^ "#define PI    3.14159265358979323846f\n"
   ^ "#define __I__ (complex_t(0,1))\n"
-  ^ "static complex_t sp_omega(int N, int k) { return cosf(2*PI*k/N) + __I__ * sinf(2*PI*k/N); }\n"
+  ^ "static complex_t omega(int N, int k) { return cosf(2*PI*k/N) + __I__ * sinf(2*PI*k/N); }\n"
   ^ "struct RS { virtual ~RS(){}};\n"
   ^ "template<class T> struct TFunc_TInt_T : public RS { virtual T at(int) = 0; };\n"
   ^ "struct func : public TFunc_TInt_T<complex_t> {};\n\n"

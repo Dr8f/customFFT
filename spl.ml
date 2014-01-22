@@ -16,7 +16,6 @@ type intexpr =
 | IDivPerfect of intexpr * intexpr (* IDivPerfect(i,j) = i / j and j divides i for sure *)
 | IDivisor of intexpr (* IDivisor(i) returns a divisor of i *)
 | ICountWrap of int * intexpr (* internal *)
-| ITmp of int
 ;;
 
 type boolexpr =
@@ -78,7 +77,6 @@ let rec string_of_intexpr (e : intexpr) : string =
   | IFreedom i -> "d"^(string_of_int i)
   | ILoopCounter i -> "i" ^ (string_of_int i)
   | IArg i -> "u"^(string_of_int i)
-  | ITmp i -> "t"^(string_of_int i)
 ;;
 
 let rec string_of_boolexpr (e : boolexpr) : string = 

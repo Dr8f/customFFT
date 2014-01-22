@@ -22,6 +22,12 @@ type expr =
 | CreateEnv of string * expr list
 | New of expr
 | MethodCall of expr (*object*) * string (*method name*) * expr list (*arguments*)
+| Mul of expr * expr
+| Plus of expr * expr
+| Minus of expr
+| Mod of expr * expr
+| Divide of expr * expr
+| Omega of expr * expr
 ;;
 
 type cmethod = 
@@ -183,20 +189,28 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 let code_of_lib ((funcs,rsteps) : lib) : code = 
   let code_of_func ((name, f, args, fargs) : envfunc) : code = 
     let count = ref 0 in
-    let code_of_at (f : Spl.idxfunc) : code =
-      let g (func:Spl.idxfunc) (code:code list): code list =
-	count := !count + 1;
-	code@[
-	  match func with 
-	  |Spl.FH(_,_,b,s) -> Assign(IntexprValueOf(Spl.ITmp(!count)), IntexprValueOf(Spl.IPlus([b;Spl.IMul([s;Spl.ITmp(!count-1)])])))
-	  |Spl.FD(n,k) -> Assign(IntexprValueOf(Spl.ITmp(!count)), Var(Int,"sp_omega("^(Spl.string_of_intexpr n)^", -(t"^(string_of_int (!count-1))^" % "^(Spl.string_of_intexpr k)^") * (t"^(string_of_int (!count-1))^ " / "^(Spl.string_of_intexpr k)^"))")) (*FIXME this is false since ITmp is an int and it shouldn't be*)
-	  |Spl.FArg(name,_) -> Assign(IntexprValueOf(Spl.ITmp(!count)), MethodCall(IdxfuncValueOf func, _at, [IntexprValueOf(Spl.ITmp(!count - 1))])) (*FIXME this is false since ITmp is an int and it shouldn't be*)
-	]
+    let vargen (ctype:ctype) : expr = 
+      count := !count + 1;
+      Var(ctype, "t"^(string_of_int (!count)))
+    in
+    
+    let code_of_at (f : Spl.idxfunc) (input : expr) : code =
+      let g (func : Spl.idxfunc) ((input,code):expr * code list) : expr * code list =
+	match func with
+	|Spl.FH(_,_,b,s) -> let output = vargen(Int) in
+			    (output,code@[Declare(output);Assign(output, Plus((IntexprValueOf b), Mul((IntexprValueOf s),input)))])
+	|Spl.FD(n,k) ->  let output = vargen(Complex) in
+			 (output,code@[Declare(output);Assign(output, Omega((IntexprValueOf n), Minus(Mul(Mod(input,(IntexprValueOf k)), Divide(input,(IntexprValueOf k))))))])
+	|Spl.FArg(name,_) -> let output = vargen(Complex) in
+			     (output,code@[Declare(output);Assign(output, MethodCall(IdxfuncValueOf func, _at, [input]))])  
       in
       match f with
-      |Spl.FCompose l -> Chain(List.fold_right g l [])
+      |Spl.FCompose l -> let(output,code) = List.fold_right g l (input,[]) in
+			 Chain(code@[Return(output)])
     in
-    let code = (code_of_at f) in
+
+    let input = vargen(Int) in
+    let code = (code_of_at f input) in
     let cons_args = (List.map expr_of_intexpr args)@(List.map (function x -> IdxfuncValueOf x) fargs) in
     Class(name,
 	  _func,
@@ -209,8 +223,8 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
 	    Method(
 	      Complex,
 	      _at,
-	      [Var(Int, "t0")], (*FIXME still horrendous*)
-	      Chain ( code :: [Return(IntexprValueOf (Spl.ITmp(!count)))])
+	      [input], 
+	      code
 	    )
 	  ]	    
     )
