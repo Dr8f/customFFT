@@ -120,12 +120,11 @@ let rec string_of_spl (e : spl) : string =
   | UnpartitionnedCall(f, l, m, _, _) -> 
     f^"("^(String.concat "," ((List.map string_of_int_intexpr (IntMap.bindings l)) @ (List.map string_of_idxfunc m)))^")" 
   | PartitionnedCall(childcount, f, cold, reinit, hot, funcs, _, _) -> 
-    "child"^(string_of_int childcount)^"<"^f^">"^"{"^(String.concat "," (List.map string_of_intexpr cold)) ^ "}"^"{"^(String.concat "," ((List.map string_of_intexpr reinit)@(List.map string_of_idxfunc funcs)))^"}"^"{"^(String.concat "," (List.map string_of_intexpr hot)) ^ "}"
-  | Construct(childcount, f, cold) -> "Construct-child"^(string_of_int childcount)^"<"^f^">{"^(String.concat "," (List.map string_of_intexpr cold)) ^ "}"
-  | ISumReinitConstruct(childcount, i, high, f, cold, reinit, funcs) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", ReinitConstruct-child"^(string_of_int childcount)^"<"^f^">{"^(String.concat "," (List.map string_of_intexpr cold)) ^ "}{" ^(String.concat "," ((List.map string_of_intexpr reinit)@(List.map string_of_idxfunc funcs))) ^ "})"
-  | Compute(childcount, f, hot,_,_) ->
-    "child"^(string_of_int childcount)^"<"^f^">-Compute{"^(String.concat "," (List.map string_of_intexpr hot)) ^ "}"
-  | ISumReinitCompute(childcount, i, high, f, hot, _, _) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^", child"^(string_of_int childcount)^"<"^f^">-ReinitCompute{" ^(String.concat "," (List.map string_of_intexpr hot)) ^ "})"
+    "PartitionnedCall("^(string_of_int childcount)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr cold))^"], ["^(String.concat ";" (List.map string_of_intexpr reinit))^"], ["^(String.concat ";" (List.map string_of_intexpr hot))^"], ["^(String.concat ";" (List.map string_of_idxfunc funcs))^"])"
+  | Construct(childcount, f, cold) -> "Construct("^(string_of_int childcount)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr cold))^"])"
+  | ISumReinitConstruct(childcount, i, high, f, cold, reinit, funcs) -> "ISumReinitConstruct("^(string_of_int childcount)^", "^(string_of_intexpr i)^", "^(string_of_intexpr high)^", ["^(String.concat ";" (List.map string_of_intexpr cold))^"], ["^(String.concat ";" (List.map string_of_intexpr reinit))^"], ["^(String.concat ";" (List.map string_of_idxfunc funcs))^"])"
+  | Compute(childcount, f, hot,_,_) ->"Compute("^(string_of_int childcount)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr hot))^"])"
+  | ISumReinitCompute(childcount, i, high, f, hot, _, _) -> "ISumReinitCompute("^(string_of_int childcount)^", "^(string_of_intexpr i)^", "^(string_of_intexpr high)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr hot))^"])"
 ;;
 
 

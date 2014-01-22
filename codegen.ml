@@ -166,7 +166,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 			   @ (List.map (fun (output,size)->(ArrayDeallocate(output,expr_of_intexpr(size)))) buffers)
 			 )
       | Spl.ISum(i, count, content) -> Loop(expr_of_intexpr i, expr_of_intexpr count, (prepare_comp output input content))
-      | Spl.Compute(numchild, rs, hot,_,_) -> Ignore(MethodCall (Cast((build_child_var(numchild)),Ptr(Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot)))     
+      | Spl.Compute(numchild, rs, hot,_,_) -> Ignore(MethodCall (Cast((build_child_var(numchild)),Ptr(Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot)))
       | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
 	Loop(expr_of_intexpr i, expr_of_intexpr count, Ignore(MethodCall(Cast((Nth(build_child_var(numchild), expr_of_intexpr(i))),Ptr(Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot))))
       | _ -> Error("UNIMPLEMENTED")

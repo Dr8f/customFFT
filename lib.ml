@@ -552,7 +552,7 @@ let lib_from_closure ((funcs, rsteps): closure) : lib =
       in
       let k (e:spl) : spl =
 	match e with
-	  PartitionnedCall(childcount, callee, _, [], hot, _, range, domain) -> Compute(childcount, callee, hot, range, domain)
+	  PartitionnedCall(childcount, callee, _, [], hot, [], range, domain) -> Compute(childcount, callee, hot, range, domain)
 	| ISum(i, high, PartitionnedCall(childcount, callee, _, _, hot,_,range, domain)) -> ISumReinitCompute(childcount, i, high, callee, hot, range, domain)
 	| x -> x
       in
