@@ -287,14 +287,56 @@ let collect_args (rstep : spl) : IntExprSet.t =
   !args
 ;;
 
+let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (spl -> boolexpr * (intexpr*intexpr) list * spl)) (ensure_name: spl-> string) : (boolexpr * (intexpr*intexpr) list * spl * spl) =
+  let (condition, freedoms, naive_desc) = algo rstep in
+  let desc = apply_rewriting_rules (mark_RS(naive_desc)) in
+  (* print_string ("WIP DESC:\t\t"^(string_of_spl desc)^"\n"); (\* WIP *\) *)
+  let rses = collect_RS desc in
+  
+  let wrap_precomputations (e:spl) : spl =
+    let transf (i : idxfunc) : idxfunc = 
+      match i with 
+	Pre f -> replace_by_a_call_idxfunc f idxfuncmap
+      | x -> x
+    in
+    (meta_transform_idxfunc_on_spl TopDown transf) e in
+  
+  let wrapped_precomps = List.map wrap_precomputations rses in
+  
+  (* print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (\* WIP *\) *)
+  
+  let wrapped_intexpr = List.map wrap_intexprs_on_spl wrapped_precomps in
+  (* print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); (\* WIP *\) *)
+  
+  
+  let constraints = List.map extract_constraints_spl wrapped_intexpr in
+  let wrapped_RSes = List.map reconcile_constraints_on_spl (List.combine constraints wrapped_intexpr) in
+  
+  (* print_string ("WIP DESC wrapped:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_RSes))^"\n\n"); (\* WIP *\) *)
+  
+  let new_steps = List.map unwrap_spl wrapped_RSes in
+  (* print_string ("WIP DESC new steps:\n"^(String.concat ",\n" (List.map string_of_spl new_steps))^"\n\n"); (\* WIP *\) *)
+  
+  let new_names = List.map ensure_name new_steps in
+  (* print_string ("WIP DESC newnames:\n"^(String.concat ",\n" (new_names))^"\n\n"); (\* WIP *\) *)
+  
+  let extracts_with_calls = List.map replace_by_a_call_spl (List.combine wrapped_RSes (List.combine new_names rses)) in
+  (* print_string ("WIP DESC extracts_with_calls:\n"^(String.concat ",\n" (List.map string_of_spl extracts_with_calls))^"\n\n"); (\* WIP *\) *)
+  
+  let desc_with_calls = drop_RS (reintegrate_RS desc extracts_with_calls) in
+  (* print_string ("WIP DESC with_calls:\n"^(string_of_spl desc_with_calls)^"\n\n"); (\* WIP *\) *)  
 
-let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*intexpr) list * spl) : closure = 
-  let under_consideration = ref [] in
+  (condition, freedoms, desc, desc_with_calls)
+;;
+
+
+let compute_the_closure (stems : spl list) (algos : (spl -> boolexpr * (intexpr*intexpr) list * spl) list) : closure = 
   let rsteps = ref [] in
-  let namemap = ref SplMap.empty in
-  let count = ref 0 in
   let idxfuncmap = ref IdxFuncMap.empty in
 
+  let under_consideration = ref [] in
+  let namemap = ref SplMap.empty in
+  let count = ref 0 in
   let register_name (rstep:spl) : _ =
     count := !count + 1;
     let name = "RS"^(string_of_int !count) in
@@ -315,45 +357,9 @@ let compute_the_closure (stems : spl list) (algo : spl -> boolexpr * (intexpr*in
     (* print_string ("WIP RSTEP:\t\t"^(string_of_spl rstep)^"\n"); (\* WIP *\) *)
     let name = ensure_name rstep in
     let args = collect_args rstep in
-    let (condition, freedoms, naive_desc) = algo rstep in
-    let desc = apply_rewriting_rules (mark_RS(naive_desc)) in
-    (* print_string ("WIP DESC:\t\t"^(string_of_spl desc)^"\n"); (\* WIP *\) *)
-    let rses = collect_RS desc in
+    let breakdowns = List.map (function algo->create_breakdown rstep idxfuncmap algo ensure_name) algos in
 
-    let wrap_precomputations (e:spl) : spl =
-      let transf (i : idxfunc) : idxfunc = 
-	match i with 
-	  Pre f -> replace_by_a_call_idxfunc f idxfuncmap
-	| x -> x
-      in
-      (meta_transform_idxfunc_on_spl TopDown transf) e in
-        
-    let wrapped_precomps = List.map wrap_precomputations rses in
-
-    (* print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (\* WIP *\) *)
-
-    let wrapped_intexpr = List.map wrap_intexprs_on_spl wrapped_precomps in
-    (* print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); (\* WIP *\) *)
-
-
-    let constraints = List.map extract_constraints_spl wrapped_intexpr in
-    let wrapped_RSes = List.map reconcile_constraints_on_spl (List.combine constraints wrapped_intexpr) in
-
-    (* print_string ("WIP DESC wrapped:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_RSes))^"\n\n"); (\* WIP *\) *)
-
-    let new_steps = List.map unwrap_spl wrapped_RSes in
-    (* print_string ("WIP DESC new steps:\n"^(String.concat ",\n" (List.map string_of_spl new_steps))^"\n\n"); (\* WIP *\) *)
-
-    let new_names = List.map ensure_name new_steps in
-    (* print_string ("WIP DESC newnames:\n"^(String.concat ",\n" (new_names))^"\n\n"); (\* WIP *\) *)
-
-    let extracts_with_calls = List.map replace_by_a_call_spl (List.combine wrapped_RSes (List.combine new_names rses)) in
-    (* print_string ("WIP DESC extracts_with_calls:\n"^(String.concat ",\n" (List.map string_of_spl extracts_with_calls))^"\n\n"); (\* WIP *\) *)
-
-    let desc_with_calls = drop_RS (reintegrate_RS desc extracts_with_calls) in
-    (* print_string ("WIP DESC with_calls:\n"^(string_of_spl desc_with_calls)^"\n\n"); (\* WIP *\) *)
-
-    rsteps := !rsteps @ [(name, rstep, args, [(condition, freedoms, desc, desc_with_calls)])];
+    rsteps := !rsteps @ [(name, rstep, args, breakdowns)];
   done;
 
   (List.map snd (IdxFuncMap.bindings !idxfuncmap), !rsteps)
@@ -573,8 +579,8 @@ let lib_from_closure ((funcs, rsteps): closure) : lib =
   (funcs,List.map f rsteps)
 ;;
 
-let make_lib (functionalities: spl list) (algo: spl -> boolexpr * (intexpr*intexpr) list * spl) : lib =
-  let closure = compute_the_closure functionalities algo in
+let make_lib (functionalities: spl list) (algos: (spl -> boolexpr * (intexpr*intexpr) list * spl) list) : lib =
+  let closure = compute_the_closure functionalities algos in
   lib_from_closure closure
 ;;
 

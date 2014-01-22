@@ -95,18 +95,24 @@ let _output = Var(Ptr(Complex),"Y")
 let _input = Var(Ptr(Complex),"X")
 ;;
 
+module IntSet = Set.Make( 
+  struct
+    let compare = Pervasives.compare
+    type t = int
+  end )
+;;
+
 let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
-(*we should probably generate content while we are generating it instead of doing another pass*)
   let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
-    let res = ref [] in  
+    let res = ref IntSet.empty in  
     let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
       Spl.meta_iter_spl_on_spl (function
-      | Spl.Construct(numchild, _, _) | Spl.ISumReinitConstruct(numchild, _, _, _, _, _, _) -> res := (build_child_var numchild)::!res 
+      | Spl.Construct(numchild, _, _) | Spl.ISumReinitConstruct(numchild, _, _, _, _, _, _) -> res := IntSet.add numchild !res
       | _ -> ()
       ) desc_cons;    
     in
     List.iter g breakdowns;
-    !res
+    List.map build_child_var (IntSet.elements !res)
   in
 
 (*we should probably generate content while we are generating it instead of doing another pass*)
