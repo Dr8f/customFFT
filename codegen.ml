@@ -9,6 +9,7 @@ type ctype =
 | Char
 | Complex
 | Void
+| Bool
 ;;
 
 type expr = 
@@ -16,18 +17,14 @@ type expr =
 | Nth of expr * expr
 | Cast of expr * ctype
 | Equal of expr * expr
-| IntexprValueOf of Spl.intexpr
-| BoolValueOf of Spl.boolexpr
-| IdxfuncValueOf of Spl.idxfunc
-| CreateEnv of string * expr list
 | New of expr
-| MethodCall of expr (*object*) * string (*method name*) * expr list (*arguments*)
 | Mul of expr * expr
 | Plus of expr * expr
 | Minus of expr
 | Mod of expr * expr
 | Divide of expr * expr
-| Omega of expr * expr
+| FunctionCall of string (*functionname*) * expr list (*arguments*)
+| MethodCall of expr (*object*) * string (*method name*) * expr list (*arguments*)
 ;;
 
 type cmethod = 
@@ -85,9 +82,16 @@ let build_child_var (num:int) : expr =
 ;;
 
 let expr_of_intexpr (intexpr : Spl.intexpr) : expr =
-  IntexprValueOf intexpr
+  Var(Int, Spl.string_of_intexpr intexpr)
 ;;
 
+let expr_of_boolexpr (boolexpr : Spl.boolexpr) : expr =
+  Var(Bool, Spl.string_of_boolexpr boolexpr)
+;;
+
+let expr_of_idxfunc (idxfunc : Spl.idxfunc) : expr =
+  Var(Func, Spl.string_of_idxfunc idxfunc)
+;;
 
 (*we should probably generate content while we are generating it instead of doing another pass*)
 let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
@@ -106,7 +110,7 @@ let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rst
 let collect_freedoms ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
   let res = ref [] in  
   let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
-    res := (List.map (fun (l,r)->IntexprValueOf l) freedoms) @ !res    
+    res := (List.map (fun (l,r)->expr_of_intexpr l) freedoms) @ !res    
   in
   List.iter g breakdowns;
   !res  
@@ -116,26 +120,26 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
   let rec prepare_cons (e:Spl.spl) : code =
     match e with
     | Spl.Compose l -> Chain (List.map prepare_cons (List.rev l)) 
-    | Spl.Construct(numchild, rs, args) -> Assign(build_child_var(numchild), New(CreateEnv(rs, List.map expr_of_intexpr args)))
+    | Spl.Construct(numchild, rs, args) -> Assign(build_child_var(numchild), New(FunctionCall(rs, List.map expr_of_intexpr args)))
     | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) ->
       let child = build_child_var(numchild) in
       Chain([
-	ArrayAllocate(child, Env(rs), (IntexprValueOf count));
-	Loop(IntexprValueOf i, IntexprValueOf count, (
+	ArrayAllocate(child, Env(rs), (expr_of_intexpr count));
+	Loop(expr_of_intexpr i, expr_of_intexpr count, (
 	  PlacementNew( 
-	    (Nth(Cast(child, Ptr(Env(rs))), IntexprValueOf i)), 
-	    (CreateEnv(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(IdxfuncValueOf x)) funcs))))
+	    (Nth(Cast(child, Ptr(Env(rs))), expr_of_intexpr i)), 
+	    (FunctionCall(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
 	))
       ])	
     | _ -> Error("UNIMPLEMENTED")
   in
   let rulecount = ref 0 in
   let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
-    let freedom_assigns = List.map (fun (l,r)->Assign(IntexprValueOf l, IntexprValueOf r)) freedoms in
+    let freedom_assigns = List.map (fun (l,r)->Assign(expr_of_intexpr l, expr_of_intexpr r)) freedoms in
     rulecount := !rulecount + 1;
     
-    If((BoolValueOf condition), 
-       Chain( [Assign(_rule, IntexprValueOf(Spl.IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]), 
+    If((expr_of_boolexpr condition), 
+       Chain( [Assign(_rule, expr_of_intexpr(Spl.IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]), 
        Error("no applicable rules"))
       
   in
@@ -162,22 +166,22 @@ let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 		       let buffers = (List.combine (buffernames) (List.map Spl.range (List.rev (List.tl l)))) in
 		       Chain (
 			 (List.map (fun (output,size)->(Declare output)) buffers)
-			 @ (List.map (fun (output,size)->(ArrayAllocate(output,ctype,IntexprValueOf(size)))) buffers)
+			 @ (List.map (fun (output,size)->(ArrayAllocate(output,ctype,expr_of_intexpr(size)))) buffers)
 			 @ (List.map (fun ((output,input),spl)->(prepare_comp output input spl)) out_in_spl)
-			 @ (List.map (fun (output,size)->(ArrayDeallocate(output,IntexprValueOf(size)))) buffers)
+			 @ (List.map (fun (output,size)->(ArrayDeallocate(output,expr_of_intexpr(size)))) buffers)
 		       )
-    | Spl.ISum(i, count, content) -> Loop(IntexprValueOf i, IntexprValueOf count, (prepare_comp output input content))
+    | Spl.ISum(i, count, content) -> Loop(expr_of_intexpr i, expr_of_intexpr count, (prepare_comp output input content))
     | Spl.Compute(numchild, rs, hot,_,_) -> prepare_env_comp (Env(rs)) (build_child_var(numchild)) rs hot output input
     | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
-      Loop(IntexprValueOf i, IntexprValueOf count, (prepare_env_comp (Env(rs)) (Nth(build_child_var(numchild), IntexprValueOf(i))) rs hot output input))
+      Loop(expr_of_intexpr i, expr_of_intexpr count, (prepare_env_comp (Env(rs)) (Nth(build_child_var(numchild), expr_of_intexpr(i))) rs hot output input))
     | _ -> Error("UNIMPLEMENTED")
   in
   let rulecount = ref 0 in
   let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
-    let freedom_assigns = List.map (fun (l,r)->Assign(IntexprValueOf l, IntexprValueOf r)) freedoms in
+    let freedom_assigns = List.map (fun (l,r)->Assign(expr_of_intexpr l, expr_of_intexpr r)) freedoms in
     rulecount := !rulecount + 1;
     
-    If(Equal(_rule, IntexprValueOf(Spl.IConstant !rulecount)),
+    If(Equal(_rule, expr_of_intexpr(Spl.IConstant !rulecount)),
        prepare_comp output input desc_comp, 
        Error("internal error: no valid rule has been selected"))
       
@@ -197,17 +201,17 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
     let rec code_of_func (func : Spl.idxfunc) ((input,code):expr * code list) : expr * code list =
       match func with
       |Spl.FH(_,_,b,s) -> let output = vargen(Int) in
-			  (output,code@[Declare(output);Assign(output, Plus((IntexprValueOf b), Mul((IntexprValueOf s),input)))])
+			  (output,code@[Declare(output);Assign(output, Plus((expr_of_intexpr b), Mul((expr_of_intexpr s),input)))])
       |Spl.FD(n,k) ->  let output = vargen(Complex) in
-		       (output,code@[Declare(output);Assign(output, Omega((IntexprValueOf n), Minus(Mul(Mod(input,(IntexprValueOf k)), Divide(input,(IntexprValueOf k))))))])
+		       (output,code@[Declare(output);Assign(output, FunctionCall("omega", [(expr_of_intexpr n);Minus(Mul(Mod(input,(expr_of_intexpr k)), Divide(input,(expr_of_intexpr k))))]))])
       |Spl.FArg(_,_) -> let output = vargen(Complex) in
-			   (output,code@[Declare(output);Assign(output, MethodCall(IdxfuncValueOf func, _at, [input]))])  
+			   (output,code@[Declare(output);Assign(output, MethodCall(expr_of_idxfunc func, _at, [input]))])  
       |Spl.FCompose l -> List.fold_right code_of_func l (input,[])
     in
 
     let input = vargen(Int) in
     let(output, code) = (code_of_func f (input,[])) in
-    let cons_args = (List.map expr_of_intexpr args)@(List.map (function x -> IdxfuncValueOf x) fargs) in
+    let cons_args = (List.map expr_of_intexpr args)@(List.map expr_of_idxfunc fargs) in
     Class(name,
 	  _func,
 	  cons_args,
@@ -229,7 +233,7 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
     let (name, rstep, cold, reinit, hot, funcs, breakdowns) = rstep_partitioned in 
     let output = Var(Ptr(Complex),"Y") in
     let input = Var(Ptr(Complex),"X") in
-    let cons_args = (List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))))@(List.map (function x -> IdxfuncValueOf x) funcs) in
+    let cons_args = (List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))))@(List.map expr_of_idxfunc funcs) in
     Class (name,
 	   _rs,
 	   _rule::_dat::cons_args@(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned),

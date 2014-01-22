@@ -26,19 +26,15 @@ type unparse_type =
 
 let rec string_of_expr (expr:expr) : string = 
   match expr with
-  | IntexprValueOf intexpr -> Spl.string_of_intexpr intexpr
-  | BoolValueOf(boolexpr) -> Spl.string_of_boolexpr boolexpr
-  | IdxfuncValueOf(f) -> Spl.string_of_idxfunc f
   | Equal(a,b) -> "(" ^ (string_of_expr a) ^ " == " ^ (string_of_expr b) ^ ")"
-  | CreateEnv(name,args) -> name^"("^(String.concat ", " (List.map string_of_expr (args)))^")"
   | New(f) -> "new "^(string_of_expr f) 
   | Nth(expr, count) ->"("^(string_of_expr expr)^"+"^(string_of_expr count)^")"
   | Var(_, name) -> name
   | Cast(expr, ctype) -> "(reinterpret_cast<"^(string_of_ctype ctype)^">("^(string_of_expr expr)^"))"
   | MethodCall(expr, methodname,args) -> (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " (List.map string_of_expr args))^")"
+  | FunctionCall(functionname, args) -> functionname^"("^(String.concat ", " (List.map string_of_expr args))^")"
   | Plus(a,b) -> "("^(string_of_expr a)^" + "^(string_of_expr b)^")"
   | Mul(a,b) -> "("^(string_of_expr a)^" * "^(string_of_expr b)^")"
-  | Omega(n,k) -> "omega("^(string_of_expr n)^", "^(string_of_expr k)^")"
   | Mod(a,b) -> "("^(string_of_expr a)^" % "^(string_of_expr b)^")"
   | Divide(a,b) -> "("^(string_of_expr a)^" / "^(string_of_expr b)^")"
   | Minus(a) -> "-("^(string_of_expr a)^")"
@@ -46,9 +42,7 @@ let rec string_of_expr (expr:expr) : string =
 
 let rec ctype_of_expr (expr:expr) : ctype =
   match expr with
-  | IntexprValueOf _ -> Int
   | Var(ctype, _) -> ctype
-  | IdxfuncValueOf(f) -> Func 
 ;;
 
 let make_signatures (l:'a list) : string list =
