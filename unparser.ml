@@ -19,7 +19,6 @@ let rec string_of_ctype (t : ctype) : string =
   |Ptr(ctype)->(string_of_ctype ctype)^" *"
   |Char -> "char"
   |Complex -> "complex_t"
-  |Deref(Ptr(ctype)) -> string_of_ctype ctype
   |Void -> "void"
 ;;
 
@@ -38,10 +37,11 @@ let rec string_of_expr (expr:expr) : string =
   | New(f) -> "new "^(string_of_expr f) 
   | Nth(expr, count) ->"("^(string_of_expr expr)^"+"^(string_of_expr count)^")"
   | Var(_, name) -> name
-  | Cast(expr, ctype) -> "(reinterpret_cast<"^(string_of_ctype ctype)^">("^(string_of_expr expr)^"))"  
+  | Cast(expr, ctype) -> "(reinterpret_cast<"^(string_of_ctype ctype)^">("^(string_of_expr expr)^"))"
+  | MethodCall(expr, methodname,args) -> (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " (List.map string_of_expr args))^")"
 ;;
 
-let rec type_of_expr (expr:expr) : ctype =
+let rec ctype_of_expr (expr:expr) : ctype =
   match expr with
   | IntexprValueOf _ -> Int
   | Var(ctype, _) -> ctype
@@ -55,7 +55,7 @@ let rec type_of_expr (expr:expr) : ctype =
 ;;
 
 let make_signatures (l:'a list) : string list =
-  List.map (fun expr -> (string_of_ctype (type_of_expr expr))^" "^(string_of_expr expr)) (l)
+  List.map (fun expr -> (string_of_ctype (ctype_of_expr expr))^" "^(string_of_expr expr)) (l)
 ;;
  
 let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : string =
@@ -68,7 +68,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
 	^ (white (n+4))
     | Implementation -> 
       (white n) ^ name ^ "::")
-    ^ (String.concat "" (List.map (fun x -> cpp_string_of_cfunction unparse_type n name x) methods))
+    ^ (String.concat "" (List.map (fun x -> cpp_string_of_cmethod unparse_type n name x) methods))
     ^ 
       (match unparse_type with
 	Prototype -> (white n) ^ "private:" ^ "\n"
@@ -85,15 +85,15 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | Error str -> (white n)^"error(\""^str^"\");\n"
   | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_expr cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
   | Loop(var, expr, code) -> (white n)^"for(int "^(string_of_intexpr var)^" = 0; "^(string_of_intexpr var)^" < "^(string_of_expr expr)^"; "^(string_of_intexpr var)^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
-  | EnvArrayAllocate(expr,rs,int) -> (white n)^(string_of_expr expr)^" = ("^rs^"*) malloc (sizeof("^rs^") * "^(string_of_expr int)^");\n"
-  | MethodCall(expr, methodname,args, output, input) -> (white n) ^ (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " ((string_of_expr output)::(string_of_expr input)::(List.map string_of_expr args)))^");\n" 
-  | BufferAllocate(buf, size) -> (white n)^(string_of_ctype(type_of_expr(buf)))^" "^(string_of_expr buf)^" = LIB_MALLOC("^(string_of_expr size)^" * sizeof("^(string_of_ctype (Deref(type_of_expr(buf))))^"));\n"
-  | BufferDeallocate(buf, size) -> (white n)^"LIB_FREE("^(string_of_expr buf)^", "^(string_of_expr size)^");\n"
-  | Return(i) -> (white n)^"return t"^(string_of_int i)^";\n"
+  | ArrayAllocate(expr,elttype,int) -> (white n)^(string_of_expr expr)^" = ("^(string_of_ctype(Ptr(elttype)))^") malloc (sizeof("^(string_of_ctype(elttype))^") * "^(string_of_expr int)^");\n"
+  | ArrayDeallocate(buf, size) -> (white n)^"free("^(string_of_expr buf)^");\n"
+  | Return(expr) -> (white n)^"return "^(string_of_expr expr)^";\n"
+  | Declare(expr) -> (white n)^(string_of_ctype(ctype_of_expr expr))^" "^(string_of_expr expr)^";\n"
+  | Ignore(expr) -> (white n)^(string_of_expr expr)^";\n"
 and 
-    cpp_string_of_cfunction (unparse_type:unparse_type) (n:int) (name:string) (cfunction:cfunction) : string =
-  match cfunction with 
-    Function(function_type, function_name, comp_args, comp) ->
+    cpp_string_of_cmethod (unparse_type:unparse_type) (n:int) (name:string) (cmethod:cmethod) : string =
+  match cmethod with 
+    Method(function_type, function_name, comp_args, comp) ->
       (match unparse_type with
       | Prototype -> (white (n+4))^(string_of_ctype function_type)^" "
       | Implementation -> (white (n))^(string_of_ctype function_type)^" "^name ^ "::")

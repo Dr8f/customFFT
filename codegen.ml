@@ -8,7 +8,6 @@ type ctype =
 | Ptr of ctype
 | Char
 | Complex
-| Deref of ctype
 | Void
 ;;
 
@@ -22,27 +21,28 @@ type expr =
 | IdxfuncValueOf of Spl.idxfunc
 | CreateEnv of string * expr list
 | New of expr
+| MethodCall of expr (*object*) * string (*method name*) * expr list (*arguments*)
 ;;
 
-type cfunction = 
-  Constructor of expr list(*comp args*)  * code (*comp*)
-| Function of ctype (*func type*) * string (*func name*) * expr list(*comp args*)  * code (*comp*)
+type cmethod = 
+  Constructor of expr list(*args*) * code 
+| Method of ctype (*return type*) * string (* functionname *) * expr list(* args*)  * code
 and
 code =
-  Class of string(*name*) * string (*super*) * expr list (*privates*) * cfunction list (*methods*)
+  Class of string(*class name*) * string (*class template from which it is derived*) * expr list (*member variables*) * cmethod list (*methods*)
 | Chain of code list
 | Noop
 | Error of string
-| Assign of expr * expr 
-| EnvArrayAllocate of expr * string * expr
-| PlacementNew of expr * expr
-| MethodCall of expr * string * expr list * expr * expr
-| If of expr * code * code
-| Loop of Spl.intexpr * expr * code
-| BufferAllocate of expr * expr
-| BufferDeallocate of expr * expr
-| Return of int
-;;
+| Assign of expr(*dest*) * expr (*origin*)
+| ArrayAllocate of expr (*pointer*) * ctype (*element type*) * expr (*element count*)
+| PlacementNew of expr (*address*) * expr (*content*)
+| If of expr (*condition*) * code (*true branch*) * code (*false branch*)
+| Loop of Spl.intexpr (*loop variable*) * expr (*count*) * code 
+| ArrayDeallocate of expr (*pointer*) * expr (*element count*)
+| Return of expr
+| Declare of expr
+| Ignore of expr (*expression with side effect*)
+;; 
 
 (* let meta_collect_code_on_code (f : code -> 'a list) : (code -> 'a list) = *)
 (*   let z (g : code -> 'a list) (e : code) : 'a list = *)
@@ -56,13 +56,22 @@ code =
 (*   Spl.recursion_collect f z *)
 (* ;; *)
 
+let _rs = "RS"
+;;
+
+let _func = "func"
+;;
+
+let _at = "at"
+;;
+
+let _compute = "compute"
+;;
+
 let _rule = Var(Int, "_rule")
 ;;
 
 let _dat = Var(Ptr(Char), "_dat")
-;;
-
-let _rs = "RS"
 ;;
 
 let build_child_var (num:int) : expr =
@@ -74,7 +83,7 @@ let expr_of_intexpr (intexpr : Spl.intexpr) : expr =
 ;;
 
 
-(*FIXME: we should probably collect that from the code itself*)
+(*we should probably generate content while we are generating it instead of doing another pass*)
 let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
   let res = ref [] in  
   let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
@@ -87,6 +96,7 @@ let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rst
   !res
 ;;
 
+(*we should probably generate content while we are generating it instead of doing another pass*)
 let collect_freedoms ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
   let res = ref [] in  
   let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
@@ -104,7 +114,7 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
     | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) ->
       let child = build_child_var(numchild) in
       Chain([
-	EnvArrayAllocate(child, rs, (IntexprValueOf count));
+	ArrayAllocate(child, Env(rs), (IntexprValueOf count));
 	Loop(i, IntexprValueOf count, (
 	  PlacementNew( 
 	    (Nth(Cast(child, Ptr(Env(rs))), IntexprValueOf i)), 
@@ -129,24 +139,26 @@ let cons_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, brea
 
 let comp_code_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) (output:expr) (input:expr): code =
   let prepare_env_comp (ctype:ctype) (expr:expr) (rs:string) (args:Spl.intexpr list) (output:expr) (input:expr): code =
-    MethodCall (Cast(expr,Ptr(ctype)), "compute", (List.map expr_of_intexpr args), output, input)
+    Ignore(MethodCall (Cast(expr,Ptr(ctype)), _compute, output::input::(List.map expr_of_intexpr args)))    
   in
 
   let rec prepare_comp (output:expr) (input:expr) (e:Spl.spl): code =
     match e with
-    | Spl.Compose l -> let buffernames = 
+    | Spl.Compose l -> let ctype = Complex in
+		       let buffernames = 
 			 let count = ref 0 in
 			 let g (res:expr list) (_:Spl.spl) : expr list = 
 			   count := !count + 1; 
-			   (Var(Ptr(Complex), "T"^(string_of_int !count))) :: res 
+			   (Var(Ptr(ctype), "T"^(string_of_int !count))) :: res 
 			 in
 			 List.fold_left g [] (List.tl l) in
 		       let out_in_spl = (List.combine (List.combine (buffernames @ [ output ]) (input :: buffernames)) (List.rev l)) in
 		       let buffers = (List.combine (buffernames) (List.map Spl.range (List.rev (List.tl l)))) in
 		       Chain (
-			 (List.map (fun (output,size)->(BufferAllocate(output,IntexprValueOf(size)))) buffers)
+			 (List.map (fun (output,size)->(Declare output)) buffers)
+			 @ (List.map (fun (output,size)->(ArrayAllocate(output,ctype,IntexprValueOf(size)))) buffers)
 			 @ (List.map (fun ((output,input),spl)->(prepare_comp output input spl)) out_in_spl)
-			 @ (List.map (fun (output,size)->(BufferDeallocate(output,IntexprValueOf(size)))) buffers)
+			 @ (List.map (fun (output,size)->(ArrayDeallocate(output,IntexprValueOf(size)))) buffers)
 		       )
     | Spl.ISum(i, count, content) -> Loop(i, IntexprValueOf count, (prepare_comp output input content))
     | Spl.Compute(numchild, rs, hot,_,_) -> prepare_env_comp (Env(rs)) (build_child_var(numchild)) rs hot output input
@@ -176,9 +188,9 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
 	count := !count + 1;
 	code@[
 	  match func with 
-	  |Spl.FH(_,_,b,s) -> Assign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), IntexprValueOf(Spl.IPlus([b;Spl.IMul([s;Spl.ITmp(!count-1)])])))
-	  |Spl.FD(n,k) -> Assign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), Var(Int,"sp_omega("^(Spl.string_of_intexpr n)^", -(t"^(string_of_int (!count-1))^" % "^(Spl.string_of_intexpr k)^") * (t"^(string_of_int (!count-1))^ " / "^(Spl.string_of_intexpr k)^"))")) (*FIXME horrendous piece of worthless code*)
-	  |Spl.FArg(name,_) -> Assign(Var(Int,Spl.string_of_intexpr (Spl.ITmp(!count))), Var(Int,name^"->at(t"^(string_of_int (!count-1))^")")) (*FIXME ugliest code eva*)
+	  |Spl.FH(_,_,b,s) -> Assign(IntexprValueOf(Spl.ITmp(!count)), IntexprValueOf(Spl.IPlus([b;Spl.IMul([s;Spl.ITmp(!count-1)])])))
+	  |Spl.FD(n,k) -> Assign(IntexprValueOf(Spl.ITmp(!count)), Var(Int,"sp_omega("^(Spl.string_of_intexpr n)^", -(t"^(string_of_int (!count-1))^" % "^(Spl.string_of_intexpr k)^") * (t"^(string_of_int (!count-1))^ " / "^(Spl.string_of_intexpr k)^"))")) (*FIXME this is false since ITmp is an int and it shouldn't be*)
+	  |Spl.FArg(name,_) -> Assign(IntexprValueOf(Spl.ITmp(!count)), MethodCall(IdxfuncValueOf func, _at, [IntexprValueOf(Spl.ITmp(!count - 1))])) (*FIXME this is false since ITmp is an int and it shouldn't be*)
 	]
       in
       match f with
@@ -187,18 +199,18 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
     let code = (code_of_at f) in
     let cons_args = (List.map expr_of_intexpr args)@(List.map (function x -> IdxfuncValueOf x) fargs) in
     Class(name,
-	  "func",
+	  _func,
 	  cons_args,
 	  [
 	    Constructor(
 	      cons_args,
 	      Noop
 	    );
-	    Function(
+	    Method(
 	      Complex,
-	      "at",
+	      _at,
 	      [Var(Int, "t0")], (*FIXME still horrendous*)
-	      Chain ( code :: [Return(!count)])
+	      Chain ( code :: [Return(IntexprValueOf (Spl.ITmp(!count)))])
 	    )
 	  ]	    
     )
@@ -216,9 +228,9 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
 	       cons_args,
 	       cons_code_of_rstep_partitioned rstep_partitioned
 	     );	       
-	     Function(
+	     Method(
 	       Void,
-	       "compute",
+	       _compute,
 	       output::input::List.map expr_of_intexpr (IntExprSet.elements hot),
 	       comp_code_of_rstep_partitioned rstep_partitioned output input
 	     )
