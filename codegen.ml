@@ -173,7 +173,6 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     in
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
-      let freedom_assigns = List.map (fun (l,r)->Assign(expr_of_intexpr l, expr_of_intexpr r)) freedoms in
       rulecount := !rulecount + 1;
       
       If(Equal(_rule, expr_of_intexpr(Spl.IConstant !rulecount)),
