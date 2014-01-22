@@ -194,22 +194,7 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
       Var(ctype, "t"^(string_of_int (!count)))
     in
     
-    (* let code_of_at (f : Spl.idxfunc) (input : expr) : code = *)
-    (*   let g (func : Spl.idxfunc) ((input,code):expr * code list) : expr * code list = *)
-    (* 	match func with *)
-    (* 	|Spl.FH(_,_,b,s) -> let output = vargen(Int) in *)
-    (* 			    (output,code@[Declare(output);Assign(output, Plus((IntexprValueOf b), Mul((IntexprValueOf s),input)))]) *)
-    (* 	|Spl.FD(n,k) ->  let output = vargen(Complex) in *)
-    (* 			 (output,code@[Declare(output);Assign(output, Omega((IntexprValueOf n), Minus(Mul(Mod(input,(IntexprValueOf k)), Divide(input,(IntexprValueOf k))))))]) *)
-    (* 	|Spl.FArg(name,_) -> let output = vargen(Complex) in *)
-    (* 			     (output,code@[Declare(output);Assign(output, MethodCall(IdxfuncValueOf func, _at, [input]))])   *)
-    (*   in *)
-    (*   match f with *)
-    (*   |Spl.FCompose l -> let(output,code) = List.fold_right g l (input,[]) in *)
-    (* 			 Chain(code@[Return(output)]) *)
-    (* in *)
-
-    let rec g (func : Spl.idxfunc) ((input,code):expr * code list) : expr * code list =
+    let rec code_of_func (func : Spl.idxfunc) ((input,code):expr * code list) : expr * code list =
       match func with
       |Spl.FH(_,_,b,s) -> let output = vargen(Int) in
 			  (output,code@[Declare(output);Assign(output, Plus((IntexprValueOf b), Mul((IntexprValueOf s),input)))])
@@ -217,13 +202,11 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
 		       (output,code@[Declare(output);Assign(output, Omega((IntexprValueOf n), Minus(Mul(Mod(input,(IntexprValueOf k)), Divide(input,(IntexprValueOf k))))))])
       |Spl.FArg(_,_) -> let output = vargen(Complex) in
 			   (output,code@[Declare(output);Assign(output, MethodCall(IdxfuncValueOf func, _at, [input]))])  
-      |Spl.FCompose l -> List.fold_right g l (input,[])
+      |Spl.FCompose l -> List.fold_right code_of_func l (input,[])
     in
 
-
     let input = vargen(Int) in
-    let code = let(output, ccode) = (g f (input,[])) in
-	       Chain(ccode@[Return(output)])
+    let(output, code) = (code_of_func f (input,[])) in
     let cons_args = (List.map expr_of_intexpr args)@(List.map (function x -> IdxfuncValueOf x) fargs) in
     Class(name,
 	  _func,
@@ -237,7 +220,7 @@ let code_of_lib ((funcs,rsteps) : lib) : code =
 	      Complex,
 	      _at,
 	      [input], 
-	      code
+	      Chain(code@[Return(output)])
 	    )
 	  ]	    
     )
