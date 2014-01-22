@@ -98,7 +98,7 @@ and
     ^ ")"^ 
       (match unparse_type with
 	Prototype -> ";\n"
-      | Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n")
+      | Implementation -> "\n"^(white (n+4))^": "^(String.concat ", " (List.map (fun x -> (string_of_expr x)^"("^(string_of_expr x)^")" ) args))^" {\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n")
 ;;
 
 let string_of_code (n:int) (code : code) : string = 
@@ -110,8 +110,6 @@ let string_of_code (n:int) (code : code) : string =
   ^ "static int divisor(int ) {return 1;} /*FIXME*/\n"
   ^ "static void error(std::string s) {throw s;}\n"
   ^ "#define complex_t std::complex<float>\n"
-  ^ "complex_t * LIB_MALLOC(size_t size) {return (complex_t *)malloc(size * sizeof(complex_t));}\n"
-  ^ "void LIB_FREE(void *ptr, size_t) {free(ptr);}\n"
   ^ "#define PI    3.14159265358979323846f\n"
   ^ "#define __I__ (complex_t(0,1))\n"
   ^ "static complex_t omega(int N, int k) { return cosf(2*PI*k/N) + __I__ * sinf(2*PI*k/N); }\n"
