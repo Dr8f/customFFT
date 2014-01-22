@@ -99,24 +99,24 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
 and 
     cpp_string_of_cmethod (unparse_type:unparse_type) (n:int) (name:string) (cmethod:cmethod) : string =
   match cmethod with 
-    Method(function_type, function_name, comp_args, comp) ->
+    Method(return_type, method_name, args, code) ->
       (match unparse_type with
-      | Prototype -> (white (n+4))^(string_of_ctype function_type)^" "
-      | Implementation -> (white (n))^(string_of_ctype function_type)^" "^name ^ "::")
-      ^ function_name^"(" ^ (String.concat ", " (make_signatures comp_args)) 
+      | Prototype -> (white (n+4))^(string_of_ctype return_type)^" "
+      | Implementation -> (white (n))^(string_of_ctype return_type)^" "^name ^ "::")
+      ^ method_name^"(" ^ (String.concat ", " (make_signatures args)) 
       ^ ")"^ 
 	(match unparse_type with
 	  Prototype -> ";\n"
-	| Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) comp)^(white n)^"}\n")
-  | Constructor(comp_args, comp) ->
+	| Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n")
+  | Constructor(args, code) ->
       (match unparse_type with
       | Prototype -> (white (n+4))
       | Implementation -> (white (n))^name ^ "::")
-      ^ name^"(" ^ (String.concat ", " (make_signatures comp_args)) 
+      ^ name^"(" ^ (String.concat ", " (make_signatures args)) 
       ^ ")"^ 
 	(match unparse_type with
 	  Prototype -> ";\n"
-	| Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) comp)^(white n)^"}\n")
+	| Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n")
     
     
 ;;
