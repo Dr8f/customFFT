@@ -21,6 +21,7 @@ type intexpr =
 type boolexpr =
   IsNotPrime of intexpr 
 | And of boolexpr list
+| Equal of intexpr * intexpr
 ;;
 
 type idxfunc = 
@@ -50,7 +51,7 @@ DFT of intexpr
 | ISum of intexpr * intexpr * spl
 | UnpartitionnedCall of string * intexpr IntMap.t * idxfunc list * intexpr * intexpr
 | PartitionnedCall of int * string * intexpr list * intexpr list * intexpr list * idxfunc list * intexpr * intexpr
-| Construct of int * string * intexpr list
+| Construct of int * string * intexpr list * idxfunc list
 | ISumReinitConstruct of int * intexpr * intexpr * string * intexpr list * intexpr list * idxfunc list
 | Compute of int * string * intexpr list * intexpr * intexpr
 | ISumReinitCompute of int * intexpr * intexpr * string * intexpr list * intexpr * intexpr
@@ -83,6 +84,7 @@ let rec string_of_boolexpr (e : boolexpr) : string =
   match e with
     IsNotPrime(l)->"isNotPrime("^string_of_intexpr l^")"
   | And(l)->optional_short_print "And" (String.concat " && " (List.map string_of_boolexpr l))
+  | Equal(a,b)->"("^string_of_intexpr a^" == "^string_of_intexpr b^")"
 ;;
 
 let string_of_intexpr_intexpr ((e,f) : intexpr * intexpr) : string = 
@@ -99,7 +101,8 @@ let rec string_of_idxfunc (e : idxfunc) : string =
   | FL(j,k) -> "l("^(string_of_intexpr j)^","^(string_of_intexpr k)^")"      
   | FD(n,k) -> "d("^(string_of_intexpr n)^","^(string_of_intexpr k)^")"      
   | FCompose(list) -> optional_short_print "fCompose" (String.concat " . " (List.map string_of_idxfunc list))
-  | Pre(l) -> "pre("^(string_of_idxfunc l)^")"
+  | Pre(l) -> "Pre("^(string_of_idxfunc l)^")"
+  (* | PreWrap(n, l, funcs, d) -> "PreWrap("^n^", "^(String.concat ", " ((List.map string_of_intexpr l)@(List.map string_of_idxfunc funcs)))^")" *)
   | PreWrap(n, l, funcs, d) -> n^"("^(String.concat ", " ((List.map string_of_intexpr l)@(List.map string_of_idxfunc funcs)))^")"
   | FArg(n, d) -> n
 ;;
@@ -121,7 +124,7 @@ let rec string_of_spl (e : spl) : string =
     f^"("^(String.concat "," ((List.map string_of_int_intexpr (IntMap.bindings l)) @ (List.map string_of_idxfunc m)))^")" 
   | PartitionnedCall(childcount, f, cold, reinit, hot, funcs, _, _) -> 
     "PartitionnedCall("^(string_of_int childcount)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr cold))^"], ["^(String.concat ";" (List.map string_of_intexpr reinit))^"], ["^(String.concat ";" (List.map string_of_intexpr hot))^"], ["^(String.concat ";" (List.map string_of_idxfunc funcs))^"])"
-  | Construct(childcount, f, cold) -> "Construct("^(string_of_int childcount)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr cold))^"])"
+  | Construct(childcount, f, cold, funcs) -> "Construct("^(string_of_int childcount)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr cold))^"], ["^(String.concat ";" (List.map string_of_idxfunc funcs))^"])"
   | ISumReinitConstruct(childcount, i, high, f, cold, reinit, funcs) -> "ISumReinitConstruct("^(string_of_int childcount)^", "^(string_of_intexpr i)^", "^(string_of_intexpr high)^", ["^(String.concat ";" (List.map string_of_intexpr cold))^"], ["^(String.concat ";" (List.map string_of_intexpr reinit))^"], ["^(String.concat ";" (List.map string_of_idxfunc funcs))^"])"
   | Compute(childcount, f, hot,_,_) ->"Compute("^(string_of_int childcount)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr hot))^"])"
   | ISumReinitCompute(childcount, i, high, f, hot, _, _) -> "ISumReinitCompute("^(string_of_int childcount)^", "^(string_of_intexpr i)^", "^(string_of_intexpr high)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr hot))^"])"

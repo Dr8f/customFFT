@@ -26,3 +26,15 @@ let algo_cooley_tukey : spl -> boolexpr * (intexpr*intexpr) list * spl =
     ((And !conditions), !freedoms, f e)
 ;;  
 
+(* this is for debug only *)
+let algo_dft_itself : spl -> boolexpr * (intexpr*intexpr) list * spl =
+  function (e:spl) ->
+    let conditions = ref [] in
+    let f = meta_transform_spl_on_spl BottomUp ( function
+      |DFT n ->
+	conditions := Equal(n,IConstant(2)) :: !conditions;
+	DFT n
+      | x -> x) in
+    ((And !conditions), [], f e)
+;;
+

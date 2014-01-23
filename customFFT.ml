@@ -2,7 +2,7 @@
 TYPES
 *******)
 
-let lib = Lib.make_lib [Spl.DFT(Spl.IArg(1))] [Algo.algo_cooley_tukey]
+let lib = Lib.make_lib [Spl.DFT(Spl.IArg(1))] [Algo.algo_cooley_tukey; Algo.algo_dft_itself]
 ;;
 
 print_string (Lib.string_of_lib lib)

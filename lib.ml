@@ -534,6 +534,24 @@ let partition_map_of_rsteps (rsteps: rstep_unpartitioned list) : (IntExprSet.t S
   (!colds,!reinits,!hots)
 ;;
 
+let depends_on (funcs : idxfunc list) (var : intexpr) : bool =
+  print_string ("Does ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"] depends on "^(string_of_intexpr var)^"?\n");
+  let res = ref false in
+  (* let f (intexpr: intexpr) : _= *)
+  (*   print_string ("... "^(string_of_intexpr intexpr)); *)
+  (*   if(var = intexpr)then *)
+  (*     res := true *)
+  (* in *)
+  (* List.map (fun x -> meta_iter_intexpr_on_idxfunc f x) funcs; *)
+  let f (idxfunc: idxfunc) : _=
+    match idxfunc with
+    |PreWrap _ -> res := true
+  in
+  List.map (fun x -> meta_iter_idxfunc_on_idxfunc f x) funcs;
+  print_string ((string_of_bool !res)^"\n\n");
+  !res
+;;
+
 let lib_from_closure ((funcs, rsteps): closure) : lib =
   let filter_by (args:intexpr IntMap.t) (set:IntExprSet.t) : intexpr list =
     List.map snd (List.filter (fun ((i,expr):int*intexpr) -> IntExprSet.mem (IArg i) set) (IntMap.bindings args))
@@ -552,17 +570,18 @@ let lib_from_closure ((funcs, rsteps): closure) : lib =
       let partitioned = (meta_transform_spl_on_spl BottomUp h) desc_with_calls in
       let j (e:spl) : spl =
 	match e with
-	  ISum(_, _, PartitionnedCall(childcount, callee, cold, [], _,[],_,_)) -> Construct(childcount, callee, cold)
+	  ISum(_, _, PartitionnedCall(childcount, callee, cold, [], _,[],_,_)) -> Construct(childcount, callee, cold, [])
 	| ISum(i, high, PartitionnedCall(childcount, callee, cold, reinit, _,funcs,_,_)) -> ISumReinitConstruct(childcount, i, high, callee, cold, reinit, funcs)
+	| PartitionnedCall(childcount, callee, cold, _, _,funcs,_,_) -> Construct(childcount, callee, cold, funcs) 
 	| x -> x
       in
       let k (e:spl) : spl =
 	match e with
-	  PartitionnedCall(childcount, callee, _, [], hot, [], range, domain) -> Compute(childcount, callee, hot, range, domain)
-	| ISum(i, high, PartitionnedCall(childcount, callee, _, _, hot,_,range, domain)) -> ISumReinitCompute(childcount, i, high, callee, hot, range, domain)
+	| ISum(i, high, (PartitionnedCall(childcount, callee, _, _, hot,funcs,range, domain) as f)) when (depends_on funcs i) -> ISumReinitCompute(childcount, i, high, callee, hot, range, domain) (*this should only fire if needed, there are funcs that are dependent on i*)
+	| PartitionnedCall(childcount, callee, _, _, hot, _, range, domain) -> Compute(childcount, callee, hot, range, domain) (*this is the default, most general case*) (*the combination of the two impose a TopDown approach*)
 	| x -> x
       in
-      (condition, freedoms, desc, partitioned, (meta_transform_spl_on_spl BottomUp j) partitioned, (meta_transform_spl_on_spl BottomUp k) partitioned) in
+      (condition, freedoms, desc, partitioned, (meta_transform_spl_on_spl TopDown j) partitioned, (meta_transform_spl_on_spl TopDown k) partitioned) in
 
     let lambda_args = 
       let rec collect_lambdas (i : idxfunc) : idxfunc list =

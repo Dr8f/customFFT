@@ -107,7 +107,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     let res = ref IntSet.empty in  
     let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
       Spl.meta_iter_spl_on_spl (function
-      | Spl.Construct(numchild, _, _) | Spl.ISumReinitConstruct(numchild, _, _, _, _, _, _) -> res := IntSet.add numchild !res
+      | Spl.Construct(numchild, _, _, _) | Spl.ISumReinitConstruct(numchild, _, _, _, _, _, _) -> res := IntSet.add numchild !res
       | _ -> ()
       ) desc_cons;    
     in
@@ -127,9 +127,10 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 
   let cons_code_of_rstep ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : code =
     let rec prepare_cons (e:Spl.spl) : code =
+      print_string ("BOOM:"^(Spl.string_of_spl e)^"\n");
       match e with
       | Spl.Compose l -> Chain (List.map prepare_cons (List.rev l)) 
-      | Spl.Construct(numchild, rs, args) -> Assign(build_child_var(numchild), New(FunctionCall(rs, List.map expr_of_intexpr args)))
+      | Spl.Construct(numchild, rs, args, funcs) -> Assign(build_child_var(numchild), New(FunctionCall(rs, (List.map expr_of_intexpr (args))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
       | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) ->
 	let child = build_child_var(numchild) in
 	Chain([
