@@ -8,36 +8,9 @@ let rec white (n:int) : string =
     " "^(white (n-1))
 ;;
 
-let rec string_of_ctype (t : ctype) : string =
-  match t with
-  |Int -> "int"
-  |Func -> "func*"
-  |Env(rs) -> rs
-  |Ptr(ctype)->(string_of_ctype ctype)^" *"
-  |Char -> "char"
-  |Complex -> "complex_t"
-  |Void -> "void"
-;;
-
 type unparse_type =
   Prototype
 | Implementation
-;;
-
-let rec string_of_expr (expr:expr) : string = 
-  match expr with
-  | Equal(a,b) -> "(" ^ (string_of_expr a) ^ " == " ^ (string_of_expr b) ^ ")"
-  | New(f) -> "new "^(string_of_expr f) 
-  | Nth(expr, count) ->"("^(string_of_expr expr)^"+"^(string_of_expr count)^")"
-  | Var(_, name) -> name
-  | Cast(expr, ctype) -> "(reinterpret_cast<"^(string_of_ctype ctype)^">("^(string_of_expr expr)^"))"
-  | MethodCall(expr, methodname,args) -> (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " (List.map string_of_expr args))^")"
-  | FunctionCall(functionname, args) -> functionname^"("^(String.concat ", " (List.map string_of_expr args))^")"
-  | Plus(a,b) -> "("^(string_of_expr a)^" + "^(string_of_expr b)^")"
-  | Mul(a,b) -> "("^(string_of_expr a)^" * "^(string_of_expr b)^")"
-  | Mod(a,b) -> "("^(string_of_expr a)^" % "^(string_of_expr b)^")"
-  | Divide(a,b) -> "("^(string_of_expr a)^" / "^(string_of_expr b)^")"
-  | Minus(a) -> "-("^(string_of_expr a)^")"
 ;;
 
 let rec ctype_of_expr (expr:expr) : ctype =

@@ -22,6 +22,7 @@ type boolexpr =
   IsNotPrime of intexpr 
 | And of boolexpr list
 | Equal of intexpr * intexpr
+| True
 ;;
 
 type idxfunc = 
@@ -55,6 +56,7 @@ DFT of intexpr
 | ISumReinitConstruct of int * intexpr * intexpr * string * intexpr list * intexpr list * idxfunc list
 | Compute of int * string * intexpr list * intexpr * intexpr
 | ISumReinitCompute of int * intexpr * intexpr * string * intexpr list * intexpr * intexpr
+| F of int
 ;;
 
 (***********    PRINTING    ************)
@@ -85,6 +87,7 @@ let rec string_of_boolexpr (e : boolexpr) : string =
     IsNotPrime(l)->"isNotPrime("^string_of_intexpr l^")"
   | And(l)->optional_short_print "And" (String.concat " && " (List.map string_of_boolexpr l))
   | Equal(a,b)->"("^string_of_intexpr a^" == "^string_of_intexpr b^")"
+  | True->"true"
 ;;
 
 let string_of_intexpr_intexpr ((e,f) : intexpr * intexpr) : string = 
@@ -128,6 +131,7 @@ let rec string_of_spl (e : spl) : string =
   | ISumReinitConstruct(childcount, i, high, f, cold, reinit, funcs) -> "ISumReinitConstruct("^(string_of_int childcount)^", "^(string_of_intexpr i)^", "^(string_of_intexpr high)^", ["^(String.concat ";" (List.map string_of_intexpr cold))^"], ["^(String.concat ";" (List.map string_of_intexpr reinit))^"], ["^(String.concat ";" (List.map string_of_idxfunc funcs))^"])"
   | Compute(childcount, f, hot,_,_) ->"Compute("^(string_of_int childcount)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr hot))^"])"
   | ISumReinitCompute(childcount, i, high, f, hot, _, _) -> "ISumReinitCompute("^(string_of_int childcount)^", "^(string_of_intexpr i)^", "^(string_of_intexpr high)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr hot))^"])"
+  | F(i) -> "F("^(string_of_int i)^")"
 ;;
 
 
@@ -223,6 +227,7 @@ let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f 
     | DFT n -> DFT (g n)
     | UnpartitionnedCall _ -> e
     | PartitionnedCall _ -> e
+    | F _ -> e
     | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ | Construct _ -> assert false
   in
   fun (e : spl) ->
@@ -417,6 +422,7 @@ let rec range (e :spl) : intexpr =
   | Diag (f) -> func_domain f
   | ISum (_, _, spl) -> range spl
   | RS (spl) -> range spl
+  | F(n) -> IConstant n
   | UnpartitionnedCall _ -> assert false
   | PartitionnedCall _ -> assert false
   | ISumReinitCompute (_, _, _, _, _, range, _) -> range
@@ -428,6 +434,7 @@ let rec range (e :spl) : intexpr =
 let rec domain (e :spl) : intexpr = 
   match e with
     DFT(n) -> n
+  | F(n) -> IConstant n
   | Tensor (list) -> IMul(List.map range list)
   | I(n) -> n
   | T(n, _) -> n

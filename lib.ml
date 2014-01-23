@@ -217,13 +217,13 @@ let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:envfunc IdxFuncMap.t ref):
     let (name,_,_,_) = IdxFuncMap.find ffunc !idxfuncmap in
     name
   in
-
+  
   let collect_farg (i : idxfunc) : idxfunc list =
     match i with
       FArg _ -> [i]
     | _ -> []
   in
-
+  
   let wrap_naive = (wrap_intexprs_on_idxfunc f) in
   let func_constraints = (extract_constraints_func wrap_naive) in
   let wrapped = reconcile_constraints_on_idxfunc (func_constraints,wrap_naive) in

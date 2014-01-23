@@ -102,6 +102,33 @@ module IntSet = Set.Make(
   end )
 ;;
 
+let rec string_of_ctype (t : ctype) : string =
+  match t with
+  |Int -> "int"
+  |Func -> "func*"
+  |Env(rs) -> rs
+  |Ptr(ctype)->(string_of_ctype ctype)^" *"
+  |Char -> "char"
+  |Complex -> "complex_t"
+  |Void -> "void"
+;;
+
+let rec string_of_expr (expr:expr) : string = 
+  match expr with
+  | Equal(a,b) -> "(" ^ (string_of_expr a) ^ " == " ^ (string_of_expr b) ^ ")"
+  | New(f) -> "new "^(string_of_expr f) 
+  | Nth(expr, count) ->"("^(string_of_expr expr)^"+"^(string_of_expr count)^")"
+  | Var(_, name) -> name
+  | Cast(expr, ctype) -> "(reinterpret_cast<"^(string_of_ctype ctype)^">("^(string_of_expr expr)^"))"
+  | MethodCall(expr, methodname,args) -> (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " (List.map string_of_expr args))^")"
+  | FunctionCall(functionname, args) -> functionname^"("^(String.concat ", " (List.map string_of_expr args))^")"
+  | Plus(a,b) -> "("^(string_of_expr a)^" + "^(string_of_expr b)^")"
+  | Mul(a,b) -> "("^(string_of_expr a)^" * "^(string_of_expr b)^")"
+  | Mod(a,b) -> "("^(string_of_expr a)^" % "^(string_of_expr b)^")"
+  | Divide(a,b) -> "("^(string_of_expr a)^" / "^(string_of_expr b)^")"
+  | Minus(a) -> "-("^(string_of_expr a)^")"
+;;
+
 let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
     let res = ref IntSet.empty in  
@@ -140,7 +167,10 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	      (Nth(Cast(child, Ptr(Env(rs))), expr_of_intexpr i)), 
 	      (FunctionCall(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
 	  ))
-	])	
+	])
+      | Spl.Diag f -> Error("FIXME: Diag should populate _dat")
+      | Spl.S _ | Spl.G _ | Spl.F _ -> Chain([])
+
     in
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
@@ -176,7 +206,10 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
       | Spl.Compute(numchild, rs, hot,_,_) -> Ignore(MethodCall (Cast((build_child_var(numchild)),Ptr(Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot)))
       | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
 	Loop(expr_of_intexpr i, expr_of_intexpr count, Ignore(MethodCall(Cast((Nth(build_child_var(numchild), expr_of_intexpr(i))),Ptr(Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot))))
-      | _ -> Error("UNIMPLEMENTED")
+      | Spl.G _ -> Error("FIXME: "^(string_of_expr output)^" = Code for "^(Spl.string_of_spl e)^" from "^(string_of_expr input))
+      | Spl.S _ -> Error("FIXME: "^(string_of_expr output)^" = Code for "^(Spl.string_of_spl e)^" from "^(string_of_expr input))
+      | Spl.F _ -> Error("FIXME: "^(string_of_expr output)^" = Code for "^(Spl.string_of_spl e)^" from "^(string_of_expr input))
+      | Spl.Diag _ -> Error("FIXME: "^(string_of_expr output)^" = Code for "^(Spl.string_of_spl e)^" from "^(string_of_expr input))
     in
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
