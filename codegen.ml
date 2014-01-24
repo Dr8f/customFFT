@@ -135,6 +135,25 @@ let rec string_of_expr (expr:expr) : string =
   | AddressOf(a) -> "&"^(string_of_expr a)
 ;;
 
+(*FIXME, move count somewhere else, rename genvar*)
+let count = ref 0
+;;
+let genvar (ctype:ctype) : expr = 
+  count := !count + 1;
+  Var(ctype, "t"^(string_of_int (!count)))
+;;
+
+let rec code_of_func (func : Spl.idxfunc) ((input,code):expr * code list) : expr * code list =
+  match func with
+  |Spl.FH(_,_,b,s) -> let output = genvar(Int) in
+		      (output,code@[Declare(output);Assign(output, Plus((expr_of_intexpr b), Mul((expr_of_intexpr s),input)))])
+  |Spl.FD(n,k) -> let output = genvar(Complex) in
+		  (output,code@[Declare(output);Assign(output, FunctionCall("omega", [(expr_of_intexpr n);UniMinus(Mul(Mod(input,(expr_of_intexpr k)), Divide(input,(expr_of_intexpr k))))]))])
+  |Spl.FArg(_,_) -> let output = genvar(Complex) in
+		    (output,code@[Declare(output);Assign(output, MethodCall(expr_of_idxfunc func, _at, [input]))])  
+  |Spl.FCompose l -> List.fold_right code_of_func l (input,[])
+;;
+
 let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
     let res = ref IntSet.empty in  
@@ -174,7 +193,11 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	      (FunctionCall(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
 	  ))
 	])
-      | Spl.Diag f -> Error("FIXME: Diag should populate _dat")
+      | Spl.Diag Spl.Pre(idxfunc) -> let var = genvar(Int) in
+				     let (precomp, codelines) = code_of_func idxfunc (var,[]) in			    
+				     Loop(var, expr_of_intexpr(Spl.range(e)),
+					  Chain(codelines@[
+					    Assign((Nth(Cast(_dat,Ptr(Complex)),var)),precomp)]))
       | Spl.S _ | Spl.G _ | Spl.F _ -> Chain([])
 
     in
@@ -189,6 +212,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     List.fold_left g (Error("no applicable rules")) breakdowns
   in
 
+(* FIXME before application of a rule, one should simplify the expression by the condition itself*)
   let comp_code_of_rstep ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) (output:expr) (input:expr): code =
     let rec prepare_comp (output:expr) (input:expr) (e:Spl.spl): code =
       match e with
@@ -212,12 +236,20 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
       | Spl.Compute(numchild, rs, hot,_,_) -> Ignore(MethodCall (Cast((build_child_var(numchild)),Ptr(Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot)))
       | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
 	Loop(expr_of_intexpr i, expr_of_intexpr count, Ignore(MethodCall(Cast(AddressOf((Nth(build_child_var(numchild), expr_of_intexpr(i)))),Ptr(Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot))))
-      | Spl.G _ -> Error("FIXME: "^(string_of_expr output)^" = Code for "^(Spl.string_of_spl e)^" from "^(string_of_expr input))
-      | Spl.S _ -> Error("FIXME: "^(string_of_expr output)^" = Code for "^(Spl.string_of_spl e)^" from "^(string_of_expr input))
       | Spl.F 2 -> Chain([
 	Assign ((Nth(output,(Const 0))), (Plus (Nth(input, (Const 0)), (Nth(input, (Const 1))))));
 	Assign ((Nth(output,(Const 1))), (Minus (Nth(input, (Const 0)), (Nth(input, (Const 1))))))])
-      | Spl.Diag _ -> Error("FIXME: "^(string_of_expr output)^" = Code for "^(Spl.string_of_spl e)^" from "^(string_of_expr input))
+      | Spl.S idxfunc -> let var = genvar(Int) in
+			 let (index, codelines) = code_of_func idxfunc (var,[]) in			    
+			     Loop(var, expr_of_intexpr(Spl.domain(e)),
+				  Chain(codelines@[Assign((Nth(output,index)), (Nth(input,var)))])) 
+      | Spl.G idxfunc -> let var = genvar(Int) in
+			 let (index, codelines) = code_of_func idxfunc (var,[]) in			    
+			     Loop(var, expr_of_intexpr(Spl.range(e)),
+				  Chain(codelines@[Assign((Nth(output,var)), (Nth(input,index)))])) 
+      | Spl.Diag _ -> let var = genvar(Int) in
+		      Loop(var, expr_of_intexpr(Spl.range(e)),
+			   Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ptr(Complex)),var))))
     in
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
@@ -238,25 +270,8 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     Method(Void, _compute, _output::_input::List.map expr_of_intexpr (IntExprSet.elements hot), comp_code_of_rstep rstep_partitioned _output _input)])
 ;;
 
-let code_of_envfunc ((name, f, args, fargs) : envfunc) : code = 
-  let count = ref 0 in
-  let vargen (ctype:ctype) : expr = 
-    count := !count + 1;
-    Var(ctype, "t"^(string_of_int (!count)))
-  in
-  
-  let rec code_of_func (func : Spl.idxfunc) ((input,code):expr * code list) : expr * code list =
-    match func with
-    |Spl.FH(_,_,b,s) -> let output = vargen(Int) in
-			(output,code@[Declare(output);Assign(output, Plus((expr_of_intexpr b), Mul((expr_of_intexpr s),input)))])
-    |Spl.FD(n,k) -> let output = vargen(Complex) in
-		    (output,code@[Declare(output);Assign(output, FunctionCall("omega", [(expr_of_intexpr n);UniMinus(Mul(Mod(input,(expr_of_intexpr k)), Divide(input,(expr_of_intexpr k))))]))])
-    |Spl.FArg(_,_) -> let output = vargen(Complex) in
-		      (output,code@[Declare(output);Assign(output, MethodCall(expr_of_idxfunc func, _at, [input]))])  
-    |Spl.FCompose l -> List.fold_right code_of_func l (input,[])
-  in
-  
-  let input = vargen(Int) in
+let code_of_envfunc ((name, f, args, fargs) : envfunc) : code =  
+  let input = genvar(Int) in
   let(output, code) = (code_of_func f (input,[])) in
   let cons_args = (List.map expr_of_intexpr args)@(List.map expr_of_idxfunc fargs) in
   Class(name, _func, cons_args, [
