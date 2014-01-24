@@ -20,11 +20,14 @@ type expr =
 | New of expr
 | Mul of expr * expr
 | Plus of expr * expr
-| Minus of expr
+| Minus of expr * expr
+| UniMinus of expr
 | Mod of expr * expr
 | Divide of expr * expr
 | FunctionCall of string (*functionname*) * expr list (*arguments*)
 | MethodCall of expr (*object*) * string (*method name*) * expr list (*arguments*)
+| Const of int
+| AddressOf of expr
 ;;
 
 type cmethod = 
@@ -117,16 +120,19 @@ let rec string_of_expr (expr:expr) : string =
   match expr with
   | Equal(a,b) -> "(" ^ (string_of_expr a) ^ " == " ^ (string_of_expr b) ^ ")"
   | New(f) -> "new "^(string_of_expr f) 
-  | Nth(expr, count) ->"("^(string_of_expr expr)^"+"^(string_of_expr count)^")"
+  | Nth(expr, count) ->(string_of_expr expr)^"["^(string_of_expr count)^"]"
   | Var(_, name) -> name
   | Cast(expr, ctype) -> "(reinterpret_cast<"^(string_of_ctype ctype)^">("^(string_of_expr expr)^"))"
   | MethodCall(expr, methodname,args) -> (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " (List.map string_of_expr args))^")"
   | FunctionCall(functionname, args) -> functionname^"("^(String.concat ", " (List.map string_of_expr args))^")"
   | Plus(a,b) -> "("^(string_of_expr a)^" + "^(string_of_expr b)^")"
+  | Minus(a,b) -> "("^(string_of_expr a)^" - "^(string_of_expr b)^")"
   | Mul(a,b) -> "("^(string_of_expr a)^" * "^(string_of_expr b)^")"
   | Mod(a,b) -> "("^(string_of_expr a)^" % "^(string_of_expr b)^")"
   | Divide(a,b) -> "("^(string_of_expr a)^" / "^(string_of_expr b)^")"
-  | Minus(a) -> "-("^(string_of_expr a)^")"
+  | UniMinus(a) -> "-("^(string_of_expr a)^")"
+  | Const(a) -> string_of_int(a)
+  | AddressOf(a) -> "&"^(string_of_expr a)
 ;;
 
 let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
@@ -164,7 +170,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	  ArrayAllocate(child, Env(rs), (expr_of_intexpr count));
 	  Loop(expr_of_intexpr i, expr_of_intexpr count, (
 	    PlacementNew( 
-	      (Nth(Cast(child, Ptr(Env(rs))), expr_of_intexpr i)), 
+	      (AddressOf(Nth(child, expr_of_intexpr i))),
 	      (FunctionCall(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
 	  ))
 	])
@@ -205,10 +211,12 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
       | Spl.ISum(i, count, content) -> Loop(expr_of_intexpr i, expr_of_intexpr count, (prepare_comp output input content))
       | Spl.Compute(numchild, rs, hot,_,_) -> Ignore(MethodCall (Cast((build_child_var(numchild)),Ptr(Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot)))
       | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
-	Loop(expr_of_intexpr i, expr_of_intexpr count, Ignore(MethodCall(Cast((Nth(build_child_var(numchild), expr_of_intexpr(i))),Ptr(Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot))))
+	Loop(expr_of_intexpr i, expr_of_intexpr count, Ignore(MethodCall(Cast(AddressOf((Nth(build_child_var(numchild), expr_of_intexpr(i)))),Ptr(Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot))))
       | Spl.G _ -> Error("FIXME: "^(string_of_expr output)^" = Code for "^(Spl.string_of_spl e)^" from "^(string_of_expr input))
       | Spl.S _ -> Error("FIXME: "^(string_of_expr output)^" = Code for "^(Spl.string_of_spl e)^" from "^(string_of_expr input))
-      | Spl.F _ -> Error("FIXME: "^(string_of_expr output)^" = Code for "^(Spl.string_of_spl e)^" from "^(string_of_expr input))
+      | Spl.F 2 -> Chain([
+	Assign ((Nth(output,(Const 0))), (Plus (Nth(input, (Const 0)), (Nth(input, (Const 1))))));
+	Assign ((Nth(output,(Const 1))), (Minus (Nth(input, (Const 0)), (Nth(input, (Const 1))))))])
       | Spl.Diag _ -> Error("FIXME: "^(string_of_expr output)^" = Code for "^(Spl.string_of_spl e)^" from "^(string_of_expr input))
     in
     let rulecount = ref 0 in
@@ -242,7 +250,7 @@ let code_of_envfunc ((name, f, args, fargs) : envfunc) : code =
     |Spl.FH(_,_,b,s) -> let output = vargen(Int) in
 			(output,code@[Declare(output);Assign(output, Plus((expr_of_intexpr b), Mul((expr_of_intexpr s),input)))])
     |Spl.FD(n,k) -> let output = vargen(Complex) in
-		    (output,code@[Declare(output);Assign(output, FunctionCall("omega", [(expr_of_intexpr n);Minus(Mul(Mod(input,(expr_of_intexpr k)), Divide(input,(expr_of_intexpr k))))]))])
+		    (output,code@[Declare(output);Assign(output, FunctionCall("omega", [(expr_of_intexpr n);UniMinus(Mul(Mod(input,(expr_of_intexpr k)), Divide(input,(expr_of_intexpr k))))]))])
     |Spl.FArg(_,_) -> let output = vargen(Complex) in
 		      (output,code@[Declare(output);Assign(output, MethodCall(expr_of_idxfunc func, _at, [input]))])  
     |Spl.FCompose l -> List.fold_right code_of_func l (input,[])
