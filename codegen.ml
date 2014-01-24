@@ -77,7 +77,7 @@ let _compute = "compute"
 let _rule = Var(Int, "_rule")
 ;;
 
-let _dat = Var(Ptr(Char), "_dat")
+let _dat = Var(Ptr(Complex), "_dat")
 ;;
 
 let build_child_var (num:int) : expr =
@@ -132,7 +132,7 @@ let rec string_of_expr (expr:expr) : string =
   | Divide(a,b) -> "("^(string_of_expr a)^" / "^(string_of_expr b)^")"
   | UniMinus(a) -> "-("^(string_of_expr a)^")"
   | Const(a) -> string_of_int(a)
-  | AddressOf(a) -> "&"^(string_of_expr a)
+  | AddressOf(a) -> "(&"^(string_of_expr a)^")"
 ;;
 
 (*FIXME, move count somewhere else, rename genvar*)
@@ -189,15 +189,18 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	  ArrayAllocate(child, Env(rs), (expr_of_intexpr count));
 	  Loop(expr_of_intexpr i, expr_of_intexpr count, (
 	    PlacementNew( 
-	      (AddressOf(Nth(child, expr_of_intexpr i))),
+	      (AddressOf(Nth(Cast(child, Ptr(Env(rs))), expr_of_intexpr i))),
 	      (FunctionCall(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
 	  ))
 	])
       | Spl.Diag Spl.Pre(idxfunc) -> let var = genvar(Int) in
 				     let (precomp, codelines) = code_of_func idxfunc (var,[]) in			    
-				     Loop(var, expr_of_intexpr(Spl.range(e)),
-					  Chain(codelines@[
-					    Assign((Nth(Cast(_dat,Ptr(Complex)),var)),precomp)]))
+				     Chain([
+				       ArrayAllocate(_dat, Complex, expr_of_intexpr(Spl.range(e)));
+				       Loop(var, expr_of_intexpr(Spl.range(e)),
+					    Chain(codelines@[
+					      Assign((Nth(Cast(_dat,Ptr(Complex)),var)),precomp)]))
+				     ])
       | Spl.S _ | Spl.G _ | Spl.F _ -> Chain([])
 
     in
@@ -235,7 +238,9 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
       | Spl.ISum(i, count, content) -> Loop(expr_of_intexpr i, expr_of_intexpr count, (prepare_comp output input content))
       | Spl.Compute(numchild, rs, hot,_,_) -> Ignore(MethodCall (Cast((build_child_var(numchild)),Ptr(Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot)))
       | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
-	Loop(expr_of_intexpr i, expr_of_intexpr count, Ignore(MethodCall(Cast(AddressOf((Nth(build_child_var(numchild), expr_of_intexpr(i)))),Ptr(Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot))))
+	Loop(expr_of_intexpr i, expr_of_intexpr count, Ignore(MethodCall(
+	  (AddressOf(Nth(Cast(build_child_var(numchild), Ptr(Env(rs))), expr_of_intexpr i)))
+	  , _compute, output::input::(List.map expr_of_intexpr hot))))
       | Spl.F 2 -> Chain([
 	Assign ((Nth(output,(Const 0))), (Plus (Nth(input, (Const 0)), (Nth(input, (Const 1))))));
 	Assign ((Nth(output,(Const 1))), (Minus (Nth(input, (Const 0)), (Nth(input, (Const 1))))))])

@@ -17,7 +17,7 @@ let algo_cooley_tukey : spl -> boolexpr * (intexpr*intexpr) list * spl =
     let freedoms = ref [] in 
     let f = meta_transform_spl_on_spl BottomUp ( function
       |DFT n -> 	    
-	conditions := IsNotPrime(n) :: !conditions;
+	conditions := Not(IsPrime(n)) :: !conditions;
 	let k = gen_freedom_var#get () in
 	freedoms := (k, IDivisor n) :: !freedoms;
 	let m = IDivPerfect(n, k) in

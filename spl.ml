@@ -19,10 +19,11 @@ type intexpr =
 ;;
 
 type boolexpr =
-  IsNotPrime of intexpr 
+  IsPrime of intexpr 
 | And of boolexpr list
 | Equal of intexpr * intexpr
 | True
+| Not of boolexpr
 ;;
 
 type idxfunc = 
@@ -84,9 +85,10 @@ let rec string_of_intexpr (e : intexpr) : string =
 
 let rec string_of_boolexpr (e : boolexpr) : string = 
   match e with
-    IsNotPrime(l)->"isNotPrime("^string_of_intexpr l^")"
+    IsPrime(l)->"isPrime("^string_of_intexpr l^")"
   | And(l)->optional_short_print "And" (String.concat " && " (List.map string_of_boolexpr l))
   | Equal(a,b)->"("^string_of_intexpr a^" == "^string_of_intexpr b^")"
+  | Not(b) -> "!"^(string_of_boolexpr b)
   | True->"true"
 ;;
 
@@ -282,6 +284,7 @@ let meta_collect_boolexpr_on_boolexpr (f : boolexpr -> 'a list) : (boolexpr -> '
   let z (g : boolexpr -> 'a list) (e : boolexpr) : 'a list =
     match e with
     | And (l) -> List.flatten (List.map g l)
+    | Not(b) -> g b
     | _ -> []
   in
   recursion_collect f z
@@ -306,7 +309,7 @@ let meta_collect_intexpr_on_idxfunc (f : intexpr -> 'a list) : (idxfunc -> 'a li
 
 let meta_collect_intexpr_on_boolexpr (f : intexpr -> 'a list) : (boolexpr -> 'a list) = 
   meta_collect_boolexpr_on_boolexpr ( function
-  | IsNotPrime x -> f x
+  | IsPrime x -> f x
   | _ -> []
   )
 ;;
