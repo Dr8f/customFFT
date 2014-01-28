@@ -80,7 +80,7 @@ let string_of_code (n:int) (code : code) : string =
   ^ "#include <stdlib.h>\n"
   ^ "#include <complex>\n\n"
   ^ "#include <vector>\n\n"
-  ^ "static int divisor(int ) {return 2;} /*FIXME*/\n"
+  ^ "static int IDivisor(int ) {return 2;} /*FIXME*/\n"
   ^ "static void error(std::string s) {throw s;}\n"
 
   ^ "// standard Eratosthene sieve\n"
@@ -120,7 +120,7 @@ let string_of_code (n:int) (code : code) : string =
   ^ "    }\n"
   ^ "\n"
   ^ "\n"
-  ^ "bool isPrime(int n) {\n"
+  ^ "bool IsPrime(int n) {\n"
   ^ "    std::vector<std::pair<int, int> > fac = _prime_factorization(n);\n"
   ^ "    // n = n^1, list contains (prime, power) entries\n"
   ^ "    return (fac.size()==1 && fac[0].first==n);\n"

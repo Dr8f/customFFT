@@ -89,7 +89,10 @@ let expr_of_intexpr (intexpr : Spl.intexpr) : expr =
 ;;
 
 let expr_of_idxfunc (idxfunc : Spl.idxfunc) : expr =
-  Var(Func, Spl.string_of_idxfunc idxfunc)
+  match idxfunc with
+  | Spl.FArg(n, d) -> Var(Func, n)
+  | Spl.PreWrap(n, l, funcs, d) -> Var(Func, (n^"("^(String.concat "; " ((List.map Spl.string_of_intexpr l)@(List.map Spl.string_of_idxfunc funcs)))^")"))
+(* "PreWrap(\""^n^"\", ["^(String.concat "; " (List.map Spl.string_of_intexpr l))^"], ["^(String.concat "; " (List.map Spl.string_of_idxfunc funcs))^"], "^(Spl.string_of_intexpr d)^")") *)
 ;;
 
 let _output = Var(Ptr(Complex),"Y")
@@ -154,6 +157,10 @@ let rec code_of_func (func : Spl.idxfunc) ((input,code):expr * code list) : expr
   |Spl.FCompose l -> List.fold_right code_of_func l (input,[])
 ;;
 
+let compile (code:code) : code = 
+  code
+;;
+
 let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
     let res = ref IntSet.empty in  
@@ -202,6 +209,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 					      Assign((Nth(Cast(_dat,Ptr(Complex)),var)),precomp)]))
 				     ])
       | Spl.S _ | Spl.G _ | Spl.F _ -> Chain([])
+      | Spl.BB spl -> prepare_cons spl
 
     in
     let rulecount = ref 0 in
@@ -254,6 +262,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
       | Spl.Diag _ -> let var = genvar(Int) in
 		      Loop(var, expr_of_intexpr(Spl.range(e)),
 			   Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ptr(Complex)),var))))
+      | Spl.BB spl -> compile(prepare_comp output input spl)
     in
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =

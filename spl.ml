@@ -58,82 +58,92 @@ DFT of intexpr
 | Compute of int * string * intexpr list * intexpr * intexpr
 | ISumReinitCompute of int * intexpr * intexpr * string * intexpr list * intexpr * intexpr
 | F of int
+| BB of spl
 ;;
 
 (***********    PRINTING    ************)
 
-let optional_short_print (optional : string) (mandatory : string) : string = 
+let optional_short_print (short : string) (long : string) : string = 
   let short_print = true in
   if (short_print) then
-    mandatory
+    short
   else
-    optional ^ "(" ^ mandatory ^ ")"
+    long
+;;
+
+(* let optional_short_infix_list_print (name:string) (l:intexpr list) (infix:string) = *)
+(*   optional_short_print (String.concat infix (List.map string_of_intexpr l)) (name^"(^"(string_of_intexpr_list l)"^)") *)
+(* ;; *)
+
+let optional_short_infix_list_print (name:string) (infix:string) (l:'a list) (f:'a -> string) =
+  optional_short_print (String.concat infix (List.map f l)) (name^"(["^(String.concat "; " (List.map f l))^"])")
 ;;
 
 let rec string_of_intexpr (e : intexpr) : string =
   match e with
-    IConstant i -> string_of_int i
-  | IMul (l) -> optional_short_print "IMul" (String.concat " * " (List.map string_of_intexpr l))
-  | IPlus (l) -> optional_short_print "IPlus" (String.concat " + " (List.map string_of_intexpr l))
-  | IDivPerfect(l,r) -> optional_short_print "IDivPerfect" ((string_of_intexpr l)^"/"^(string_of_intexpr r))
-  | ICountWrap (l,r) -> "["^string_of_int l^"]"^string_of_intexpr r
-  | IDivisor(l)->"divisor("^string_of_intexpr l^")"
-  | IFreedom i -> "d"^(string_of_int i)
-  | ILoopCounter i -> "i" ^ (string_of_int i)
-  | IArg i -> "u"^(string_of_int i)
+    IConstant i -> optional_short_print (string_of_int i) ("IConstant("^(string_of_int i)^")")
+  | IMul (l) -> optional_short_infix_list_print "IMul" " * " l string_of_intexpr
+  | IPlus (l) -> optional_short_infix_list_print "IPlus" " + " l string_of_intexpr
+  | IDivPerfect(l,r) -> optional_short_print ((string_of_intexpr l)^" / "^(string_of_intexpr r)) ("IDivPerfect("^((string_of_intexpr l)^", "^(string_of_intexpr r))^")")
+  | ICountWrap (l,r) -> "ICountWrap("^string_of_int l^", "^string_of_intexpr r^")"
+  | IDivisor(l)->"IDivisor("^string_of_intexpr l^")"
+  | IFreedom i -> optional_short_print ("d"^(string_of_int i)) ("IFreedom("^(string_of_int i)^")")
+  | ILoopCounter i -> optional_short_print ("i"^(string_of_int i)) ("ILoopCounter("^(string_of_int i)^")")
+  | IArg i -> optional_short_print ("u"^(string_of_int i)) ("IArg("^(string_of_int i)^")")
 ;;
 
 let rec string_of_boolexpr (e : boolexpr) : string = 
   match e with
-    IsPrime(l)->"isPrime("^string_of_intexpr l^")"
-  | And(l)->optional_short_print "And" (String.concat " && " (List.map string_of_boolexpr l))
-  | Equal(a,b)->"("^string_of_intexpr a^" == "^string_of_intexpr b^")"
-  | Not(b) -> "!"^(string_of_boolexpr b)
-  | True->"true"
+    IsPrime(l)->"IsPrime("^string_of_intexpr l^")"
+  | And(l)->optional_short_infix_list_print "And" " && " l string_of_boolexpr
+  | Equal(a,b)->optional_short_print ("("^string_of_intexpr a^" == "^string_of_intexpr b^")") ("Equal("^string_of_intexpr a^", "^string_of_intexpr b^")")
+  | Not(b) -> optional_short_print ("!"^(string_of_boolexpr b)) ("Not("^(string_of_boolexpr b)^")")
+  | True->"True"
 ;;
 
 let string_of_intexpr_intexpr ((e,f) : intexpr * intexpr) : string = 
   (string_of_intexpr e)^"="^(string_of_intexpr f)
 ;;
 
-let string_of_int_intexpr ((e,f):int * intexpr) : string =
-  "["^(string_of_int e)^"]"^(string_of_intexpr f)
+let string_of_intexpr_intmap (map: intexpr IntMap.t) : string =
+  "IntexprIntMap("^(String.concat "; " (List.map (function (e,f)-> "("^(string_of_int e)^", "^(string_of_intexpr f)^")") (IntMap.bindings map)))^")"
 ;;
 
 let rec string_of_idxfunc (e : idxfunc) : string =
   match e with
-    FH(src, dest, j,k) -> "h("^(string_of_intexpr src)^","^(string_of_intexpr dest)^","^(string_of_intexpr j)^","^(string_of_intexpr k)^")"
-  | FL(j,k) -> "l("^(string_of_intexpr j)^","^(string_of_intexpr k)^")"      
-  | FD(n,k) -> "d("^(string_of_intexpr n)^","^(string_of_intexpr k)^")"      
-  | FCompose(list) -> optional_short_print "fCompose" (String.concat " . " (List.map string_of_idxfunc list))
+    FH(src, dest, j,k) -> "FH("^(string_of_intexpr src)^","^(string_of_intexpr dest)^","^(string_of_intexpr j)^","^(string_of_intexpr k)^")"
+  | FL(j,k) -> "FL("^(string_of_intexpr j)^","^(string_of_intexpr k)^")"      
+  | FD(n,k) -> "FD("^(string_of_intexpr n)^","^(string_of_intexpr k)^")"      
+  | FCompose(l) -> optional_short_infix_list_print "FCompose" " . " l string_of_idxfunc
+
   | Pre(l) -> "Pre("^(string_of_idxfunc l)^")"
-  (* | PreWrap(n, l, funcs, d) -> "PreWrap("^n^", "^(String.concat ", " ((List.map string_of_intexpr l)@(List.map string_of_idxfunc funcs)))^")" *)
-  | PreWrap(n, l, funcs, d) -> n^"("^(String.concat ", " ((List.map string_of_intexpr l)@(List.map string_of_idxfunc funcs)))^")"
-  | FArg(n, d) -> n
+  | PreWrap(n, l, funcs, d) -> "PreWrap(\""^n^"\", ["^(String.concat "; " (List.map string_of_intexpr l))^"], ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"], "^(string_of_intexpr d)^")"
+  | FArg(n, d) -> "FArg(\""^n^"\", "^(string_of_intexpr d)^")"
 ;;
 
 let rec string_of_spl (e : spl) : string =
   match e with
     DFT (n) -> "DFT("^(string_of_intexpr n)^")"
-  | Tensor (list) ->  String.concat " x " (List.map string_of_spl list)
+  | Tensor (list) -> optional_short_infix_list_print "Tensor" " x " list string_of_spl
   | I (n) -> "I("^(string_of_intexpr n)^")"
   | T (n, m) -> "T("^(string_of_intexpr n)^","^(string_of_intexpr m)^")"
   | L (n, m) -> "L("^(string_of_intexpr n)^","^(string_of_intexpr m)^")"
-  | Compose (list) -> optional_short_print "Compose" (String.concat " . " (List.map string_of_spl list))
+  | Compose (list) -> optional_short_infix_list_print "Compose" " . " list string_of_spl
   | S (f) -> "S("^(string_of_idxfunc f)^")"
   | G (f) -> "G("^(string_of_idxfunc f)^")"
   | Diag (f) -> "Diag("^(string_of_idxfunc f)^")"
   | ISum (i, high, spl) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^","^(string_of_spl spl)^")"
   | RS(spl) -> "RS("^(string_of_spl spl)^")"
-  | UnpartitionnedCall(f, l, m, _, _) -> 
-    f^"("^(String.concat "," ((List.map string_of_int_intexpr (IntMap.bindings l)) @ (List.map string_of_idxfunc m)))^")" 
-  | PartitionnedCall(childcount, f, cold, reinit, hot, funcs, _, _) -> 
-    "PartitionnedCall("^(string_of_int childcount)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr cold))^"], ["^(String.concat ";" (List.map string_of_intexpr reinit))^"], ["^(String.concat ";" (List.map string_of_intexpr hot))^"], ["^(String.concat ";" (List.map string_of_idxfunc funcs))^"])"
-  | Construct(childcount, f, cold, funcs) -> "Construct("^(string_of_int childcount)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr cold))^"], ["^(String.concat ";" (List.map string_of_idxfunc funcs))^"])"
-  | ISumReinitConstruct(childcount, i, high, f, cold, reinit, funcs) -> "ISumReinitConstruct("^(string_of_int childcount)^", "^(string_of_intexpr i)^", "^(string_of_intexpr high)^", ["^(String.concat ";" (List.map string_of_intexpr cold))^"], ["^(String.concat ";" (List.map string_of_intexpr reinit))^"], ["^(String.concat ";" (List.map string_of_idxfunc funcs))^"])"
+  | UnpartitionnedCall(f, map, funcs, r, d) -> 
+    "UnpartitionnedCall(\""^f^"\", ("^(string_of_intexpr_intmap(map))^"), ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"], "^(string_of_intexpr r)^", "^(string_of_intexpr d)^")"
+  | PartitionnedCall(childcount, f, cold, reinit, hot, funcs, r, d) -> 
+    "PartitionnedCall("^(string_of_int childcount)^", \""^f^"\", ["^(String.concat ";" (List.map string_of_intexpr cold))^"], ["^(String.concat ";" (List.map string_of_intexpr reinit))^"], ["^(String.concat ";" (List.map string_of_intexpr hot))^"], ["^(String.concat ";" (List.map string_of_idxfunc funcs))^"], "^(string_of_intexpr r)^", "^(string_of_intexpr d)^")"
+  | Construct(childcount, f, cold, funcs) -> "Construct("^(string_of_int childcount)^", \""^f^"\", ["^(String.concat ";" (List.map string_of_intexpr cold))^"], ["^(String.concat ";" (List.map string_of_idxfunc funcs))^"])"
+  | ISumReinitConstruct(childcount, i, high, f, cold, reinit, funcs) -> "ISumReinitConstruct("^(string_of_int childcount)^", "^(string_of_intexpr i)^", "^(string_of_intexpr high)^", \""^f^"\", ["^(String.concat ";" (List.map string_of_intexpr cold))^"], ["^(String.concat ";" (List.map string_of_intexpr reinit))^"], ["^(String.concat ";" (List.map string_of_idxfunc funcs))^"])"
   | Compute(childcount, f, hot,_,_) ->"Compute("^(string_of_int childcount)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr hot))^"])"
   | ISumReinitCompute(childcount, i, high, f, hot, _, _) -> "ISumReinitCompute("^(string_of_int childcount)^", "^(string_of_intexpr i)^", "^(string_of_intexpr high)^", "^f^", ["^(String.concat ";" (List.map string_of_intexpr hot))^"])"
   | F(i) -> "F("^(string_of_int i)^")"
+  | BB(x) ->"BB("^(string_of_spl x)^")"
 ;;
 
 
@@ -164,6 +174,7 @@ let meta_transform_spl_on_spl (recursion_direction: recursion_direction) (f : sp
     | Tensor (l) -> Tensor (List.map g l)
     | ISum(v,c,a) -> ISum(v,c, (g a))
     | RS (l) -> RS(g l)
+    | BB (l) -> BB(g l)
     | _ -> e          
   in
   recursion_transform recursion_direction f z
@@ -227,6 +238,7 @@ let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f 
     | T (n, m) -> T(g n, g m)
     | I n -> I(g n)
     | DFT n -> DFT (g n)
+    | BB _ -> e
     | UnpartitionnedCall _ -> e
     | PartitionnedCall _ -> e
     | F _ -> e
@@ -426,6 +438,7 @@ let rec range (e :spl) : intexpr =
   | ISum (_, _, spl) -> range spl
   | RS (spl) -> range spl
   | F(n) -> IConstant n
+  | BB(spl) -> range spl
   | UnpartitionnedCall _ -> assert false
   | PartitionnedCall _ -> assert false
   | ISumReinitCompute (_, _, _, _, _, range, _) -> range
@@ -448,6 +461,7 @@ let rec domain (e :spl) : intexpr =
   | Diag (f) -> func_domain f (* by definition a diag range is equal to a diag domain. However the range of the function is larger but noone cares since its precomputed*)
   | ISum (_, _, spl) -> domain spl
   | RS (spl) -> domain spl
+  | BB(spl) -> domain spl
   | UnpartitionnedCall _ -> assert false
   | PartitionnedCall _ -> assert false
   | ISumReinitCompute (_, _, _, _, _, _, domain) -> domain
@@ -558,7 +572,7 @@ let rule_remove_unary_tensor : (spl -> spl) =
 let rule_flatten_compose : (spl -> spl) =
   let rec f (l : spl list) : spl list = 
   match l with
-    Compose(a)::tl -> f (a @ tl)
+  | Compose(a)::tl -> f (a @ tl)
   | a::tl -> a :: (f tl)
   | [] -> []
   in
@@ -603,13 +617,44 @@ let rule_compose_scatter_scatter : (spl -> spl) =
 
 let rule_compose_gather_diag : (spl -> spl) =
   let rec f (l : spl list) : spl list =
-  match l with
-    G(a)::Diag(b)::tl -> f (Diag(FCompose [b;a]) :: G(a) :: tl)
+    match l with
+      G(a)::Diag(b)::tl -> f (Diag(FCompose [b;a]) :: G(a) :: tl)
     | a::tl -> a :: (f tl)
     | [] -> []
   in
   meta_compose_spl BottomUp f
 ;;
+
+let rule_compose_BB_diag : (spl -> spl) =
+  let rec f (l : spl list) : spl list =
+    match l with
+      BB(spl)::Diag(b)::tl -> BB(Compose([spl;Diag(b)]))::tl
+    | a::tl -> a :: (f tl)
+    | [] -> []
+  in
+  meta_compose_spl BottomUp f
+;;
+
+let rule_compose_BB_gather : (spl -> spl) =
+  let rec f (l : spl list) : spl list =
+    match l with
+      BB(spl)::G(b)::tl -> BB(Compose([spl;G(b)]))::tl
+    | a::tl -> a :: (f tl)
+    | [] -> []
+  in
+  meta_compose_spl BottomUp f
+;;
+
+let rule_compose_scatter_BB : (spl -> spl) =
+  let rec f (l : spl list) : spl list =
+    match l with
+      S(b)::BB(spl)::tl -> BB(Compose([S(b);spl]))::tl
+    | a::tl -> a :: (f tl)
+    | [] -> []
+  in
+  meta_compose_spl BottomUp f
+;;
+
     
 let rule_compose_FL_FH : (spl -> spl) =
   let rec f (l : idxfunc list) : idxfunc list =
@@ -665,6 +710,9 @@ let rec apply_rewriting_rules (e : spl) : spl =
       ("Compose_l_h", rule_compose_FL_FH);
       ("Compose_h_h", rule_compose_FH_FH);
       ("Compose Gather Diag", rule_compose_gather_diag);
+      ("Compose BB Diag", rule_compose_BB_diag);
+      ("Compose BB Gather", rule_compose_BB_gather);
+      ("Compose Scatter BB", rule_compose_scatter_BB);
       ("Multiply by one", rule_multiply_by_one);
       ("Multiply and divide by the same", rule_multiply_and_divide_by_the_same);
     ]
