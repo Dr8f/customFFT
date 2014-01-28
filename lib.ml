@@ -144,6 +144,7 @@ let rec extract_constraints_spl (e : spl) : (intexpr * intexpr) list =
 let rec reconcile_constraints_on_spl ((constraints,spl) : (((intexpr * intexpr) list) * spl)) : spl =
   match constraints with
     (l,r) :: tl -> let f (e : intexpr) : intexpr = if (e=r) then l else e in
+		   (* print_string ("constraint:"^(string_of_intexpr l)^"="^(string_of_intexpr r)^"\n"); *)
 		   reconcile_constraints_on_spl ((List.map (fun (l,r) -> (f l, f r)) tl), ((meta_transform_intexpr_on_spl TopDown f) spl))
   | [] -> spl
 ;;
@@ -238,7 +239,7 @@ let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:envfunc IdxFuncMap.t ref):
   let printer (args:intexpr IntMap.t) : string =
     String.concat ", " (List.map (fun ((i,e):int*intexpr) -> "( "^(string_of_int i)^ " = " ^(string_of_intexpr e)^")") (IntMap.bindings args));
   in
-  print_string ("WIP ok, so what do we have here?\nfunction: "^(string_of_idxfunc f)^"\nwrap_naive: "^(string_of_idxfunc wrap_naive)^"\nconstraints:"^(String.concat ", " (List.map (fun ((g,d):intexpr*intexpr) -> "( "^(string_of_intexpr g)^ " = " ^(string_of_intexpr d)^")") func_constraints))^"\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nargs: "^(String.concat ", " (List.map string_of_intexpr args))^"\nfargs: "^(String.concat ", " (List.map string_of_idxfunc fargs))^"\nnewdef: "^(string_of_idxfunc newdef)^"\nres: "^(string_of_idxfunc res)^"\n\n\n");
+  (* print_string ("WIP ok, so what do we have here?\nfunction: "^(string_of_idxfunc f)^"\nwrap_naive: "^(string_of_idxfunc wrap_naive)^"\nconstraints:"^(String.concat ", " (List.map (fun ((g,d):intexpr*intexpr) -> "( "^(string_of_intexpr g)^ " = " ^(string_of_intexpr d)^")") func_constraints))^"\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nargs: "^(String.concat ", " (List.map string_of_intexpr args))^"\nfargs: "^(String.concat ", " (List.map string_of_idxfunc fargs))^"\nnewdef: "^(string_of_idxfunc newdef)^"\nres: "^(string_of_idxfunc res)^"\n\n\n"); *)
   res
 ;;
 
@@ -289,9 +290,16 @@ let collect_args (rstep : spl) : IntExprSet.t =
 
 let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (spl -> boolexpr * (intexpr*intexpr) list * spl)) (ensure_name: spl-> string) : (boolexpr * (intexpr*intexpr) list * spl * spl) =
   let (condition, freedoms, naive_desc) = algo rstep in
+
   let desc = apply_rewriting_rules (mark_RS(naive_desc)) in
-  (* print_string ("WIP DESC:\t\t"^(string_of_spl desc)^"\n"); (\* WIP *\) *)
-  let rses = collect_RS desc in
+  print_string ("Desc:\t\t"^(string_of_spl desc)^"\n");
+
+  let simplification_constraints = extract_constraints_spl desc in
+  let simplified =  reconcile_constraints_on_spl (simplification_constraints, desc) in
+  print_string ("Simplified desc:\t\t"^(string_of_spl simplified)^"\n");
+
+
+  let rses = collect_RS simplified in
   
   let wrap_precomputations (e:spl) : spl =
     let transf (i : idxfunc) : idxfunc = 
@@ -306,7 +314,7 @@ let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (
   (* print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (\* WIP *\) *)
   
   let wrapped_intexpr = List.map wrap_intexprs_on_spl wrapped_precomps in
-  (* print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); (\* WIP *\) *)
+  (* print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); *)
   
   
   let constraints = List.map extract_constraints_spl wrapped_intexpr in
@@ -323,10 +331,10 @@ let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (
   let extracts_with_calls = List.map replace_by_a_call_spl (List.combine wrapped_RSes (List.combine new_names rses)) in
   (* print_string ("WIP DESC extracts_with_calls:\n"^(String.concat ",\n" (List.map string_of_spl extracts_with_calls))^"\n\n"); (\* WIP *\) *)
   
-  let desc_with_calls = drop_RS (reintegrate_RS desc extracts_with_calls) in
+  let desc_with_calls = drop_RS (reintegrate_RS simplified extracts_with_calls) in
   (* print_string ("WIP DESC with_calls:\n"^(string_of_spl desc_with_calls)^"\n\n"); (\* WIP *\) *)  
 
-  (condition, freedoms, desc, desc_with_calls)
+  (condition, freedoms, simplified, desc_with_calls)
 ;;
 
 
@@ -535,20 +543,14 @@ let partition_map_of_rsteps (rsteps: rstep_unpartitioned list) : (IntExprSet.t S
 ;;
 
 let depends_on (funcs : idxfunc list) (var : intexpr) : bool =
-  print_string ("Does ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"] depends on "^(string_of_intexpr var)^"?\n");
+  (* print_string ("Does ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"] depends on "^(string_of_intexpr var)^"?\n"); *)
   let res = ref false in
-  (* let f (intexpr: intexpr) : _= *)
-  (*   print_string ("... "^(string_of_intexpr intexpr)); *)
-  (*   if(var = intexpr)then *)
-  (*     res := true *)
-  (* in *)
-  (* List.map (fun x -> meta_iter_intexpr_on_idxfunc f x) funcs; *)
   let f (idxfunc: idxfunc) : _=
     match idxfunc with
     |PreWrap _ -> res := true
   in
   List.map (fun x -> meta_iter_idxfunc_on_idxfunc f x) funcs;
-  print_string ((string_of_bool !res)^"\n\n");
+  (* print_string ((string_of_bool !res)^"\n\n"); *)
   !res
 ;;
 

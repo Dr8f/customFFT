@@ -179,7 +179,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 
   let cons_code_of_rstep ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : code =
     let rec prepare_cons (e:Spl.spl) : code =
-      print_string ("BOOM:"^(Spl.string_of_spl e)^"\n");
+      (* print_string ("BOOM:"^(Spl.string_of_spl e)^"\n"); *)
       match e with
       | Spl.Compose l -> Chain (List.map prepare_cons (List.rev l)) 
       | Spl.Construct(numchild, rs, args, funcs) -> Assign(build_child_var(numchild), New(FunctionCall(rs, (List.map expr_of_intexpr (args))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
@@ -215,7 +215,6 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     List.fold_left g (Error("no applicable rules")) breakdowns
   in
 
-(* FIXME before application of a rule, one should simplify the expression by the condition itself*)
   let comp_code_of_rstep ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) (output:expr) (input:expr): code =
     let rec prepare_comp (output:expr) (input:expr) (e:Spl.spl): code =
       match e with

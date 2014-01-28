@@ -1,48 +1,18 @@
 #include "result.cpp"
 #include <iostream>
-
-#ifdef _MSC_VER
-#define _USE_MATH_DEFINES
-#include <math.h>
-#endif
-
 #include <malloc.h>
 #include <cstring>
 
-// AUTOLIB_MEM_ALIGNMENT - alignment used by autolib_malloc.
-#define AUTOLIB_MEM_ALIGNMENT   16
-
-/* ---------------------------------------------------
- * Memory management
- * --------------------------------------------------- */
-
-void * autolib_malloc(size_t size) {
-#ifdef _MSC_VER
-    return _aligned_malloc(size, AUTOLIB_MEM_ALIGNMENT);
-#else
-    return memalign(AUTOLIB_MEM_ALIGNMENT, size);
-#endif
-}
-
-void autolib_free(void *ptr) {
-#ifdef _MSC_VER
-    _aligned_free(ptr);
-#else
-    free(ptr);
-#endif
-}
-
+#define MEMORY_ALIGNMENT   16
 
 #define VERIFIER_MEM_PATTERN	0xCC
 
-void* autolib_ver_malloc(size_t size, bool unaligned = false) {
-    size_t  border_size = ((size + AUTOLIB_MEM_ALIGNMENT - 1)/AUTOLIB_MEM_ALIGNMENT) *AUTOLIB_MEM_ALIGNMENT; 
+void* ver_malloc(size_t size) {
+    size_t  border_size = ((size + MEMORY_ALIGNMENT - 1)/MEMORY_ALIGNMENT) *MEMORY_ALIGNMENT; 
     if (2*sizeof(size_t ) > border_size )
         border_size = 2*sizeof(size_t );
-    if (unaligned)
-        border_size++;
 
-    char* result = (char*)autolib_malloc(size + 2*border_size);
+    char* result = (char*)memalign(MEMORY_ALIGNMENT, (size + 2*border_size));
     if ( result == NULL )
     	return NULL;
 
@@ -59,7 +29,7 @@ void* autolib_ver_malloc(size_t size, bool unaligned = false) {
     return result + border_size;
 }
 
-bool autolib_ver_free(void* p, const char* name) {
+bool ver_free(void* p, const char* name) {
     // figure out buffer and border sizes
     size_t* pe = (size_t*)p;
     size_t buffer_size = *(--pe);
@@ -88,7 +58,7 @@ bool autolib_ver_free(void* p, const char* name) {
     for (int i=0; i<border_size; i++, t++)
         if (*t != VERIFIER_MEM_PATTERN) {
 			std::cout << "! error: " << name << " buffer prologue of size " << border_size << " corrupted at byte " << i << "\n";
-            autolib_free(p);
+            free(p);
             return false;
         }
 
@@ -96,11 +66,11 @@ bool autolib_ver_free(void* p, const char* name) {
     for (int i=0; i<border_size; i++, t++)
         if (*t != VERIFIER_MEM_PATTERN) {
 			std::cout << "! error: " << name << " buffer epilogue of size " << border_size << " corrupted at byte " << i << "\n";
-            autolib_free(p);
+            free(p);
             return false;
         }
 
-    autolib_free(p);
+    free(p);
     return true;
 }
 
@@ -108,7 +78,7 @@ bool autolib_ver_free(void* p, const char* name) {
  * Vector utilities
  * --------------------------------------------------- */
 
-int autolib_compare_vecs(char *id1, float *v1, char *id2, float *v2, int n, double threshold) {
+int compare_vecs(char *id1, float *v1, char *id2, float *v2, int n, double threshold) {
     int pass = 1;
     int printed = 0;
     const int max_printed = 100;
@@ -125,31 +95,31 @@ int autolib_compare_vecs(char *id1, float *v1, char *id2, float *v2, int n, doub
     return pass;
 }
 
-void autolib_impulse_vec(float *Y, int n, int j) {
+void impulse_vec(float *Y, int n, int j) {
     for(int i=0; i<n; ++i) Y[i] = (float)0.0;
     Y[j] = (float) 1.0;
 }
 
-void autolib_rand_vec(float *Y, int n) {
+void rand_vec(float *Y, int n) {
     for(int i=0; i<n; ++i) Y[i] = ((float)rand()) / ((float)RAND_MAX) * 2.0 - 1.0;
 }
 
-void autolib_const_vec(float *Y, int n, float c) {
+void const_vec(float *Y, int n, float c) {
     for(int i=0; i<n; ++i) Y[i] = c;
 }
 
-void autolib_piecewise_vec(float *Y, int n) {
+void piecewise_vec(float *Y, int n) {
     for(int i=0; i<n; ++i)  Y[i] = (float)i+1;
 }
 
-void autolib_verif_print_vec(char *id, float *v, int n) {
+void verif_print_vec(char *id, float *v, int n) {
 	std::cout << "# " << id << ": [";
     for(int i=0; i<n-1; ++i) std::cout << v[i] << ", ";
     if(n>0) std::cout << v[n-1];
 	std::cout << "]" << std::endl;
 }
 
-void autolib_copy_vec(float *X, float* Y, int n) {
+void copy_vec(float *X, float* Y, int n) {
     for(int i=0; i<n; ++i) Y[i] = X[i];
 }
 
@@ -184,84 +154,62 @@ public:
 
     bool _verify(float *X, float *Y, RS1 *lib, double threshold) {
         // warning: X might be equal to Y 
-        float *Xref = (float*) autolib_ver_malloc(sizeof(float)*_numX());
-        float *Yref = (float*) autolib_ver_malloc(sizeof(float)*_numY());
-        float *yy = (float*) autolib_ver_malloc(sizeof(float)*num_tests);
-        float *yyref = (float*) autolib_ver_malloc(sizeof(float)*num_tests);
+        float *Xref = (float*) ver_malloc(sizeof(float)*_numX());
+        float *Yref = (float*) ver_malloc(sizeof(float)*_numY());
+        float *yy = (float*) ver_malloc(sizeof(float)*num_tests);
+        float *yyref = (float*) ver_malloc(sizeof(float)*num_tests);
 
 		std::cout << "# check impulse response \n";
         for(int k=0; k<num_tests; ++k) {
             int j = rand() % _numX();
-            autolib_const_vec(Y, _numY(), (float) 7.7);
-            autolib_impulse_vec(X, _numX(), j);
-            autolib_copy_vec(X, Xref, _numX());
+            const_vec(Y, _numY(), (float) 7.7);
+            impulse_vec(X, _numX(), j);
+            copy_vec(X, Xref, _numX());
             { lib->compute(reinterpret_cast<std::complex<float>*>(Y), reinterpret_cast<std::complex<float>*>(X)); }
             impulse_resp(Yref, j);
-            if(!autolib_compare_vecs((char*)"Y", Y, (char*)"Yref", Yref, _numY(), threshold)) {
+            if(!compare_vecs((char*)"Y", Y, (char*)"Yref", Yref, _numY(), threshold)) {
                 if(n <= num_tests) {
-                    autolib_verif_print_vec((char*)"X   ", Xref, _numX());
-                    autolib_verif_print_vec((char*)"Y   ", Y,    _numY());
-                    autolib_verif_print_vec((char*)"Yref", Yref, _numY());
+                    verif_print_vec((char*)"X   ", Xref, _numX());
+                    verif_print_vec((char*)"Y   ", Y,    _numY());
+                    verif_print_vec((char*)"Yref", Yref, _numY());
                 }
-                autolib_ver_free(Yref,"Yref");     autolib_ver_free(Xref, "Xref");
-                autolib_ver_free(yy, "yy");        autolib_ver_free(yyref, "yyref");
+                ver_free(Yref,"Yref");     ver_free(Xref, "Xref");
+                ver_free(yy, "yy");        ver_free(yyref, "yyref");
                 return false;
             }
         }
 
 		std::cout << "# check several output samples \n";
-        autolib_const_vec(Y, _numY(), (float) 0);
-        autolib_rand_vec(X, _numX());
-        autolib_copy_vec(X, Xref, _numX());
+        const_vec(Y, _numY(), (float) 0);
+        rand_vec(X, _numX());
+        copy_vec(X, Xref, _numX());
         { lib->compute(reinterpret_cast<std::complex<float>*>(Y), reinterpret_cast<std::complex<float>*>(X)); }
         for(int k=0; k<num_tests; ++k) {
             int i = (_numY()==num_tests) ? k : (rand() % _numY());
             yy[k] = Y[i];
             yyref[k] = sample(Xref, i);
         }
-        if(!autolib_compare_vecs((char*)"yy", yy, (char*)"yyref", yyref, num_tests, threshold)) {
-            if(_numX() <= num_tests) autolib_verif_print_vec((char*)"X   ", Xref, _numX());
-            autolib_verif_print_vec((char*)"yy   ", yy, num_tests);
-            autolib_verif_print_vec((char*)"yyref", yyref, num_tests);
-            autolib_ver_free(Yref,"Yref");     autolib_ver_free(Xref, "Xref");
-            autolib_ver_free(yy, "yy");        autolib_ver_free(yyref, "yyref");
+        if(!compare_vecs((char*)"yy", yy, (char*)"yyref", yyref, num_tests, threshold)) {
+            if(_numX() <= num_tests) verif_print_vec((char*)"X   ", Xref, _numX());
+            verif_print_vec((char*)"yy   ", yy, num_tests);
+            verif_print_vec((char*)"yyref", yyref, num_tests);
+            ver_free(Yref,"Yref");     ver_free(Xref, "Xref");
+            ver_free(yy, "yy");        ver_free(yyref, "yyref");
             return false;
         }
 
-        autolib_ver_free(Yref,"Yref");     autolib_ver_free(Xref, "Xref");
-        autolib_ver_free(yy, "yy");        autolib_ver_free(yyref, "yyref");
+        ver_free(Yref,"Yref");     ver_free(Xref, "Xref");
+        ver_free(yy, "yy");        ver_free(yyref, "yyref");
         return true;
     }
 
-    bool verifyEx(RS1 *lib, double threshold, bool inplace = false, bool unaligned = false) {
-        float *Y, *X;
-        int sizeX = sizeof(float)*_numX();
-        int sizeY = sizeof(float)*_numY();
-        if (unaligned) return true;
-        if (inplace) {
-            X = (float*) autolib_ver_malloc((sizeX<sizeY) ? sizeY: sizeX, unaligned);
-            Y = X;
-        } else {
-            X = (float*) autolib_ver_malloc(sizeX, unaligned);
-            Y = (float*) autolib_ver_malloc(sizeY, unaligned);
-        }
-#ifdef VERIFIER_USE_INIT_FUNCTIONS
-        if (!lib->init(reinterpret_cast<float*>(Y), reinterpret_cast<float*>(X))) {
-			std::cout << "! error: lib init failed\n";
-            return false;
-        }
-#endif
-        bool result = _verify(X, Y, lib, threshold);
-
-        if (!autolib_ver_free(X, "X")) return false;
-        if (!inplace) 
-            if (!autolib_ver_free(Y, "Y")) return false;
-
-        return result;
-    }
-
     bool verify(RS1 *lib, double threshold) {
-    	return verifyEx(lib, threshold, false, false);
+		float* X = (float*) ver_malloc(sizeof(float)*this->n);
+		float* Y = (float*) ver_malloc(sizeof(float)*this->n);
+        bool result = _verify(X, Y, lib, threshold);
+        if (!ver_free(X, "X")) return false;
+		if (!ver_free(Y, "Y")) return false;
+        return result;
     }
 
     int n;
