@@ -88,13 +88,6 @@ let expr_of_intexpr (intexpr : Spl.intexpr) : expr =
   Var(Int, Spl.string_of_intexpr intexpr)
 ;;
 
-let expr_of_idxfunc (idxfunc : Spl.idxfunc) : expr =
-  match idxfunc with
-  | Spl.FArg(n, d) -> Var(Func, n)
-  | Spl.PreWrap(n, l, funcs, d) -> Var(Func, (n^"("^(String.concat "; " ((List.map Spl.string_of_intexpr l)@(List.map Spl.string_of_idxfunc funcs)))^")"))
-(* "PreWrap(\""^n^"\", ["^(String.concat "; " (List.map Spl.string_of_intexpr l))^"], ["^(String.concat "; " (List.map Spl.string_of_idxfunc funcs))^"], "^(Spl.string_of_intexpr d)^")") *)
-;;
-
 let _output = Var(Ptr(Complex),"Y")
 ;;
 
@@ -137,6 +130,13 @@ let rec string_of_expr (expr:expr) : string =
   | Const(a) -> string_of_int(a)
   | AddressOf(a) -> "(&"^(string_of_expr a)^")"
 ;;
+
+let rec expr_of_idxfunc (idxfunc : Spl.idxfunc) : expr =
+  match idxfunc with
+  | Spl.FArg(n, d) -> Var(Func, n)
+  | Spl.PreWrap(n, l, funcs, d) -> Var(Func, (n^"("^(String.concat ", " (List.map string_of_expr ((List.map expr_of_intexpr l)@(List.map expr_of_idxfunc funcs))))^")"))
+;;
+
 
 (*FIXME, move count somewhere else, rename genvar*)
 let count = ref 0

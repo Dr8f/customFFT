@@ -292,11 +292,11 @@ let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (
   let (condition, freedoms, naive_desc) = algo rstep in
 
   let desc = apply_rewriting_rules (mark_RS(naive_desc)) in
-  print_string ("Desc:\t\t"^(string_of_spl desc)^"\n");
+  (* print_string ("Desc:\t\t"^(string_of_spl desc)^"\n"); *)
 
   let simplification_constraints = extract_constraints_spl desc in
   let simplified =  reconcile_constraints_on_spl (simplification_constraints, desc) in
-  print_string ("Simplified desc:\t\t"^(string_of_spl simplified)^"\n");
+  (* print_string ("Simplified desc:\t\t"^(string_of_spl simplified)^"\n"); *)
 
 
   let rses = collect_RS simplified in
@@ -579,7 +579,7 @@ let lib_from_closure ((funcs, rsteps): closure) : lib =
       in
       let k (e:spl) : spl =
 	match e with
-	| ISum(i, high, (PartitionnedCall(childcount, callee, _, _, hot,funcs,range, domain) as f)) when (depends_on funcs i) -> ISumReinitCompute(childcount, i, high, callee, hot, range, domain) (*this should only fire if needed, there are funcs that are dependent on i*)
+	| ISum(i, high, (PartitionnedCall(childcount, callee, _, _, hot,funcs,range, domain))) when (depends_on funcs i) -> ISumReinitCompute(childcount, i, high, callee, hot, range, domain) (*this should only fire if needed, there are funcs that are dependent on i*)
 	| PartitionnedCall(childcount, callee, _, _, hot, _, range, domain) -> Compute(childcount, callee, hot, range, domain) (*this is the default, most general case*) (*the combination of the two impose a TopDown approach*)
 	| x -> x
       in

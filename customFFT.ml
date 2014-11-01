@@ -23,9 +23,9 @@ print_string cppcode
 let file = "result/result.cpp"
 
 let () =
-  let oc = open_out file in    
-  Printf.fprintf oc "%s\n" cppcode;   
-  close_out oc;                
+  let oc = open_out file in
+  Printf.fprintf oc "%s\n" cppcode;
+  close_out oc;
 
 
 
