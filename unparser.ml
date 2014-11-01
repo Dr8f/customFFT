@@ -127,7 +127,7 @@ let string_of_code (n:int) (code : code) : string =
   ^ "  while ((output == 1)||(output == n)){\n"
   ^ "    output = 1;\n"
   ^ "    for (int i=0;i<fac.size();i++){\n"
-  ^ "      output *= pow(fac[i].first, (rand()%fac[i].second + 1));\n"
+  ^ "      output *= pow(fac[i].first, (rand()%(fac[i].second + 1)));\n"
   ^ "    }\n"
   ^ "  }\n"
   ^ "  return output;\n"
