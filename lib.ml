@@ -138,6 +138,7 @@ let rec extract_constraints_spl (e : spl) : (intexpr * intexpr) list =
   match e with 
     Compose l -> extract_constraints_within_compose l (List.flatten (List.map extract_constraints_spl l))
   | Diag x -> extract_constraints_func x
+  | BB x -> extract_constraints_spl x
   | _ -> []    
 ;;
 
@@ -332,7 +333,7 @@ let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (
   (* print_string ("WIP DESC extracts_with_calls:\n"^(String.concat ",\n" (List.map string_of_spl extracts_with_calls))^"\n\n"); (\* WIP *\) *)
   
   let desc_with_calls = drop_RS (reintegrate_RS simplified extracts_with_calls) in
-  (* print_string ("WIP DESC with_calls:\n"^(string_of_spl desc_with_calls)^"\n\n"); (\* WIP *\) *)  
+  (* print_string ("WIP DESC with_calls:\n"^(string_of_spl desc_with_calls)^"\n\n"); (\* WIP *\) *)
 
   (condition, freedoms, simplified, desc_with_calls)
 ;;
