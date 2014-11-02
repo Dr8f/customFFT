@@ -18,6 +18,36 @@ let rec ctype_of_expr (expr:expr) : ctype =
   | Var(ctype, _) -> ctype
 ;;
 
+let rec string_of_ctype (t : ctype) : string =
+  match t with
+  |Int -> "int"
+  |Func -> "func*"
+  |Env(rs) -> rs
+  |Ptr(ctype)->(string_of_ctype ctype)^" *"
+  |Char -> "char"
+  |Complex -> "complex_t"
+  |Void -> "void"
+;;
+
+let rec string_of_expr (expr:expr) : string =
+  match expr with
+  | Equal(a,b) -> "(" ^ (string_of_expr a) ^ " == " ^ (string_of_expr b) ^ ")"
+  | New(f) -> "new "^(string_of_expr f)
+  | Nth(expr, count) ->(string_of_expr expr)^"["^(string_of_expr count)^"]"
+  | Var(_, name) -> name
+  | Cast(expr, ctype) -> "(reinterpret_cast<"^(string_of_ctype ctype)^">("^(string_of_expr expr)^"))"
+  | MethodCall(expr, methodname,args) -> (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " (List.map string_of_expr args))^")"
+  | FunctionCall(functionname, args) -> functionname^"("^(String.concat ", " (List.map string_of_expr args))^")"
+  | Plus(a,b) -> "("^(string_of_expr a)^" + "^(string_of_expr b)^")"
+  | Minus(a,b) -> "("^(string_of_expr a)^" - "^(string_of_expr b)^")"
+  | Mul(a,b) -> "("^(string_of_expr a)^" * "^(string_of_expr b)^")"
+  | Mod(a,b) -> "("^(string_of_expr a)^" % "^(string_of_expr b)^")"
+  | Divide(a,b) -> "("^(string_of_expr a)^" / "^(string_of_expr b)^")"
+  | UniMinus(a) -> "-("^(string_of_expr a)^")"
+  | Const(a) -> string_of_int(a)
+  | AddressOf(a) -> "(&"^(string_of_expr a)^")"
+;;
+
 let make_signatures (l:'a list) : string list =
   List.map (fun expr -> (string_of_ctype (ctype_of_expr expr))^" "^(string_of_expr expr)) (l)
 ;;

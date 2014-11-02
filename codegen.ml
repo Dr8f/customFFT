@@ -85,7 +85,9 @@ let build_child_var (num:int) : expr =
 ;;
 
 let expr_of_intexpr (intexpr : Spl.intexpr) : expr =
-  Var(Int, Spl.string_of_intexpr intexpr)
+  match intexpr with
+    Spl.IConstant x -> Const x
+  | x -> Var(Int, Spl.string_of_intexpr intexpr)
 ;;
 
 let _output = Var(Ptr(Complex),"Y")
@@ -103,38 +105,40 @@ module IntSet = Set.Make(
 
 let rec string_of_ctype (t : ctype) : string =
   match t with
-  |Int -> "int"
-  |Func -> "func*"
-  |Env(rs) -> rs
-  |Ptr(ctype)->(string_of_ctype ctype)^" *"
-  |Char -> "char"
-  |Complex -> "complex_t"
-  |Void -> "void"
+  |Int -> "Int"
+  |Func -> "Func"
+  |Env(rs) -> "Env(\""^rs^"\")"
+  |Ptr(ctype)->"Ptr("^(string_of_ctype ctype)^")"
+  |Char -> "Char"
+  |Complex -> "Complex"
+  |Void -> "Void"
+  |Bool -> "Bool"
 ;;
 
 let rec string_of_expr (expr:expr) : string = 
   match expr with
-  | Equal(a,b) -> "(" ^ (string_of_expr a) ^ " == " ^ (string_of_expr b) ^ ")"
-  | New(f) -> "new "^(string_of_expr f) 
-  | Nth(expr, count) ->(string_of_expr expr)^"["^(string_of_expr count)^"]"
-  | Var(_, name) -> name
-  | Cast(expr, ctype) -> "(reinterpret_cast<"^(string_of_ctype ctype)^">("^(string_of_expr expr)^"))"
-  | MethodCall(expr, methodname,args) -> (string_of_expr expr) ^ " -> "^methodname^"("^(String.concat ", " (List.map string_of_expr args))^")"
-  | FunctionCall(functionname, args) -> functionname^"("^(String.concat ", " (List.map string_of_expr args))^")"
-  | Plus(a,b) -> "("^(string_of_expr a)^" + "^(string_of_expr b)^")"
-  | Minus(a,b) -> "("^(string_of_expr a)^" - "^(string_of_expr b)^")"
-  | Mul(a,b) -> "("^(string_of_expr a)^" * "^(string_of_expr b)^")"
-  | Mod(a,b) -> "("^(string_of_expr a)^" % "^(string_of_expr b)^")"
-  | Divide(a,b) -> "("^(string_of_expr a)^" / "^(string_of_expr b)^")"
-  | UniMinus(a) -> "-("^(string_of_expr a)^")"
-  | Const(a) -> string_of_int(a)
-  | AddressOf(a) -> "(&"^(string_of_expr a)^")"
+  | Equal(a,b) -> "Equal(" ^ (string_of_expr a) ^ ", " ^ (string_of_expr b) ^ ")"
+  | New(f) -> "New("^(string_of_expr f) ^")"
+  | Nth(expr, count) ->"Nth("^(string_of_expr expr)^", "^(string_of_expr count)^")"
+  | Var(a, b) -> "Var("^ (string_of_ctype a) ^ ", \"" ^ b ^ "\")"
+  | Cast(expr, ctype) -> "Cast("^(string_of_expr expr)^", "^(string_of_ctype ctype)^")"
+  | MethodCall(expr, methodname,args) -> "MethodCall("^(string_of_expr expr) ^ ", \""^methodname^"\", ["^(String.concat "; " (List.map string_of_expr args))^"])"
+  | FunctionCall(functionname, args) -> "FunctionCall(\""^functionname^"\", ["^(String.concat "; " (List.map string_of_expr args))^"])"
+  | Plus(a,b) -> "Plus("^(string_of_expr a)^", "^(string_of_expr b)^")"
+  | Minus(a,b) -> "Minus("^(string_of_expr a)^", "^(string_of_expr b)^")"
+  | Mul(a,b) -> "Mul("^(string_of_expr a)^", "^(string_of_expr b)^")"
+  | Mod(a,b) -> "Mod("^(string_of_expr a)^", "^(string_of_expr b)^")"
+  | Divide(a,b) -> "Divide("^(string_of_expr a)^", "^(string_of_expr b)^")"
+  | UniMinus(a) -> "UniMinus("^(string_of_expr a)^")"
+  | Const(a) -> "Const("^ (string_of_int a) ^")"
+  | AddressOf(a) -> "AddressOf("^ (string_of_expr a) ^")"
 ;;
+
 
 let rec expr_of_idxfunc (idxfunc : Spl.idxfunc) : expr =
   match idxfunc with
-  | Spl.FArg(n, d) -> Var(Func, n)
-  | Spl.PreWrap(n, l, funcs, d) -> Var(Func, (n^"("^(String.concat ", " (List.map string_of_expr ((List.map expr_of_intexpr l)@(List.map expr_of_idxfunc funcs))))^")"))
+  | Spl.FArg(n, _) -> Var(Func, n)
+  | Spl.PreWrap(n, l, funcs, _) -> FunctionCall(n, ((List.map expr_of_intexpr l)@(List.map expr_of_idxfunc funcs)))
 ;;
 
 
@@ -157,8 +161,46 @@ let rec code_of_func (func : Spl.idxfunc) ((input,code):expr * code list) : expr
   |Spl.FCompose l -> List.fold_right code_of_func l (input,[])
 ;;
 
-let compile (code:code) : code = 
-  code
+let rec white (n:int) : string =
+  if (n <= 0) then
+    ""
+  else
+    " "^(white (n-1))
+;;
+
+let rec ctype_of_expr (expr:expr) : ctype =
+  match expr with
+  | Var(ctype, _) -> ctype
+;;
+
+
+let rec string_of_code (n:int) (code : code) : string =
+  (white n)^(
+    match code with
+      Chain l -> "Chain( [\n"^(String.concat ";\n" (List.map (string_of_code (n+4)) l))^"\n"^(white n)^"] )"
+    | PlacementNew(l, r) -> "PlacementNew("^(string_of_expr l)^", "^(string_of_expr r)^")"
+    | Assign(l, r) -> "Assign("^(string_of_expr l) ^ ", "^ (string_of_expr r) ^ ")"
+    | Loop(var, expr, code) -> "Loop("^(string_of_expr var)^", "^(string_of_expr expr)^", \n"^(string_of_code  (n+4) code)^"\n"^(white n)^")"
+    | ArrayAllocate(expr,elttype,int) -> "ArrayAllocate("^(string_of_expr expr)^", "^(string_of_ctype(elttype))^", "^(string_of_expr int)^")"
+    | ArrayDeallocate(buf, size) -> "ArrayDeallocate("^(string_of_expr buf)^", "^(string_of_expr size)^")"
+    | Return(expr) -> "Return("^(string_of_expr expr)^")"
+    | Declare(expr) -> "Declare("^(string_of_expr expr)^")"
+   )   
+;;
+
+(* FIXME:FRED *)
+let rec unroll_loops (code:code) : code = 
+  match code with
+  | Chain l -> Chain (List.map unroll_loops l)
+  | Loop(var, expr, code) -> print_string ("loop:"^(string_of_expr expr)^"\n"); Loop(var, expr, code)
+  | _ -> code
+;;
+
+let compile_basic_bloc (code:code) : code = 
+  let res = unroll_loops code in
+  print_string(string_of_code 0 code);
+  print_string "\n\n\n\n\n";
+  res
 ;;
 
 let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
@@ -262,7 +304,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
       | Spl.Diag _ -> let var = genvar(Int) in
 		      Loop(var, expr_of_intexpr(Spl.range(e)),
 			   Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ptr(Complex)),var))))
-      | Spl.BB spl -> compile(prepare_comp output input spl)
+      | Spl.BB spl -> compile_basic_bloc(prepare_comp output input spl)
     in
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
