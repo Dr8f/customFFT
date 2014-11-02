@@ -68,11 +68,11 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
 	Prototype -> (white n) ^ "private:" ^ "\n"
 	  ^ (white (n+4)) ^ name ^ "(const " ^ name ^ "&);" ^ "\n"
 	  ^ (white (n+4)) ^ name ^ "& operator=(const " ^ name ^"&);" ^ "\n"
-	  ^ "};\n\n"
+	  ^ (white n) ^ "};\n\n"
       | Implementation -> "\n")
       
 	
-  | Chain l -> String.concat "" (List.map (cpp_string_of_code unparse_type n) l)
+  | Chain l -> (white n)^"{\n"^String.concat "" (List.map (cpp_string_of_code unparse_type (n+4)) l)^(white n)^"}\n"
   | PlacementNew(l, r) -> (white n)^"new ("^(string_of_expr l)^") "^(string_of_expr r)^";\n" 
   | Assign(l, r) -> (white n) ^ (string_of_expr l) ^ " = "^ (string_of_expr r) ^ ";\n"
   | Noop -> (white n)^"/* noop */\n"
@@ -97,14 +97,14 @@ and
 	  Prototype -> ";\n"
 	| Implementation -> "{\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n")
   | Constructor(args, code) ->
-    (white (n))^ name^"(" ^ (String.concat ", " (make_signatures args)) 
+    name^"(" ^ (String.concat ", " (make_signatures args)) 
     ^ ")"^ 
       (match unparse_type with
 	Prototype -> ";\n"
       | Implementation -> "\n"^(white (n+4))^": "^(String.concat ", " (List.map (fun x -> (string_of_expr x)^"("^(string_of_expr x)^")" ) args))^" {\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n")
 ;;
 
-let string_of_code (n:int) (code : code) : string = 
+let string_of_codes (n:int) (codes : code list) : string = 
   "#include <new>\n"
   ^ "#include <string>\n"
   ^ "#include <stdlib.h>\n"
@@ -178,7 +178,7 @@ let string_of_code (n:int) (code : code) : string =
   ^ "struct RS { virtual ~RS(){}};\n"
   ^ "template<class T> struct TFunc_TInt_T : public RS { virtual T at(int) = 0; };\n"
   ^ "struct func : public TFunc_TInt_T<complex_t> {};\n\n"
-  ^ (cpp_string_of_code Prototype n code)
-  ^ (cpp_string_of_code Implementation n code)
+  ^ String.concat "" (List.map (cpp_string_of_code Prototype n) codes)
+  ^ String.concat "" (List.map (cpp_string_of_code Implementation n) codes)
 ;;
 

@@ -188,18 +188,71 @@ let rec string_of_code (n:int) (code : code) : string =
    )   
 ;;
 
-(* FIXME:FRED *)
-let rec unroll_loops (code:code) : code = 
-  match code with
-  | Chain l -> Chain (List.map unroll_loops l)
-  | Loop(var, expr, code) -> print_string ("loop:"^(string_of_expr expr)^"\n"); Loop(var, expr, code)
-  | _ -> code
+let meta_transform_code_on_code (recursion_direction: Spl.recursion_direction) (f : code -> code) : (code -> code) =
+  let z (g : code -> code) (e : code) : code = 
+    match e with
+    | Chain l -> Chain (List.map g l)
+    | Loop(var, expr, code) -> Loop(var, expr, (g code))
+    | PlacementNew _ | Assign _ | ArrayAllocate _ | ArrayDeallocate _ | Return _ | Declare _ -> e
+  in
+  Spl.recursion_transform recursion_direction f z
+;;
+
+let meta_transform_expr_on_expr (recursion_direction: Spl.recursion_direction) (f : expr -> expr) : (expr -> expr) =
+  let z (g : expr -> expr) (e : expr) : expr = 
+    match e with
+    | Equal(a,b) -> Equal(g a, g b)
+    | Plus(a,b) -> Plus(g a, g b)
+    | Mul(a,b) -> Mul(g a, g b)
+    | Cast(expr,ctype) -> Cast(g expr, ctype)
+    | Nth(expr, count) -> Nth(g expr, g count)
+    | Var _ | Const _ -> e
+    | x -> failwith ("Pattern_matching failed:\n"^(string_of_expr x))
+  in
+  Spl.recursion_transform recursion_direction f z
+;;
+
+let meta_transform_expr_on_code (recursion_direction: Spl.recursion_direction) (f : expr -> expr) : (code -> code) =
+  let g = meta_transform_expr_on_expr recursion_direction f in
+  meta_transform_code_on_code recursion_direction ( function 
+  | Declare e -> Declare (g e)
+  | Assign(l, r) -> Assign(g l, g r)
+  | Chain _ as x -> x 
+  | x -> failwith ("Pattern_matching failed:\n"^(string_of_code 0 x))
+  )
+;;
+
+let expr_substitution_on_expr (target : expr) (replacement : expr) : (expr -> expr) =
+  let g (e: expr) : expr = 
+    if (e = target) then replacement else e
+  in
+  meta_transform_expr_on_expr Spl.TopDown g
+;;
+
+let expr_substitution_on_code (target : expr) (replacement : expr) : (code -> code) =
+  let g (e: expr) : expr = 
+    if (e = target) then replacement else e
+  in
+  meta_transform_expr_on_code Spl.TopDown g
+;;
+
+let rec range i j = if i > j then [] else i :: (range (i+1) j)
+;;
+
+(* takes the code into a multidecl form*)
+let rec unroll_loops (code:code) : code =
+  meta_transform_code_on_code Spl.TopDown ( function 
+  | Loop(var, Const n, c) -> 
+    let g (i:int) = expr_substitution_on_code var (Const i) c in
+    Chain (List.map g (range 0 (n-1)))
+  | x -> x
+  ) code
 ;;
 
 let compile_basic_bloc (code:code) : code = 
   let res = unroll_loops code in
-  print_string(string_of_code 0 code);
-  print_string "\n\n\n\n\n";
+  (* print_string(string_of_code 0 res); *)
+  (* print_string "\n\n\n\n\n"; *)
   res
 ;;
 
@@ -334,7 +387,7 @@ let code_of_envfunc ((name, f, args, fargs) : envfunc) : code =
     Method(Complex, _at, [input], Chain(code@[Return(output)]))])
 ;;
 
-let code_of_lib ((funcs,rsteps) : lib) : code = 
-  Chain ((List.map code_of_envfunc funcs)@(List.map code_of_rstep rsteps))
+let code_of_lib ((funcs,rsteps) : lib) : code list = 
+  (List.map code_of_envfunc funcs)@(List.map code_of_rstep rsteps)
 ;;
 
