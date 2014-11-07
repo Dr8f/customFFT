@@ -50,18 +50,6 @@ code =
 | Ignore of expr (*expression with side effect*)
 ;; 
 
-(* let meta_collect_code_on_code (f : code -> 'a list) : (code -> 'a list) = *)
-(*   let z (g : code -> 'a list) (e : code) : 'a list = *)
-(*     match e with *)
-(*     | Class(_,_,_,_,cons,comp,_,_,_,_) -> (g cons) @ (g comp) *)
-(*     | Chain l -> List.flatten (List.map g l) *)
-(*     | If(_,a,b) -> (g a)@(g b) *)
-(*     | Loop(_,_,c) -> g c *)
-(*     | _ -> [] *)
-(*   in *)
-(*   Spl.recursion_collect f z *)
-(* ;; *)
-
 let _rs = "RS"
 ;;
 
@@ -185,6 +173,7 @@ let rec string_of_code (n:int) (code : code) : string =
     | ArrayDeallocate(buf, size) -> "ArrayDeallocate("^(string_of_expr buf)^", "^(string_of_expr size)^")"
     | Return(expr) -> "Return("^(string_of_expr expr)^")"
     | Declare(expr) -> "Declare("^(string_of_expr expr)^")"
+    | Noop -> "Noop"
    )   
 ;;
 
@@ -193,7 +182,7 @@ let meta_transform_code_on_code (recursion_direction: Spl.recursion_direction) (
     match e with
     | Chain l -> Chain (List.map g l)
     | Loop(var, expr, code) -> Loop(var, expr, (g code))
-    | PlacementNew _ | Assign _ | ArrayAllocate _ | ArrayDeallocate _ | Return _ | Declare _ -> e
+    | PlacementNew _ | Assign _ | ArrayAllocate _ | ArrayDeallocate _ | Return _ | Declare _ | Noop _ -> e
   in
   Spl.recursion_transform recursion_direction f z
 ;;
@@ -239,6 +228,50 @@ let expr_substitution_on_code (target : expr) (replacement : expr) : (code -> co
 let rec range i j = if i > j then [] else i :: (range (i+1) j)
 ;;
 
+
+let meta_chain_code (recursion_direction: Spl.recursion_direction) (f : code list -> code list) : (code -> code) =
+  meta_transform_code_on_code recursion_direction ( function 
+  | Chain (l) -> Chain (f l) 
+  | x -> x)
+;;
+
+let rule_flatten_chain : (code -> code) =
+  let rec f (l : code list) : code list = 
+  match l with
+  | Chain(a)::tl -> f (a @ tl)
+  | Noop::tl -> f(tl)
+  | a::tl -> a :: (f tl)
+  | [] -> []
+  in
+  meta_chain_code Spl.BottomUp f
+;;  
+
+let remove_decls : (code -> code) =
+  meta_transform_code_on_code Spl.BottomUp ( function
+  | Declare x -> Noop
+  | x -> x
+  )
+;;
+
+let declare_free_vars (l: code list) : code list =
+  (* compute all free variables *)
+  (* declare all free variables *)
+  l
+;;
+
+let rec reintroduce_decls : (code -> code) =
+  meta_transform_code_on_code Spl.BottomUp ( function 
+  | Chain (l) -> let decls = declare_free_vars l in Chain (decls @ l) 
+  | x -> x)
+;;
+
+(* FIXME write the code *)
+let rec flatten_chain (code:code) : code =
+  rule_flatten_chain (remove_decls code) 
+;;
+
+
+
 (* takes the code into a multidecl form*)
 let rec unroll_loops (code:code) : code =
   meta_transform_code_on_code Spl.TopDown ( function 
@@ -250,9 +283,9 @@ let rec unroll_loops (code:code) : code =
 ;;
 
 let compile_basic_bloc (code:code) : code = 
-  let res = unroll_loops code in
-  (* print_string(string_of_code 0 res); *)
-  (* print_string "\n\n\n\n\n"; *)
+  let res = flatten_chain (unroll_loops code) in
+  print_string(string_of_code 0 res);
+  print_string "\n\n\n\n\n";
   res
 ;;
 
