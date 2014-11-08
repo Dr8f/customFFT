@@ -1,54 +1,12 @@
+open Util
+;;
+
 open Lib
 ;;
 
-type ctype = 
-  Int
-| Env of string
-| Func
-| Ptr of ctype
-| Char
-| Complex
-| Void
-| Bool
+open Code
 ;;
 
-type expr = 
-| Var of ctype * string
-| Nth of expr * expr
-| Cast of expr * ctype
-| Equal of expr * expr
-| New of expr
-| Mul of expr * expr
-| Plus of expr * expr
-| Minus of expr * expr
-| UniMinus of expr
-| Mod of expr * expr
-| Divide of expr * expr
-| FunctionCall of string (*functionname*) * expr list (*arguments*)
-| MethodCall of expr (*object*) * string (*method name*) * expr list (*arguments*)
-| Const of int
-| AddressOf of expr
-;;
-
-type cmethod = 
-  Constructor of expr list(*args*) * code 
-| Method of ctype (*return type*) * string (* functionname *) * expr list(* args*)  * code
-and
-code =
-  Class of string(*class name*) * string (*class template from which it is derived*) * expr list (*member variables*) * cmethod list (*methods*)
-| Chain of code list
-| Noop
-| Error of string
-| Assign of expr(*dest*) * expr (*origin*)
-| ArrayAllocate of expr (*pointer*) * ctype (*element type*) * expr (*element count*)
-| PlacementNew of expr (*address*) * expr (*content*)
-| If of expr (*condition*) * code (*true branch*) * code (*false branch*)
-| Loop of expr (*loop variable*) * expr (*count*) * code 
-| ArrayDeallocate of expr (*pointer*) * expr (*element count*)
-| Return of expr
-| Declare of expr
-| Ignore of expr (*expression with side effect*)
-;; 
 
 let _rs = "RS"
 ;;
@@ -91,36 +49,6 @@ module IntSet = Set.Make(
   end )
 ;;
 
-let rec string_of_ctype (t : ctype) : string =
-  match t with
-  |Int -> "Int"
-  |Func -> "Func"
-  |Env(rs) -> "Env(\""^rs^"\")"
-  |Ptr(ctype)->"Ptr("^(string_of_ctype ctype)^")"
-  |Char -> "Char"
-  |Complex -> "Complex"
-  |Void -> "Void"
-  |Bool -> "Bool"
-;;
-
-let rec string_of_expr (expr:expr) : string = 
-  match expr with
-  | Equal(a,b) -> "Equal(" ^ (string_of_expr a) ^ ", " ^ (string_of_expr b) ^ ")"
-  | New(f) -> "New("^(string_of_expr f) ^")"
-  | Nth(expr, count) ->"Nth("^(string_of_expr expr)^", "^(string_of_expr count)^")"
-  | Var(a, b) -> "Var("^ (string_of_ctype a) ^ ", \"" ^ b ^ "\")"
-  | Cast(expr, ctype) -> "Cast("^(string_of_expr expr)^", "^(string_of_ctype ctype)^")"
-  | MethodCall(expr, methodname,args) -> "MethodCall("^(string_of_expr expr) ^ ", \""^methodname^"\", ["^(String.concat "; " (List.map string_of_expr args))^"])"
-  | FunctionCall(functionname, args) -> "FunctionCall(\""^functionname^"\", ["^(String.concat "; " (List.map string_of_expr args))^"])"
-  | Plus(a,b) -> "Plus("^(string_of_expr a)^", "^(string_of_expr b)^")"
-  | Minus(a,b) -> "Minus("^(string_of_expr a)^", "^(string_of_expr b)^")"
-  | Mul(a,b) -> "Mul("^(string_of_expr a)^", "^(string_of_expr b)^")"
-  | Mod(a,b) -> "Mod("^(string_of_expr a)^", "^(string_of_expr b)^")"
-  | Divide(a,b) -> "Divide("^(string_of_expr a)^", "^(string_of_expr b)^")"
-  | UniMinus(a) -> "UniMinus("^(string_of_expr a)^")"
-  | Const(a) -> "Const("^ (string_of_int a) ^")"
-  | AddressOf(a) -> "AddressOf("^ (string_of_expr a) ^")"
-;;
 
 
 let rec expr_of_idxfunc (idxfunc : Spl.idxfunc) : expr =
@@ -130,164 +58,17 @@ let rec expr_of_idxfunc (idxfunc : Spl.idxfunc) : expr =
 ;;
 
 
-(*FIXME, move count somewhere else, rename genvar*)
-let count = ref 0
-;;
-let genvar (ctype:ctype) : expr = 
-  count := !count + 1;
-  Var(ctype, "t"^(string_of_int (!count)))
-;;
-
 let rec code_of_func (func : Spl.idxfunc) ((input,code):expr * code list) : expr * code list =
   match func with
-  |Spl.FH(_,_,b,s) -> let output = genvar(Int) in
+  |Spl.FH(_,_,b,s) -> let output = gen_var#get Int "t" in
 		      (output,code@[Declare(output);Assign(output, Plus((expr_of_intexpr b), Mul((expr_of_intexpr s),input)))])
-  |Spl.FD(n,k) -> let output = genvar(Complex) in
+  |Spl.FD(n,k) -> let output = gen_var#get Complex "c" in
 		  (output,code@[Declare(output);Assign(output, FunctionCall("omega", [(expr_of_intexpr n);UniMinus(Mul(Mod(input,(expr_of_intexpr k)), Divide(input,(expr_of_intexpr k))))]))])
-  |Spl.FArg(_,_) -> let output = genvar(Complex) in
+  |Spl.FArg(_,_) -> let output = gen_var#get Complex "c" in
 		    (output,code@[Declare(output);Assign(output, MethodCall(expr_of_idxfunc func, _at, [input]))])  
   |Spl.FCompose l -> List.fold_right code_of_func l (input,[])
 ;;
 
-let rec white (n:int) : string =
-  if (n <= 0) then
-    ""
-  else
-    " "^(white (n-1))
-;;
-
-let rec ctype_of_expr (expr:expr) : ctype =
-  match expr with
-  | Var(ctype, _) -> ctype
-;;
-
-
-let rec string_of_code (n:int) (code : code) : string =
-  (white n)^(
-    match code with
-      Chain l -> "Chain( [\n"^(String.concat ";\n" (List.map (string_of_code (n+4)) l))^"\n"^(white n)^"] )"
-    | PlacementNew(l, r) -> "PlacementNew("^(string_of_expr l)^", "^(string_of_expr r)^")"
-    | Assign(l, r) -> "Assign("^(string_of_expr l) ^ ", "^ (string_of_expr r) ^ ")"
-    | Loop(var, expr, code) -> "Loop("^(string_of_expr var)^", "^(string_of_expr expr)^", \n"^(string_of_code  (n+4) code)^"\n"^(white n)^")"
-    | ArrayAllocate(expr,elttype,int) -> "ArrayAllocate("^(string_of_expr expr)^", "^(string_of_ctype(elttype))^", "^(string_of_expr int)^")"
-    | ArrayDeallocate(buf, size) -> "ArrayDeallocate("^(string_of_expr buf)^", "^(string_of_expr size)^")"
-    | Return(expr) -> "Return("^(string_of_expr expr)^")"
-    | Declare(expr) -> "Declare("^(string_of_expr expr)^")"
-    | Noop -> "Noop"
-   )   
-;;
-
-let meta_transform_code_on_code (recursion_direction: Spl.recursion_direction) (f : code -> code) : (code -> code) =
-  let z (g : code -> code) (e : code) : code = 
-    match e with
-    | Chain l -> Chain (List.map g l)
-    | Loop(var, expr, code) -> Loop(var, expr, (g code))
-    | PlacementNew _ | Assign _ | ArrayAllocate _ | ArrayDeallocate _ | Return _ | Declare _ | Noop _ -> e
-  in
-  Spl.recursion_transform recursion_direction f z
-;;
-
-let meta_transform_expr_on_expr (recursion_direction: Spl.recursion_direction) (f : expr -> expr) : (expr -> expr) =
-  let z (g : expr -> expr) (e : expr) : expr = 
-    match e with
-    | Equal(a,b) -> Equal(g a, g b)
-    | Plus(a,b) -> Plus(g a, g b)
-    | Mul(a,b) -> Mul(g a, g b)
-    | Cast(expr,ctype) -> Cast(g expr, ctype)
-    | Nth(expr, count) -> Nth(g expr, g count)
-    | Var _ | Const _ -> e
-    | x -> failwith ("Pattern_matching failed:\n"^(string_of_expr x))
-  in
-  Spl.recursion_transform recursion_direction f z
-;;
-
-let meta_transform_expr_on_code (recursion_direction: Spl.recursion_direction) (f : expr -> expr) : (code -> code) =
-  let g = meta_transform_expr_on_expr recursion_direction f in
-  meta_transform_code_on_code recursion_direction ( function 
-  | Declare e -> Declare (g e)
-  | Assign(l, r) -> Assign(g l, g r)
-  | Chain _ as x -> x 
-  | x -> failwith ("Pattern_matching failed:\n"^(string_of_code 0 x))
-  )
-;;
-
-let expr_substitution_on_expr (target : expr) (replacement : expr) : (expr -> expr) =
-  let g (e: expr) : expr = 
-    if (e = target) then replacement else e
-  in
-  meta_transform_expr_on_expr Spl.TopDown g
-;;
-
-let expr_substitution_on_code (target : expr) (replacement : expr) : (code -> code) =
-  let g (e: expr) : expr = 
-    if (e = target) then replacement else e
-  in
-  meta_transform_expr_on_code Spl.TopDown g
-;;
-
-let rec range i j = if i > j then [] else i :: (range (i+1) j)
-;;
-
-
-let meta_chain_code (recursion_direction: Spl.recursion_direction) (f : code list -> code list) : (code -> code) =
-  meta_transform_code_on_code recursion_direction ( function 
-  | Chain (l) -> Chain (f l) 
-  | x -> x)
-;;
-
-let rule_flatten_chain : (code -> code) =
-  let rec f (l : code list) : code list = 
-  match l with
-  | Chain(a)::tl -> f (a @ tl)
-  | Noop::tl -> f(tl)
-  | a::tl -> a :: (f tl)
-  | [] -> []
-  in
-  meta_chain_code Spl.BottomUp f
-;;  
-
-let remove_decls : (code -> code) =
-  meta_transform_code_on_code Spl.BottomUp ( function
-  | Declare x -> Noop
-  | x -> x
-  )
-;;
-
-let declare_free_vars (l: code list) : code list =
-  (* compute all free variables *)
-  (* declare all free variables *)
-  l
-;;
-
-let rec reintroduce_decls : (code -> code) =
-  meta_transform_code_on_code Spl.BottomUp ( function 
-  | Chain (l) -> let decls = declare_free_vars l in Chain (decls @ l) 
-  | x -> x)
-;;
-
-(* FIXME write the code *)
-let rec flatten_chain (code:code) : code =
-  rule_flatten_chain (remove_decls code) 
-;;
-
-
-
-(* takes the code into a multidecl form*)
-let rec unroll_loops (code:code) : code =
-  meta_transform_code_on_code Spl.TopDown ( function 
-  | Loop(var, Const n, c) -> 
-    let g (i:int) = expr_substitution_on_code var (Const i) c in
-    Chain (List.map g (range 0 (n-1)))
-  | x -> x
-  ) code
-;;
-
-let compile_basic_bloc (code:code) : code = 
-  let res = flatten_chain (unroll_loops code) in
-  print_string(string_of_code 0 res);
-  print_string "\n\n\n\n\n";
-  res
-;;
 
 let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
@@ -328,7 +109,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	      (FunctionCall(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
 	  ))
 	])
-      | Spl.Diag Spl.Pre(idxfunc) -> let var = genvar(Int) in
+      | Spl.Diag Spl.Pre(idxfunc) -> let var = gen_var#get Int "t" in
 				     let (precomp, codelines) = code_of_func idxfunc (var,[]) in			    
 				     Chain([
 				       ArrayAllocate(_dat, Complex, expr_of_intexpr(Spl.range(e)));
@@ -379,18 +160,18 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
       | Spl.F 2 -> Chain([
 	Assign ((Nth(output,(Const 0))), (Plus (Nth(input, (Const 0)), (Nth(input, (Const 1))))));
 	Assign ((Nth(output,(Const 1))), (Minus (Nth(input, (Const 0)), (Nth(input, (Const 1))))))])
-      | Spl.S idxfunc -> let var = genvar(Int) in
+      | Spl.S idxfunc -> let var = gen_var#get Int "t" in
 			 let (index, codelines) = code_of_func idxfunc (var,[]) in			    
 			     Loop(var, expr_of_intexpr(Spl.domain(e)),
 				  Chain(codelines@[Assign((Nth(output,index)), (Nth(input,var)))])) 
-      | Spl.G idxfunc -> let var = genvar(Int) in
+      | Spl.G idxfunc -> let var = gen_var#get Int "t" in
 			 let (index, codelines) = code_of_func idxfunc (var,[]) in			    
 			     Loop(var, expr_of_intexpr(Spl.range(e)),
 				  Chain(codelines@[Assign((Nth(output,var)), (Nth(input,index)))])) 
-      | Spl.Diag _ -> let var = genvar(Int) in
+      | Spl.Diag _ -> let var = gen_var#get Int "t" in
 		      Loop(var, expr_of_intexpr(Spl.range(e)),
 			   Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ptr(Complex)),var))))
-      | Spl.BB spl -> compile_basic_bloc(prepare_comp output input spl)
+      | Spl.BB spl -> Compiler.compile_bloc(prepare_comp output input spl)
     in
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
@@ -412,7 +193,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 ;;
 
 let code_of_envfunc ((name, f, args, fargs) : envfunc) : code =  
-  let input = genvar(Int) in
+  let input = gen_var#get Int "t" in
   let(output, code) = (code_of_func f (input,[])) in
   let cons_args = (List.map expr_of_intexpr args)@(List.map expr_of_idxfunc fargs) in
   Class(name, _func, cons_args, [

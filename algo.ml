@@ -1,3 +1,6 @@
+open Util
+;;
+
 open Spl
 ;;
 

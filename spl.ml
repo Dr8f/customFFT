@@ -1,9 +1,9 @@
-(******    TYPES    *******)
-module StringMap = Map.Make(String)
+open Util
 ;;
 
-module IntMap = Map.Make(struct type t = int let compare = compare end)
-;;
+(*********************************************
+	 TYPES
+*********************************************)
 
 
 type intexpr =
@@ -61,8 +61,9 @@ DFT of intexpr
 | BB of spl
 ;;
 
-(***********    PRINTING    ************)
-
+(*********************************************
+	 PRINTING
+*********************************************)
 let optional_short_print (short : string) (long : string) : string = 
   let short_print = true in
   if (short_print) then
@@ -152,20 +153,6 @@ let rec string_of_spl (e : spl) : string =
 (*********************************************
 	 METARULES                 
 *********************************************)
-
-type recursion_direction = 
-  BottomUp 
-| TopDown
-;;
-
-let recursion_transform (recursion_direction: recursion_direction) (f : 'a -> 'a) (z : ('a -> 'a) -> 'a -> 'a) : ('a -> 'a) =
-  let rec g (e : 'a) : 'a =
-    match recursion_direction with
-      BottomUp -> f (z g e)
-    | TopDown -> z g (f e)
-  in
-  g  
-;;
 
 let meta_transform_spl_on_spl (recursion_direction: recursion_direction) (f : spl -> spl) : (spl -> spl) =
   let z (g : spl -> spl) (e : spl) : spl = 
@@ -402,7 +389,9 @@ let meta_compose_idxfunc (recursion_direction : recursion_direction) (f : idxfun
   | x -> x)
 ;;
 
-(**********    RANGE AND DOMAIN    ************)
+(*********************************************
+	 RANGE AND DOMAIN                 
+*********************************************)
 
 let rec func_range (e : idxfunc) : intexpr = 
   match e with

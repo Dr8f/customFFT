@@ -1,4 +1,6 @@
 (******    TYPES    *******)
+open Util
+;;
 
 open Spl
 ;;

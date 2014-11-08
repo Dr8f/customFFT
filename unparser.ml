@@ -1,11 +1,7 @@
-open Codegen
+open Util
 ;;
 
-let rec white (n:int) : string =
-  if (n <= 0) then
-    ""
-  else
-    " "^(white (n-1))
+open Code
 ;;
 
 type unparse_type =
