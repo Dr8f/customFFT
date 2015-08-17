@@ -10,7 +10,7 @@ let meta_chain_code (recursion_direction: recursion_direction) (f : code list ->
   | x -> x)
 ;;
 
-let rule_flatten_chain : (code -> code) =
+let flatten_chain : (code -> code) =
   let rec f (l : code list) : code list = 
   match l with
   | Chain(a)::tl -> f (a @ tl)
@@ -21,10 +21,6 @@ let rule_flatten_chain : (code -> code) =
   meta_chain_code BottomUp f
 ;;  
 
-let rec flatten_chain (code:code) : code =
-  rule_flatten_chain code 
-;;
-
 let remove_decls : (code -> code) =
   meta_transform_code_on_code BottomUp ( function
   | Declare x -> Noop
@@ -33,30 +29,22 @@ let remove_decls : (code -> code) =
 ;;
 
 let replace_bound_vars (code:code) : code =
-  let filter_code (code: code) : expr list =
-    match code with
-      Assign(Var(ctype,name),_) | Loop(Var(ctype,name),_,_) -> [Var(ctype,name)]
-    | _ -> []
-  in
-  let bound_vars = meta_collect_code_on_code filter_code code in
-  let substitute_var (code:code) (var:expr) : code =
-    match var with
-    | Var(ctype, str) -> expr_substitution_on_code var (gen_var#get ctype "r") code  
-    | _ -> failwith "expression is not a Var"
-  in
-  List.fold_left substitute_var code bound_vars
+  let bound_vars =
+    meta_collect_code_on_code ( function
+      Declare(Var(ctype,name)) | Loop(Var(ctype,name),_,_) -> [(ctype,name)]
+      | _ -> []) code in
+  List.fold_left (fun c (ctype,name) -> expr_substitution_on_code (Var(ctype,name)) (gen_var#get ctype "r") c) code bound_vars
 ;;
   
 let rec unroll_loops (code:code) : code =
-  let c = meta_transform_code_on_code TopDown ( function 
+  flatten_chain (meta_transform_code_on_code TopDown ( function 
   | Loop(var, Const n, code) ->
      let g (i:int) =
        (* to avoid multi-declarations of the same variable, we replace bound variables from code *)
        expr_substitution_on_code var (Const i) (replace_bound_vars code) in
     Chain (List.map g (range 0 (n-1)))
   | x -> x
-  ) code in
-  rule_flatten_chain c
+  ) code )
 ;;
 
 (* let declare_free_vars (l: code list) : code list = *)
@@ -84,7 +72,7 @@ let rec unroll_loops (code:code) : code =
 
 let compile_bloc (code:code) : code =
   (*  let compilation_sequence = [remove_decls;flatten_chain;reintroduce_decls] in*)
-  let compilation_sequence = [unroll_loops;immediate_arithmetic] in 
+  let compilation_sequence = [unroll_loops;(*immediate_arithmetic*)] in 
   let f (code:code) (compilation_function:code->code) : code = compilation_function code in
   let res = List.fold_left f code compilation_sequence in 
   print_string(string_of_code 0 code);
