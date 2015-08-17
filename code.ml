@@ -118,6 +118,48 @@ let meta_transform_code_on_code (recursion_direction: recursion_direction) (f : 
   recursion_transform recursion_direction f z
 ;;
 
+let meta_collect_code_on_code (f : code -> 'a list) : (code -> 'a list) =
+  let z (g : code -> 'a list) (e : code) : 'a list =
+    match e with
+      Chain l -> List.flatten (List.map g l)
+    | Loop(_, _, code) -> g code
+    | If(_, true_branch, false_branch) ->(g true_branch)@(g false_branch) 
+    | _ -> []
+  in
+  recursion_collect f z
+;;
+
+let meta_collect_expr_on_expr (f : expr -> 'a list) : (expr -> 'a list) =
+  let z (g : expr -> 'a list) (e : expr) : 'a list =
+    match e with
+      Nth(a,b) | Equal(a,b) | Mul(a,b) | Plus(a,b) | Minus(a,b) | Mod(a,b) | Divide(a,b) -> (g a)@(g b)
+    | Cast(a,_) | New(a) | UniMinus(a) | AddressOf(a) -> g a
+    | FunctionCall(_, l) -> List.flatten (List.map g l)
+    | MethodCall(a, _, l) -> (g a)@(List.flatten (List.map g l))
+    | _ -> []
+  in
+  recursion_collect f z
+;;
+
+let meta_collect_expr_on_code (f : expr -> 'a list) : (code -> 'a list) =
+  let direct_from_code (ff : expr -> 'a list) (e : code) : 'a list =
+    match e with
+      Assign(dest, orig) -> (ff dest)@(ff orig)
+    | ArrayAllocate (pointer, _, elcount) -> (ff pointer)@(ff elcount)
+    | PlacementNew (address, content) -> (ff address)@(ff content)
+    | If (condition, _, _) -> ff condition
+    | Loop(var, expr, _) -> (ff var)@(ff expr)
+    | ArrayDeallocate(pointer, elcount) -> (ff pointer)@(ff elcount)
+    | Return(expr) | Declare(expr) | Ignore(expr) -> ff expr
+    | Noop | Chain _ | Error _ -> []
+    | Class (_, _, _, _) -> [] (* not seriously thought after*)
+  in
+  fun (e : code) ->
+    let ff = meta_collect_expr_on_expr f in
+    (meta_collect_code_on_code (direct_from_code ff )) e
+;;
+
+  
 let meta_transform_expr_on_expr (recursion_direction: recursion_direction) (f : expr -> expr) : (expr -> expr) =
   let z (g : expr -> expr) (e : expr) : expr = 
     match e with

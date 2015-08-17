@@ -235,15 +235,6 @@ let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f 
     (meta_transform_spl_on_spl recursion_direction intexprs_in_spl) ((meta_transform_idxfunc_on_spl recursion_direction (meta_transform_intexpr_on_idxfunc recursion_direction g)) e)
 ;;
 
-
-
-let recursion_collect (f : 'a -> 'b list) (z : ('a -> 'b list) -> 'a -> 'b list) : ('a -> 'b list) =
-  let rec g (e : 'a) : 'b list =
-    f e @ (z g e)
-  in
-  g
-;;
-
 let meta_collect_spl_on_spl (f : spl -> 'a list) : (spl -> 'a list) =
   let z (g : spl -> 'a list) (e : spl) : 'a list =
     match e with

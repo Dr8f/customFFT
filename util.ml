@@ -31,3 +31,10 @@ let recursion_transform (recursion_direction: recursion_direction) (f : 'a -> 'a
   in
   g  
 ;;
+
+let recursion_collect (f : 'a -> 'b list) (z : ('a -> 'b list) -> 'a -> 'b list) : ('a -> 'b list) =
+  let rec g (e : 'a) : 'b list =
+    f e @ (z g e)
+  in
+  g
+;;

@@ -129,6 +129,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	 Chain( [Assign(_rule, expr_of_intexpr(Spl.IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]),
 	 stmt)	
     in
+    print_string "===== Building an rstep constructor =====\n";
     List.fold_left g (Error("no applicable rules")) breakdowns
   in
 
@@ -176,17 +177,18 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
       rulecount := !rulecount + 1;
-      
       If(Equal(_rule, expr_of_intexpr(Spl.IConstant !rulecount)),
 	 prepare_comp output input desc_comp, 
 	 stmt)
 	
     in
+    print_string "===== Building an rstep content =====\n";
     List.fold_left g (Error("internal error: no valid rule has been selected")) breakdowns
   in
 
   let (name, rstep, cold, reinit, hot, funcs, breakdowns) = rstep_partitioned in 
   let cons_args = (List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))))@(List.map expr_of_idxfunc funcs) in
+  print_string ("=== Building "^name^" ===\n");
   Class (name, _rs, _rule::_dat::cons_args@(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned), [
     Constructor(cons_args, cons_code_of_rstep rstep_partitioned);	       
     Method(Void, _compute, _output::_input::List.map expr_of_intexpr (IntExprSet.elements hot), comp_code_of_rstep rstep_partitioned _output _input)])
@@ -196,12 +198,13 @@ let code_of_envfunc ((name, f, args, fargs) : envfunc) : code =
   let input = gen_var#get Int "t" in
   let(output, code) = (code_of_func f (input,[])) in
   let cons_args = (List.map expr_of_intexpr args)@(List.map expr_of_idxfunc fargs) in
+  print_string ("=== Building "^name^" ===\n");
   Class(name, _func, cons_args, [
     Constructor(cons_args, Noop);
     Method(Complex, _at, [input], Chain(code@[Return(output)]))])
 ;;
 
-let code_of_lib ((funcs,rsteps) : lib) : code list = 
+let code_of_lib ((funcs,rsteps) : lib) : code list =
   (List.map code_of_envfunc funcs)@(List.map code_of_rstep rsteps)
 ;;
 

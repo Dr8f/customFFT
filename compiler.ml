@@ -21,6 +21,10 @@ let rule_flatten_chain : (code -> code) =
   meta_chain_code BottomUp f
 ;;  
 
+let rec flatten_chain (code:code) : code =
+  rule_flatten_chain code 
+;;
+
 let remove_decls : (code -> code) =
   meta_transform_code_on_code BottomUp ( function
   | Declare x -> Noop
@@ -28,36 +32,63 @@ let remove_decls : (code -> code) =
   )
 ;;
 
-(* FIXME write the code *)
-let rec flatten_chain (code:code) : code =
-  rule_flatten_chain (remove_decls code) 
+let replace_bound_vars (code:code) : code =
+  let filter_code (code: code) : expr list =
+    match code with
+      Assign(Var(ctype,name),_) | Loop(Var(ctype,name),_,_) -> [Var(ctype,name)]
+    | _ -> []
+  in
+  let bound_vars = meta_collect_code_on_code filter_code code in
+  let substitute_var (code:code) (var:expr) : code =
+    match var with
+    | Var(ctype, str) -> expr_substitution_on_code var (gen_var#get ctype "r") code  
+    | _ -> failwith "expression is not a Var"
+  in
+  List.fold_left substitute_var code bound_vars
 ;;
-
-(* takes the code into a multidecl form*)
+  
 let rec unroll_loops (code:code) : code =
-  meta_transform_code_on_code TopDown ( function 
-  | Loop(var, Const n, c) -> 
-    let g (i:int) = expr_substitution_on_code var (Const i) c in
+  let c = meta_transform_code_on_code TopDown ( function 
+  | Loop(var, Const n, code) ->
+     let g (i:int) =
+       (* to avoid multi-declarations of the same variable, we replace bound variables from code *)
+       expr_substitution_on_code var (Const i) (replace_bound_vars code) in
     Chain (List.map g (range 0 (n-1)))
   | x -> x
-  ) code
+  ) code in
+  rule_flatten_chain c
 ;;
 
-let declare_free_vars (l: code list) : code list =
-  (* compute all free variables *)
-  (* declare all free variables *)
-  l
-;;
+(* let declare_free_vars (l: code list) : code list = *)
+(*   let filter_vars (expr: expr) : expr list = *)
+(*     match expr with *)
+(*       Var _ -> [expr] *)
+(*     | _ -> [] *)
+(*   in *)
+(*   let vars = meta_collect_expr_on_code filter_vars (Chain l) in *)
+(*   let varsset = List.fold_left (fun set elem -> ExprSet.add elem set) ExprSet.empty vars in *)
 
-let rec reintroduce_decls : (code -> code) =
-  meta_transform_code_on_code BottomUp ( function 
-  | Chain (l) -> let decls = declare_free_vars l in Chain (decls @ l) 
-  | x -> x)
-;;
+(*   let f (expr:expr) (str:string) : string = *)
+(*     (string_of_expr expr)^" | "^str in *)
+(*   print_string (ExprSet.fold f varsset ""); (\*FIXME*\) *)
+(*   (\* compute all free variables *\) *)
+(*   (\* declare all free variables *\) *)
+(*   [] *)
+(* ;; *)
 
-let compile_bloc (code:code) : code = 
-  let res = code in (* flatten_chain (unroll_loops code) in *)
+(* let rec reintroduce_decls : (code -> code) = *)
+(*   meta_transform_code_on_code BottomUp ( function  *)
+(*   | Chain (l) -> let decls = declare_free_vars l in Chain (decls @ l)  *)
+(*   | x -> x) *)
+(* ;; *)
+
+let compile_bloc (code:code) : code =
+  (*  let compilation_sequence = [remove_decls;flatten_chain;reintroduce_decls] in*)
+  let compilation_sequence = [unroll_loops;immediate_arithmetic] in 
+  let f (code:code) (compilation_function:code->code) : code = compilation_function code in
+  let res = List.fold_left f code compilation_sequence in 
+  print_string(string_of_code 0 code);
+  print_string "\n\n => \n\n\n";
   print_string(string_of_code 0 res);
-  print_string "\n\n\n\n\n";
   res
 ;;
