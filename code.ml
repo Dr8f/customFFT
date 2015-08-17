@@ -165,6 +165,7 @@ let meta_transform_expr_on_expr (recursion_direction: recursion_direction) (f : 
     match e with
     | Equal(a,b) -> Equal(g a, g b)
     | Plus(a,b) -> Plus(g a, g b)
+    | Minus(a,b) -> Minus(g a, g b)
     | Mul(a,b) -> Mul(g a, g b)
     | Cast(expr,ctype) -> Cast(g expr, ctype)
     | Nth(expr, count) -> Nth(g expr, g count)
@@ -179,7 +180,9 @@ let meta_transform_expr_on_code (recursion_direction: recursion_direction) (f : 
   meta_transform_code_on_code recursion_direction ( function 
   | Declare e -> Declare (g e)
   | Assign(l, r) -> Assign(g l, g r)
-  | Chain _ as x -> x 
+  | Chain _ as x -> x
+  | ArrayAllocate(a, ctype, b) -> ArrayAllocate(g a, ctype, g b)
+  | ArrayDeallocate(a, b) -> ArrayDeallocate(g a, g b)
   | x -> failwith ("Pattern_matching failed:\n"^(string_of_code 0 x))
   )
 ;;
