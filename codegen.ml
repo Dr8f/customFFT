@@ -42,14 +42,6 @@ let _output = Var(Ptr(Complex),"Y")
 let _input = Var(Ptr(Complex),"X")
 ;;
 
-module IntSet = Set.Make( 
-  struct
-    let compare = Pervasives.compare
-    type t = int
-  end )
-;;
-
-
 
 let rec expr_of_idxfunc (idxfunc : Spl.idxfunc) : expr =
   match idxfunc with

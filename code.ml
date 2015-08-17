@@ -183,7 +183,8 @@ let meta_transform_expr_on_code (recursion_direction: recursion_direction) (f : 
   | Chain _ as x -> x
   | ArrayAllocate(a, ctype, b) -> ArrayAllocate(g a, ctype, g b)
   | ArrayDeallocate(a, b) -> ArrayDeallocate(g a, g b)
-  | x -> failwith ("Pattern_matching failed:\n"^(string_of_code 0 x))
+  | Noop -> Noop
+  | x -> failwith ("Pattern_matching failed in meta_transform_expr_on_code:\n"^(string_of_code 0 x))
   )
 ;;
 

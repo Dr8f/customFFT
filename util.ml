@@ -4,6 +4,13 @@ module StringMap = Map.Make(String)
 module IntMap = Map.Make(struct type t = int let compare = compare end)
 ;;
 
+module IntSet = Set.Make( 
+  struct
+    let compare = Pervasives.compare
+    type t = int
+  end )
+;;
+
 let rec white (n:int) : string =
   if (n <= 0) then
     ""

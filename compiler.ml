@@ -55,32 +55,38 @@ let unroll_loops (code:code) : code =
 	| x -> x) in
   flatten_chain (constant_folding (unroll_loops_ugly code))
 
-(* let declare_free_vars (l: code list) : code list = *)
-(*   let filter_vars (expr: expr) : expr list = *)
-(*     match expr with *)
-(*       Var _ -> [expr] *)
-(*     | _ -> [] *)
-(*   in *)
-(*   let vars = meta_collect_expr_on_code filter_vars (Chain l) in *)
-(*   let varsset = List.fold_left (fun set elem -> ExprSet.add elem set) ExprSet.empty vars in *)
-
-(*   let f (expr:expr) (str:string) : string = *)
-(*     (string_of_expr expr)^" | "^str in *)
-(*   print_string (ExprSet.fold f varsset ""); (\*FIXME*\) *)
-(*   (\* compute all free variables *\) *)
-(*   (\* declare all free variables *\) *)
-(*   [] *)
-(* ;; *)
-
-(* let rec reintroduce_decls : (code -> code) = *)
-(*   meta_transform_code_on_code BottomUp ( function  *)
-(*   | Chain (l) -> let decls = declare_free_vars l in Chain (decls @ l)  *)
-(*   | x -> x) *)
-(* ;; *)
+let array_scalarization (code:code) : code =
+  let all_arrays =
+    meta_collect_code_on_code ( function
+				  ArrayAllocate(arr, ctype, size) -> [(arr, ctype)]
+				| _ -> []) code in
+  let attempt_to_scalarize (code:code) ((array,ctype):expr*ctype) : code =
+    let all_nth = meta_collect_expr_on_code (function
+      | Nth(arr, idx) when arr = array -> [idx]
+      | _ -> []) code in
+    let nth_consts = List.flatten (List.map (function
+				   | (Const x) -> [x]
+				   | _ -> [] ) all_nth) in
+    if (List.length nth_consts <> List.length all_nth) then
+      code
+    else (
+      let value_set = List.fold_left (fun s c -> IntSet.add c s) IntSet.empty nth_consts in
+      let h (i:int) (code:code) : code =
+	let varname = (gen_var#get ctype "a") in
+	let r1 = expr_substitution_on_code (Nth(array, (Const i))) varname code in
+	let r = meta_transform_code_on_code BottomUp ( function
+						         Declare(arr) when arr = array -> Noop
+						       | ArrayAllocate(arr, ct, _) when ((arr = array) & (ct = ctype)) -> Noop
+						       | ArrayDeallocate(arr, _) when arr = array -> Noop
+						       | x -> x) r1 in
+	flatten_chain (Chain [Declare(varname); r]) in
+      IntSet.fold h value_set code
+  in
+  List.fold_left attempt_to_scalarize code all_arrays
+  
 
 let compile_bloc (code:code) : code =
-  (*  let compilation_sequence = [remove_decls;flatten_chain;reintroduce_decls] in*)
-  let compilation_sequence = [unroll_loops;] in 
+  let compilation_sequence = [unroll_loops; array_scalarization] in 
   let f (code:code) (compilation_function:code->code) : code = compilation_function code in
   let res = List.fold_left f code compilation_sequence in 
   print_string(string_of_code 0 code);
