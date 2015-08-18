@@ -36,6 +36,7 @@ let replace_bound_vars (code:code) : code =
   List.fold_left (fun c (ctype,name) -> expr_substitution_on_code (Var(ctype,name)) (gen_var#get ctype "r") c) code bound_vars
 ;;
 
+(* lots of missing stuff here *)
 let constant_folding : code -> code =
   meta_transform_expr_on_code BottomUp ( function
   | Mul((Const 0), x) | Mul(x, (Const 0)) -> Const 0
@@ -54,7 +55,8 @@ let unroll_loops (code:code) : code =
 	   Chain (List.map g (range 0 (n-1)))
 	| x -> x) in
   flatten_chain (constant_folding (unroll_loops_ugly code))
-
+;;
+  
 let array_scalarization (code:code) : code =
   let all_arrays =
     meta_collect_code_on_code ( function
@@ -80,13 +82,25 @@ let array_scalarization (code:code) : code =
 						       | ArrayDeallocate(arr, _) when arr = array -> Noop
 						       | x -> x) r1 in
 	flatten_chain (Chain [Declare(varname); r]) in
-      IntSet.fold h value_set code
+      IntSet.fold h value_set code)
   in
   List.fold_left attempt_to_scalarize code all_arrays
-  
+;;
 
+let canonical_associative_form : code -> code =
+  meta_transform_expr_on_code BottomUp ( function
+  | Mul(x, y) -> if (x<y) then Mul(x, y) else Mul(y,x)
+  | Plus(x, y) -> if (x<y) then Plus(x, y) else Plus(y,x)
+  | x -> x)
+;;
+  
+let common_subexpression_elimination (code:code) : code =
+  let c = canonical_associative_form code in
+  c (*TODO*)
+;;
+		 
 let compile_bloc (code:code) : code =
-  let compilation_sequence = [unroll_loops; array_scalarization] in 
+  let compilation_sequence = [unroll_loops; array_scalarization; common_subexpression_elimination] in 
   let f (code:code) (compilation_function:code->code) : code = compilation_function code in
   let res = List.fold_left f code compilation_sequence in 
   print_string(string_of_code 0 code);
