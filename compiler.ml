@@ -3,7 +3,6 @@ open Util
 open Code
 ;;
 
-
 let meta_chain_code (recursion_direction: recursion_direction) (f : code list -> code list) : (code -> code) =
   meta_transform_code_on_code recursion_direction ( function 
   | Chain (l) -> Chain (f l) 
@@ -39,19 +38,19 @@ let replace_bound_vars (code:code) : code =
 (* lots of missing stuff here *)
 let constant_folding : code -> code =
   meta_transform_expr_on_code BottomUp ( function
-  | Mul((Const 0), x) | Mul(x, (Const 0)) -> Const 0
-  | Mul((Const 1), x) | Mul(x, (Const 1)) -> x
-  | Plus((Const 0), x) | Plus(x, (Const 0)) -> x						 
+  | Mul((IConst 0), x) | Mul(x, (IConst 0)) -> IConst 0
+  | Mul((IConst 1), x) | Mul(x, (IConst 1)) -> x
+  | Plus((IConst 0), x) | Plus(x, (IConst 0)) -> x						 
   | x -> x)
 ;;
 
 let unroll_loops (code:code) : code =
   let unroll_loops_ugly : code -> code =
     meta_transform_code_on_code TopDown ( function 
-        | Loop(var, Const n, code) ->
+        | Loop(var, IConst n, code) ->
 	   let g (i:int) =
 	     (* to avoid multi-declarations of the same variable, we replace bound variables from code *)
-	     substitution_expr_on_code var (Const i) (replace_bound_vars code) in
+	     substitution_expr_on_code var (IConst i) (replace_bound_vars code) in
 	   Chain (List.map g (range 0 (n-1)))
 	| x -> x) in
   flatten_chain (constant_folding (unroll_loops_ugly code))
@@ -67,7 +66,7 @@ let array_scalarization (code:code) : code =
       | Nth(arr, idx) when arr = array -> [idx]
       | _ -> []) code in
     let nth_consts = List.flatten (List.map (function
-				   | (Const x) -> [x]
+				   | (IConst x) -> [x]
 				   | _ -> [] ) all_nth) in
     if (List.length nth_consts <> List.length all_nth) then
       code
@@ -75,7 +74,7 @@ let array_scalarization (code:code) : code =
       let value_set = List.fold_left (fun s c -> IntSet.add c s) IntSet.empty nth_consts in
       let h (i:int) (code:code) : code =
 	let varname = (gen_var#get ctype "a") in
-	let r1 = substitution_expr_on_code (Nth(array, (Const i))) varname code in
+	let r1 = substitution_expr_on_code (Nth(array, (IConst i))) varname code in
 	let r2 = substitution_code_on_code (Declare array) Noop r1 in
 	let r3 = substitution_code_on_code (ArrayAllocate(array,ctype, size)) Noop r2 in
 	let r = substitution_code_on_code (ArrayDeallocate(array,size)) Noop r3 in
@@ -95,10 +94,64 @@ let canonical_associative_form : code -> code =
 let common_subexpression_elimination (code:code) : code =
   let eliminate_within_a_chain (l :code list) : code list =
     let g ((insns, map, set) : code list * expr ExprMap.t  * ExprSet.t) (next_insn:code) : (code list * expr ExprMap.t * ExprSet.t) =
-      let mem_rvalue (expr:expr) (map:expr ExprMap.t) : expr ExprMap.t =
-	(* if the expression is already memorized, great, if not, add it recursively*)
-	(* FIXME we might need somethong smart to find the type any expr*)
-	map 
+      let rec replace_rvalue (expr:expr) (map:expr ExprMap.t) : expr * expr ExprMap.t * code list =
+	if (ExprMap.mem expr map) then
+	  (ExprMap.find expr map,map, [])
+	else
+	  match expr with
+	    Var _ | IConst _ | Cast _-> (expr,map,[])
+	  | Nth(a,b) ->
+	     let (na,nmap1,insn1) = (replace_rvalue a map) in
+	     let (nb,nmap2,insn2) = (replace_rvalue b nmap1) in
+	     let nexpr = Nth(na,nb) in
+	     let (res,insn3) =
+	       if (ExprMap.mem nexpr nmap2) then
+		 (ExprMap.find nexpr nmap2,[])
+	       else
+		 let nvar = gen_var#get (ctype_of_expr nexpr) "g" in
+		 (nvar, [Declare(nvar);Assign(nvar, nexpr)])
+	     in
+	     (res, (ExprMap.add nexpr res nmap2), insn1@insn2@insn3)
+	  | Plus(a,b) ->
+	     let (na,nmap1,insn1) = (replace_rvalue a map) in
+	     let (nb,nmap2,insn2) = (replace_rvalue b nmap1) in
+	     let nexpr = Plus(na,nb) in
+	     let (res,insn3) =
+	       if (ExprMap.mem nexpr nmap2) then
+		 (ExprMap.find nexpr nmap2,[])
+	       else
+		 let nvar = gen_var#get (ctype_of_expr nexpr) "g" in
+		 (nvar, [Declare(nvar);Assign(nvar, nexpr)])
+	     in
+	     (res, (ExprMap.add nexpr res nmap2), insn1@insn2@insn3)
+
+	  | Minus(a,b) ->
+	     	     let (na,nmap1,insn1) = (replace_rvalue a map) in
+	     let (nb,nmap2,insn2) = (replace_rvalue b nmap1) in
+	     let nexpr = Minus(na,nb) in
+	     let (res,insn3) =
+	       if (ExprMap.mem nexpr nmap2) then
+		 (ExprMap.find nexpr nmap2,[])
+	       else
+		 let nvar = gen_var#get (ctype_of_expr nexpr) "g" in
+		 (nvar, [Declare(nvar);Assign(nvar, nexpr)])
+	     in
+	     (res, (ExprMap.add nexpr res nmap2), insn1@insn2@insn3)
+
+	  | Mul(a,b) ->
+	     let (na,nmap1,insn1) = (replace_rvalue a map) in
+	     let (nb,nmap2,insn2) = (replace_rvalue b nmap1) in
+	     let nexpr = Mul(na,nb) in
+	     let (res,insn3) =
+	       if (ExprMap.mem nexpr nmap2) then
+		 (ExprMap.find nexpr nmap2,[])
+	       else
+		 let nvar = gen_var#get (ctype_of_expr nexpr) "g" in
+		 (nvar, [Declare(nvar);Assign(nvar, nexpr)])
+	     in
+	     (res, (ExprMap.add nexpr res nmap2), insn1@insn2@insn3)
+
+	  | _ -> failwith("replace_rvalue is not finished: "^(string_of_expr expr))
       in
       match next_insn with
 	Declare var -> (* only values actually declared within the scope can be eliminated or replaced, 
@@ -107,15 +160,20 @@ let common_subexpression_elimination (code:code) : code =
 	  	 ((insns@[next_insn]), map, set) (*FIXME remove*)
 
       | Assign(var, rvalue) ->
-	 (* first we want to make sure we can recompute the rvalue *)
-	 let newmap = mem_rvalue rvalue map in
+	 (* first we want to simplify the rvalue if we can *)
+	 let (newrvalue,newmap,newinsns) = replace_rvalue rvalue map in
+	 let f (arg:expr) (eval:expr): unit =
+	   print_string ((string_of_expr arg)^" -> "^(string_of_expr eval)^"\n") in
+	 ExprMap.iter f newmap;
+	 print_string "\n";
 	 (* then if the lvalue is a variable declared within the scope, then we stuff it in the map *)
 	 (*FIXME*)
 	 (* then if the lvalue is a variable not declared within the scope, then we need to be very careful *)
 	 (*FIXME*)
 	 (* and if it's a memory location, we can yank all the necessary stuff from the map and actually delete them from the map to materialize their existence *)
 	 (*FIXME*)
-	 ((insns@[next_insn]), map, set) (*FIXME remove*)
+	 ((insns@newinsns@[Assign(var, newrvalue)]), newmap, set)
+	   (*((insns@newinsns@[next_insn]), newmap, set)*)
       | x -> ((insns@[next_insn]), map, set)
     in
     let (final, out_map, out_set) = (List.fold_left g ([], ExprMap.empty, ExprSet.empty) l) in

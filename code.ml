@@ -30,7 +30,7 @@ type expr =
 | Divide of expr * expr
 | FunctionCall of string (*functionname*) * expr list (*arguments*)
 | MethodCall of expr (*object*) * string (*method name*) * expr list (*arguments*)
-| Const of int
+| IConst of int
 | AddressOf of expr
 ;;
 
@@ -66,6 +66,23 @@ module ExprSet = Set.Make(struct
 end )
 ;;
 
+let rec ctype_of_expr (e : expr) : ctype =
+  let deref (c:ctype):ctype =
+    match c with
+      Ptr(c) -> c
+    | _ -> failwith("Cannot dereference a non-pointer type") in
+  match e with
+  | Var(ctype,_) -> ctype
+  | Nth(expr,_) -> deref (ctype_of_expr expr)
+  | Cast(_,ctype) -> ctype
+  | Equal _ -> Bool
+  | Mul(a,b) |Plus(a,b)|Minus(a,b)|Mod(a,b)|Divide(a,b) ->
+					     let (at,bt) = (ctype_of_expr a, ctype_of_expr b) in
+					     if (at = bt) then at else failwith("type lattice not implemented yet")
+  | UniMinus(expr) -> ctype_of_expr expr
+  | IConst _ -> Int
+  | New _ | FunctionCall _ | MethodCall _ | AddressOf _ -> failwith("not implemented yet")
+;;
 
 (*********************************************
 	 PRINTING
@@ -98,7 +115,7 @@ let rec string_of_expr (expr:expr) : string =
   | Mod(a,b) -> "Mod("^(string_of_expr a)^", "^(string_of_expr b)^")"
   | Divide(a,b) -> "Divide("^(string_of_expr a)^", "^(string_of_expr b)^")"
   | UniMinus(a) -> "UniMinus("^(string_of_expr a)^")"
-  | Const(a) -> "Const("^ (string_of_int a) ^")"
+  | IConst(a) -> "IConst("^ (string_of_int a) ^")"
   | AddressOf(a) -> "AddressOf("^ (string_of_expr a) ^")"
 ;;
 
@@ -182,7 +199,7 @@ let meta_transform_expr_on_expr (recursion_direction: recursion_direction) (f : 
     | Mul(a,b) -> Mul(g a, g b)
     | Cast(expr,ctype) -> Cast(g expr, ctype)
     | Nth(expr, count) -> Nth(g expr, g count)
-    | Var _ | Const _ -> e
+    | Var _ | IConst _ -> e
     | x -> failwith ("Pattern_matching failed:\n"^(string_of_expr x))
   in
   recursion_transform recursion_direction f z

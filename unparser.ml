@@ -40,7 +40,7 @@ let rec string_of_expr (expr:expr) : string =
   | Mod(a,b) -> "("^(string_of_expr a)^" % "^(string_of_expr b)^")"
   | Divide(a,b) -> "("^(string_of_expr a)^" / "^(string_of_expr b)^")"
   | UniMinus(a) -> "-("^(string_of_expr a)^")"
-  | Const(a) -> string_of_int(a)
+  | IConst(a) -> string_of_int(a)
   | AddressOf(a) -> "(&"^(string_of_expr a)^")"
 ;;
 

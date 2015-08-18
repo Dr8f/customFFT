@@ -32,7 +32,7 @@ let build_child_var (num:int) : expr =
 
 let expr_of_intexpr (intexpr : Spl.intexpr) : expr =
   match intexpr with
-    Spl.IConstant x -> Const x
+    Spl.IConstant x -> IConst x
   | x -> Var(Int, Spl.string_of_intexpr intexpr)
 ;;
 
@@ -151,8 +151,8 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	  (AddressOf(Nth(Cast(build_child_var(numchild), Ptr(Env(rs))), expr_of_intexpr i)))
 	  , _compute, output::input::(List.map expr_of_intexpr hot))))
       | Spl.F 2 -> Chain([
-	Assign ((Nth(output,(Const 0))), (Plus (Nth(input, (Const 0)), (Nth(input, (Const 1))))));
-	Assign ((Nth(output,(Const 1))), (Minus (Nth(input, (Const 0)), (Nth(input, (Const 1))))))])
+	Assign ((Nth(output,(IConst 0))), (Plus (Nth(input, (IConst 0)), (Nth(input, (IConst 1))))));
+	Assign ((Nth(output,(IConst 1))), (Minus (Nth(input, (IConst 0)), (Nth(input, (IConst 1))))))])
       | Spl.S idxfunc -> let var = gen_var#get Int "t" in
 			 let (index, codelines) = code_of_func idxfunc (var,[]) in			    
 			     Loop(var, expr_of_intexpr(Spl.domain(e)),
