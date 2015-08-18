@@ -52,7 +52,20 @@ code =
 | Return of expr
 | Declare of expr
 | Ignore of expr (*expression with side effect*)
-;; 
+;;
+
+module ExprMap = Map.Make (struct
+  type t = expr
+  let compare = Pervasives.compare
+end)
+;;
+
+module ExprSet = Set.Make(struct
+    let compare = Pervasives.compare
+    type t = expr
+end )
+;;
+
 
 (*********************************************
 	 PRINTING
@@ -188,18 +201,16 @@ let meta_transform_expr_on_code (recursion_direction: recursion_direction) (f : 
   )
 ;;
 
-let expr_substitution_on_expr (target : expr) (replacement : expr) : (expr -> expr) =
-  let g (e: expr) : expr = 
-    if (e = target) then replacement else e
-  in
-  meta_transform_expr_on_expr TopDown g
+let substitution_expr_on_expr (target : expr) (replacement : expr) : (expr -> expr) =
+  meta_transform_expr_on_expr TopDown (fun e -> if (e=target) then replacement else e)
 ;;
 
-let expr_substitution_on_code (target : expr) (replacement : expr) : (code -> code) =
-  let g (e: expr) : expr = 
-    if (e = target) then replacement else e
-  in
-  meta_transform_expr_on_code TopDown g
+let substitution_expr_on_code (target : expr) (replacement : expr) : (code -> code) =
+  meta_transform_expr_on_code TopDown (fun e -> if (e=target) then replacement else e)
+;;
+
+let substitution_code_on_code (target : code) (replacement : code) : (code -> code) =
+  meta_transform_code_on_code TopDown (fun e -> if (e=target) then replacement else e)
 ;;
 
 let gen_var =
