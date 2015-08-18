@@ -156,24 +156,28 @@ let common_subexpression_elimination (code:code) : code =
       match next_insn with
 	Declare var -> (* only values actually declared within the scope can be eliminated or replaced, 
                           so we keep track of them *)
- 	(*(insns, map, (ExprSet.add var set)) FIXME reenable*)
-	  	 ((insns@[next_insn]), map, set) (*FIXME remove*)
+ 	(insns, map, (ExprSet.add var set))
 
-      | Assign(var, rvalue) ->
+      | Assign(lvalue, rvalue) ->
 	 (* first we want to simplify the rvalue if we can *)
 	 let (newrvalue,newmap,newinsns) = replace_rvalue rvalue map in
 	 let f (arg:expr) (eval:expr): unit =
 	   print_string ((string_of_expr arg)^" -> "^(string_of_expr eval)^"\n") in
 	 ExprMap.iter f newmap;
 	 print_string "\n";
-	 (* then if the lvalue is a variable declared within the scope, then we stuff it in the map *)
-	 (*FIXME*)
-	 (* then if the lvalue is a variable not declared within the scope, then we need to be very careful *)
-	 (*FIXME*)
-	 (* and if it's a memory location, we can yank all the necessary stuff from the map and actually delete them from the map to materialize their existence *)
-	 (*FIXME*)
-	 ((insns@newinsns@[Assign(var, newrvalue)]), newmap, set)
-	   (*((insns@newinsns@[next_insn]), newmap, set)*)
+
+	 (match lvalue with
+	   Var _ -> 
+	     if (ExprSet.mem lvalue set) then
+	       (* if the lvalue is a variable declared within the scope, then we can substitute all upcoming iterations*)
+	       ((insns@newinsns), ExprMap.add lvalue newrvalue newmap, set)
+	     else
+	       failwith("Are we really assigning to a variable not declared within the scope??")
+	 | Nth(var,idx) ->
+	    let (newidx, newmap2, newinsns2) = replace_rvalue idx newmap in
+	    ((insns@newinsns@newinsns2@[Assign(Nth(var,newidx), newrvalue)]), newmap2, set)
+	 | _ ->
+	    failwith "what are we assigning to?")
       | x -> ((insns@[next_insn]), map, set)
     in
     let (final, out_map, out_set) = (List.fold_left g ([], ExprMap.empty, ExprSet.empty) l) in
