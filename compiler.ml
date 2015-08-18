@@ -94,16 +94,21 @@ let canonical_associative_form : code -> code =
 let common_subexpression_elimination (code:code) : code =
   let eliminate_within_a_chain (l :code list) : code list =
     let g ((insns, map, set) : code list * expr ExprMap.t  * ExprSet.t) (next_insn:code) : (code list * expr ExprMap.t * ExprSet.t) =
-      let rec replace_rvalue (expr:expr) (map:expr ExprMap.t) : expr * expr ExprMap.t * code list =
+      let rec simplify_expr (expr:expr) (map:expr ExprMap.t) : expr * expr ExprMap.t * code list =
 	if (ExprMap.mem expr map) then
 	  (ExprMap.find expr map,map, [])
 	else
 	  match expr with
 	    Var _ | IConst _ | Cast _-> (expr,map,[])
-	  | Nth(a,b) ->
-	     let (na,nmap1,insn1) = (replace_rvalue a map) in
-	     let (nb,nmap2,insn2) = (replace_rvalue b nmap1) in
-	     let nexpr = Nth(na,nb) in
+	  | Nth(a,b) | Plus(a,b) |Minus(a,b) |Mul(a,b) ->
+	     let (na,nmap1,insn1) = (simplify_expr a map) in
+	     let (nb,nmap2,insn2) = (simplify_expr b nmap1) in
+	     let nexpr = match expr with
+	       | Nth _ -> Nth(na,nb)
+	       | Plus _ -> Plus(na,nb)
+	       | Minus _ -> Minus(na,nb)
+	       | Mul _ -> Mul(na,nb)
+	     in
 	     let (res,insn3) =
 	       if (ExprMap.mem nexpr nmap2) then
 		 (ExprMap.find nexpr nmap2,[])
@@ -112,60 +117,17 @@ let common_subexpression_elimination (code:code) : code =
 		 (nvar, [Declare(nvar);Assign(nvar, nexpr)])
 	     in
 	     (res, (ExprMap.add nexpr res nmap2), insn1@insn2@insn3)
-	  | Plus(a,b) ->
-	     let (na,nmap1,insn1) = (replace_rvalue a map) in
-	     let (nb,nmap2,insn2) = (replace_rvalue b nmap1) in
-	     let nexpr = Plus(na,nb) in
-	     let (res,insn3) =
-	       if (ExprMap.mem nexpr nmap2) then
-		 (ExprMap.find nexpr nmap2,[])
-	       else
-		 let nvar = gen_var#get (ctype_of_expr nexpr) "g" in
-		 (nvar, [Declare(nvar);Assign(nvar, nexpr)])
-	     in
-	     (res, (ExprMap.add nexpr res nmap2), insn1@insn2@insn3)
-
-	  | Minus(a,b) ->
-	     	     let (na,nmap1,insn1) = (replace_rvalue a map) in
-	     let (nb,nmap2,insn2) = (replace_rvalue b nmap1) in
-	     let nexpr = Minus(na,nb) in
-	     let (res,insn3) =
-	       if (ExprMap.mem nexpr nmap2) then
-		 (ExprMap.find nexpr nmap2,[])
-	       else
-		 let nvar = gen_var#get (ctype_of_expr nexpr) "g" in
-		 (nvar, [Declare(nvar);Assign(nvar, nexpr)])
-	     in
-	     (res, (ExprMap.add nexpr res nmap2), insn1@insn2@insn3)
-
-	  | Mul(a,b) ->
-	     let (na,nmap1,insn1) = (replace_rvalue a map) in
-	     let (nb,nmap2,insn2) = (replace_rvalue b nmap1) in
-	     let nexpr = Mul(na,nb) in
-	     let (res,insn3) =
-	       if (ExprMap.mem nexpr nmap2) then
-		 (ExprMap.find nexpr nmap2,[])
-	       else
-		 let nvar = gen_var#get (ctype_of_expr nexpr) "g" in
-		 (nvar, [Declare(nvar);Assign(nvar, nexpr)])
-	     in
-	     (res, (ExprMap.add nexpr res nmap2), insn1@insn2@insn3)
-
-	  | _ -> failwith("replace_rvalue is not finished: "^(string_of_expr expr))
+	  | _ -> failwith("case not handled by simplify_expr : "^(string_of_expr expr))
       in
       match next_insn with
 	Declare var -> (* only values actually declared within the scope can be eliminated or replaced, 
                           so we keep track of them *)
  	(insns, map, (ExprSet.add var set))
 
+      (* FIXME no writes are assumed, this would require some invalidation*)
       | Assign(lvalue, rvalue) ->
 	 (* first we want to simplify the rvalue if we can *)
-	 let (newrvalue,newmap,newinsns) = replace_rvalue rvalue map in
-	 let f (arg:expr) (eval:expr): unit =
-	   print_string ((string_of_expr arg)^" -> "^(string_of_expr eval)^"\n") in
-	 ExprMap.iter f newmap;
-	 print_string "\n";
-
+	 let (newrvalue,newmap,newinsns) = simplify_expr rvalue map in
 	 (match lvalue with
 	   Var _ -> 
 	     if (ExprSet.mem lvalue set) then
@@ -174,11 +136,11 @@ let common_subexpression_elimination (code:code) : code =
 	     else
 	       failwith("Are we really assigning to a variable not declared within the scope??")
 	 | Nth(var,idx) ->
-	    let (newidx, newmap2, newinsns2) = replace_rvalue idx newmap in
+	    let (newidx, newmap2, newinsns2) = simplify_expr idx newmap in
 	    ((insns@newinsns@newinsns2@[Assign(Nth(var,newidx), newrvalue)]), newmap2, set)
 	 | _ ->
 	    failwith "what are we assigning to?")
-      | x -> ((insns@[next_insn]), map, set)
+      | _ -> failwith "what is this instruction?"
     in
     let (final, out_map, out_set) = (List.fold_left g ([], ExprMap.empty, ExprSet.empty) l) in
     final
