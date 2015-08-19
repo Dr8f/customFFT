@@ -124,6 +124,17 @@ let common_subexpression_elimination (code:code) : code =
                           so we keep track of them *)
  	(insns, map, (ExprSet.add var set))
 
+      | ArrayAllocate(var, ctype, rvalue) ->
+	 let (newrvalue,newmap,newinsns) = simplify_expr rvalue map in
+	 (newinsns@insns@[Declare(var);ArrayAllocate(var, ctype, newrvalue)], newmap, set) (*FIXME not proper*)
+
+      | ArrayDeallocate(var, rvalue) ->
+	 let (newrvalue,newmap,newinsns) = simplify_expr rvalue map in
+	 (newinsns@insns@[ArrayDeallocate(var, newrvalue)], newmap, set)
+
+      | Loop _ | Chain _ -> (*FIXME something smart should happen here*)
+	 (insns@[next_insn], map, set)
+
       (* FIXME no writes are assumed, this would require some invalidation*)
       | Assign(lvalue, rvalue) ->
 	 (* first we want to simplify the rvalue if we can *)
@@ -139,8 +150,9 @@ let common_subexpression_elimination (code:code) : code =
 	    let (newidx, newmap2, newinsns2) = simplify_expr idx newmap in
 	    ((insns@newinsns@newinsns2@[Assign(Nth(var,newidx), newrvalue)]), newmap2, set)
 	 | _ ->
-	    failwith "what are we assigning to?")
-      | _ -> failwith "what is this instruction?"
+	    failwith "what are we assigning to?"
+	 )
+      | _ -> failwith ("what is this instruction? "^(string_of_code 0 next_insn)) 
     in
     let (final, out_map, out_set) = (List.fold_left g ([], ExprMap.empty, ExprSet.empty) l) in
     final
@@ -152,7 +164,8 @@ let common_subexpression_elimination (code:code) : code =
 ;;
 		 
 let compile_bloc (code:code) : code =
-  let compilation_sequence = [unroll_loops; array_scalarization; common_subexpression_elimination] in 
+  (* let compilation_sequence = [unroll_loops; array_scalarization; common_subexpression_elimination] in  *)
+  let compilation_sequence = [common_subexpression_elimination] in 
   let f (code:code) (compilation_function:code->code) : code = compilation_function code in
   let res = List.fold_left f code compilation_sequence in 
   print_string(string_of_code 0 code);

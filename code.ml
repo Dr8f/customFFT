@@ -214,6 +214,7 @@ let meta_transform_expr_on_code (recursion_direction: recursion_direction) (f : 
   | ArrayAllocate(a, ctype, b) -> ArrayAllocate(g a, ctype, g b)
   | ArrayDeallocate(a, b) -> ArrayDeallocate(g a, g b)
   | Noop -> Noop
+  | Loop(var, expr, code) -> Loop(g var, g expr, code)
   | x -> failwith ("Pattern_matching failed in meta_transform_expr_on_code:\n"^(string_of_code 0 x))
   )
 ;;
