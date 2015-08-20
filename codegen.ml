@@ -163,7 +163,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 				  Chain(codelines@[Assign((Nth(output,var)), (Nth(input,index)))])) 
       | Spl.Diag _ -> let var = gen_var#get Int "t" in
 		      Loop(var, expr_of_intexpr(Spl.range(e)),
-			   Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ptr(Complex)),var))))
+			   Chain([Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ptr(Complex)),var)))]))
       | Spl.BB spl -> Compiler.compile_bloc(prepare_comp output input spl)
     in
     let rulecount = ref 0 in

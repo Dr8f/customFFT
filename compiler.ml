@@ -92,7 +92,7 @@ let canonical_associative_form : code -> code =
 ;;
   
 let common_subexpression_elimination (code:code) : code =
-  let eliminate_within_a_chain (l :code list) : code list =
+  let rec eliminate_within_a_chain (l :code list) (substmap:expr ExprMap.t): code list =
     let g ((insns, map, set) : code list * expr ExprMap.t  * ExprSet.t) (next_insn:code) : (code list * expr ExprMap.t * ExprSet.t) =
       let rec simplify_expr (is_a_lvalue:bool) (expr:expr) (map:expr ExprMap.t) : expr * expr ExprMap.t * code list =
 	let f expr ev : unit =
@@ -136,15 +136,16 @@ let common_subexpression_elimination (code:code) : code =
 
       | ArrayAllocate(var, ctype, rvalue) ->
 	 let (newrvalue,newmap,newinsns) = simplify_expr false rvalue map in
-	 (newinsns@insns@[Declare(var);ArrayAllocate(var, ctype, newrvalue)], newmap, set) (*FIXME not proper*)
+	 (insns@newinsns@[Declare(var);ArrayAllocate(var, ctype, newrvalue)], newmap, set) (*FIXME not proper, no substitution*)
 
       | ArrayDeallocate(var, rvalue) ->
 	 let (newrvalue,newmap,newinsns) = simplify_expr false rvalue map in
-	 (newinsns@insns@[ArrayDeallocate(var, newrvalue)], newmap, set)
+	 (insns@newinsns@[ArrayDeallocate(var, newrvalue)], newmap, set)
 
-      | Loop _ | Chain _ -> (*FIXME something smart should happen here*)
-		  print_string ("\nLoop or chain:\n"^(string_of_code 0 next_insn)^"\n\n");
-	 (insns@[next_insn], map, set)
+      | Loop (var,count,Chain code) ->
+	 (insns@[Loop(var, count, Chain(eliminate_within_a_chain code map))], map, set) (*FIXME count should be substituted *)
+	   
+      | Chain x -> (insns@[Chain(eliminate_within_a_chain x map)], map, set)
 
       (* FIXME no writes are assumed, this would require some invalidation*)
       | Assign(lvalue, rvalue) ->
@@ -159,11 +160,11 @@ let common_subexpression_elimination (code:code) : code =
 	   ((insns@newinsns@newinsns2@[Assign(newlvalue,newrvalue)]), newmap2, set)
       | _ -> failwith ("what is this instruction? "^(string_of_code 0 next_insn)) 
     in
-    let (final, out_map, out_set) = (List.fold_left g ([], ExprMap.empty, ExprSet.empty) l) in
+    let (final, out_map, out_set) = (List.fold_left g ([], substmap, ExprSet.empty) l) in
     final
   in
   let f : code -> code = function
-      Chain list -> Chain (eliminate_within_a_chain list)
+      Chain list -> Chain (eliminate_within_a_chain list ExprMap.empty)
     | x-> x in
   meta_transform_code_on_code BottomUp f (canonical_associative_form code)
 ;;
