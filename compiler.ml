@@ -92,8 +92,8 @@ let canonical_associative_form : code -> code =
 ;;
   
 let common_subexpression_elimination (code:code) : code =
-  let rec eliminate_within_a_chain (l :code list) (substmap_orig:expr ExprMap.t): code list =
-    let substmap = ref substmap_orig in
+  let rec eliminate_within_a_chain (l :code list) (map_orig:expr ExprMap.t): code list =
+    let map = ref map_orig in
     let g ((set, acc) : ExprSet.t * code list) (next_insn:code) : (ExprSet.t * code list) =
       let g_inner (set: ExprSet.t) (next_insn:code) : (ExprSet.t * code list ) =
 	let rec simplify_expr (is_a_lvalue:bool) (expr:expr) : expr * code list =
@@ -101,10 +101,10 @@ let common_subexpression_elimination (code:code) : code =
 	    print_string ((string_of_expr expr)^" => "^(string_of_expr ev)^"\n")
 	  in
 	  print_string "=====\n";
-	  ExprMap.iter f !substmap;
+	  ExprMap.iter f !map;
 	  print_string "=====\n";
-	  if (ExprMap.mem expr !substmap) then
-	    (ExprMap.find expr !substmap, [])
+	  if (ExprMap.mem expr !map) then
+	    (ExprMap.find expr !map, [])
 	  else
 	    match expr with
 	      Var _ | IConst _ | Cast _-> (expr,[])
@@ -118,8 +118,8 @@ let common_subexpression_elimination (code:code) : code =
 						     | Mul _ -> Mul(na,nb)
 						   in
 						   let (res,insn3) =
-						     if (ExprMap.mem nexpr !substmap) then
-						       (ExprMap.find nexpr !substmap,[])
+						     if (ExprMap.mem nexpr !map) then
+						       (ExprMap.find nexpr !map,[])
 						     else if (not is_a_lvalue) then
 						       let nvar = gen_var#get (ctype_of_expr nexpr) "g" in
 						       (nvar, [Declare(nvar);Assign(nvar, nexpr)])
@@ -128,8 +128,8 @@ let common_subexpression_elimination (code:code) : code =
 						   in
 						   print_string ("Adding "^(string_of_expr expr)^" => "^(string_of_expr res)^"\n");
 						   print_string ("Adding "^(string_of_expr nexpr)^" => "^(string_of_expr res)^"\n");
-						   substmap := ExprMap.add expr res !substmap;
-						   substmap := ExprMap.add nexpr res !substmap;	
+						   map := ExprMap.add expr res !map;
+						   map := ExprMap.add nexpr res !map;	
 						   (res, insn1@insn2@insn3)
 	      | _ -> failwith("case not handled by simplify_expr : "^(string_of_expr expr))
 	in
@@ -147,9 +147,9 @@ let common_subexpression_elimination (code:code) : code =
 	   (set, newinsns@[ArrayDeallocate(var, newrvalue)])
 	     
 	| Loop (var,count,Chain code) ->
-	   (set, [Loop(var, count, Chain(eliminate_within_a_chain code !substmap))]) (*FIXME count should be substituted *)
+	   (set, [Loop(var, count, Chain(eliminate_within_a_chain code !map))]) (*FIXME count should be substituted *)
 	     
-	| Chain x -> (set, [Chain(eliminate_within_a_chain x !substmap)])
+	| Chain x -> (set, [Chain(eliminate_within_a_chain x !map)])
 		       
 	(* FIXME no writes are assumed, this would require some invalidation*)
 	| Assign(lvalue, rvalue) ->
@@ -159,7 +159,7 @@ let common_subexpression_elimination (code:code) : code =
 	   
 	   if (ExprSet.mem newlvalue set) then
 	     (* if the lvalue is a variable declared within the scope, then we can substitute all upcoming iterations*)
-	     (substmap:=ExprMap.add lvalue newrvalue !substmap;
+	     (map:=ExprMap.add lvalue newrvalue !map;
 	     (set, (newinsns@newinsns2)))
 	   else
 	     (set, (newinsns@newinsns2@[Assign(newlvalue,newrvalue)]))
