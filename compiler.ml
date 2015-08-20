@@ -92,88 +92,78 @@ let canonical_associative_form : code -> code =
 ;;
   
 let common_subexpression_elimination (code:code) : code =
-  let rec eliminate_within_a_chain (l :code list) (map_orig:expr ExprMap.t): code list =
+  let rec eliminate_within_a_chain (map_orig:expr ExprMap.t) (list:code list): code list =
     let map = ref map_orig in
-    let g ((set, acc) : ExprSet.t * code list) (next_insn:code) : (ExprSet.t * code list) =
-      let g_inner (set: ExprSet.t) (next_insn:code) : (ExprSet.t * code list ) =
-	let rec simplify_expr (is_a_lvalue:bool) (expr:expr) : expr * code list =
-	  let f expr ev : unit =
-	    print_string ((string_of_expr expr)^" => "^(string_of_expr ev)^"\n")
-	  in
-	  print_string "=====\n";
-	  ExprMap.iter f !map;
-	  print_string "=====\n";
-	  if (ExprMap.mem expr !map) then
-	    (ExprMap.find expr !map, [])
-	  else
-	    match expr with
-	      Var _ | IConst _ | Cast _-> (expr,[])
-	      | Nth(a,b) | Plus(a,b) |Minus(a,b) |Mul(a,b) ->
-						   let (na,insn1) = (simplify_expr false a) in
-						   let (nb,insn2) = (simplify_expr false b) in
-						   let nexpr = match expr with
-						     | Nth _ -> Nth(na,nb)
-						     | Plus _ -> Plus(na,nb)
-						     | Minus _ -> Minus(na,nb)
-						     | Mul _ -> Mul(na,nb)
-						   in
-						   let (res,insn3) =
-						     if (ExprMap.mem nexpr !map) then
-						       (ExprMap.find nexpr !map,[])
-						     else if (not is_a_lvalue) then
-						       let nvar = gen_var#get (ctype_of_expr nexpr) "g" in
-						       (nvar, [Declare(nvar);Assign(nvar, nexpr)])
-						     else
-						       (nexpr, [])
-						   in
-						   print_string ("Adding "^(string_of_expr expr)^" => "^(string_of_expr res)^"\n");
-						   print_string ("Adding "^(string_of_expr nexpr)^" => "^(string_of_expr res)^"\n");
-						   map := ExprMap.add expr res !map;
-						   map := ExprMap.add nexpr res !map;	
-						   (res, insn1@insn2@insn3)
-	      | _ -> failwith("case not handled by simplify_expr : "^(string_of_expr expr))
-	in
-	match next_insn with
-	  Declare var -> (* only values actually declared within the scope can be eliminated or replaced, 
-                          so we keep track of them *)
- 	  ((ExprSet.add var set), [])
-	    
-	| ArrayAllocate(var, ctype, rvalue) ->
-	   let (newrvalue,newinsns) = simplify_expr false rvalue in
-	   (set, newinsns@[Declare(var);ArrayAllocate(var, ctype, newrvalue)]) (*FIXME not proper, no substitution*)
-	     
-	| ArrayDeallocate(var, rvalue) ->
-	   let (newrvalue,newinsns) = simplify_expr false rvalue in
-	   (set, newinsns@[ArrayDeallocate(var, newrvalue)])
-	     
-	| Loop (var,count,Chain code) ->
-	   (set, [Loop(var, count, Chain(eliminate_within_a_chain code !map))]) (*FIXME count should be substituted *)
-	     
-	| Chain x -> (set, [Chain(eliminate_within_a_chain x !map)])
-		       
-	(* FIXME no writes are assumed, this would require some invalidation*)
-	| Assign(lvalue, rvalue) ->
-	   (* first we want to simplify the rvalue if we can *)
-	   let (newrvalue,newinsns) = simplify_expr false rvalue in
-	   let (newlvalue,newinsns2) = simplify_expr true lvalue in
-	   
-	   if (ExprSet.mem newlvalue set) then
-	     (* if the lvalue is a variable declared within the scope, then we can substitute all upcoming iterations*)
-	     (map:=ExprMap.add lvalue newrvalue !map;
-	     (set, (newinsns@newinsns2)))
-	   else
-	     (set, (newinsns@newinsns2@[Assign(newlvalue,newrvalue)]))
-	| _ -> failwith ("what is this instruction? "^(string_of_code 0 next_insn)) 
+    let set = ref ExprSet.empty in
+    let process_one_instruction (next_insn:code) : (code list) =
+      let rec simplify_expr (is_a_lvalue:bool) (expr:expr) : expr * code list =
+	if (ExprMap.mem expr !map) then
+	  (ExprMap.find expr !map, [])
+	else
+	  match expr with
+	    Var _ | IConst _ | Cast _-> (expr,[])
+	    | Nth(a,b) | Plus(a,b) |Minus(a,b) |Mul(a,b) ->
+						 let (na,insn1) = (simplify_expr false a) in
+						 let (nb,insn2) = (simplify_expr false b) in
+						 let nexpr = match expr with
+						   | Nth _ -> Nth(na,nb)
+						   | Plus _ -> Plus(na,nb)
+						   | Minus _ -> Minus(na,nb)
+						   | Mul _ -> Mul(na,nb)
+						 in
+						 let (res,insn3) =
+						   if (ExprMap.mem nexpr !map) then
+						     (ExprMap.find nexpr !map,[])
+						   else if (not is_a_lvalue) then
+						     let nvar = gen_var#get (ctype_of_expr nexpr) "g" in
+						     (nvar, [Declare(nvar);Assign(nvar, nexpr)])
+						   else
+						     (nexpr, [])
+						 in
+						 map := ExprMap.add expr res !map;
+						 map := ExprMap.add nexpr res !map;	
+						 (res, insn1@insn2@insn3)
+	    | _ -> failwith("case not handled by simplify_expr : "^(string_of_expr expr))
       in
-      let (b,c) = (g_inner set next_insn) in
-      (b, (acc @ c))
+      match next_insn with
+	Declare var -> (* only values actually declared within the scope can be eliminated or replaced, 
+                          so we keep track of them *)
+	set := ExprSet.add var !set;
+	[]
+	  
+      | ArrayAllocate(var, ctype, rvalue) ->
+	 let (newrvalue,newinsns) = simplify_expr false rvalue in
+	 (newinsns@[Declare(var);ArrayAllocate(var, ctype, newrvalue)]) (*FIXME not proper, no substitution*)
+	   
+      | ArrayDeallocate(var, rvalue) ->
+	   let (newrvalue,newinsns) = simplify_expr false rvalue in
+	   (newinsns@[ArrayDeallocate(var, newrvalue)])
+	     
+      | Loop (var,count,Chain code) ->
+	 ([Loop(var, count, Chain(eliminate_within_a_chain !map code))]) (*FIXME count should be substituted *)
+	   
+      | Chain x -> ([Chain(eliminate_within_a_chain !map x)])
+		     
+      (* FIXME no writes are assumed, this would require some invalidation*)
+      | Assign(lvalue, rvalue) ->
+	 (* first we want to simplify the rvalue if we can *)
+	 let (newrvalue,newinsns) = simplify_expr false rvalue in
+	 let (newlvalue,newinsns2) = simplify_expr true lvalue in
+	 
+	 if (ExprSet.mem newlvalue !set) then (
+	   (* if the lvalue is a variable declared within the scope, then we can substitute all upcoming iterations*)
+	   map:=ExprMap.add lvalue newrvalue !map;
+	   (newinsns@newinsns2)
+	 )
+	 else
+	   (newinsns@newinsns2@[Assign(newlvalue,newrvalue)])
+      | _ -> failwith ("what is this instruction? "^(string_of_code 0 next_insn)) 
     in
-    let (_, final) = (List.fold_left g (ExprSet.empty, []) l) in
-    final
+    List.flatten (List.map process_one_instruction list)
   in
   let f : code -> code = function
       Chain list ->
-      Chain (eliminate_within_a_chain list ExprMap.empty)
+      Chain (eliminate_within_a_chain ExprMap.empty list)
     | x-> x in
   meta_transform_code_on_code BottomUp f (canonical_associative_form code)
 ;;
