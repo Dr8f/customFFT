@@ -96,66 +96,54 @@ let common_subexpression_elimination (code:code) : code =
     let map = ref map_orig in (*represents the substitutions to be executed*)
     let set = ref ExprSet.empty in (*represent the local variables*)
     let output = ref [] in
-    let rec simplify_expr (is_a_lvalue:bool) (expr:expr) : expr =
+    let handle (nexpr:expr) : expr =
+      if (ExprMap.mem nexpr !map) then 
+	ExprMap.find nexpr !map 
+      else (
+	let nvar = gen_var#get (ctype_of_expr nexpr) "g" in
+	output:= (!output)@[Declare(nvar);Assign(nvar, nexpr)];
+	map := ExprMap.add nexpr nvar !map;	
+	nvar
+      ) in
+    let rec z (expr:expr) : expr =
       if (ExprMap.mem expr !map) then
 	ExprMap.find expr !map
       else
 	match expr with
 	| Var _ | IConst _ | Cast _-> expr
-	| Nth(a,b) | Plus(a,b) |Minus(a,b) |Mul(a,b) ->
-					     let na = (simplify_expr false a) in
-					     let nb = (simplify_expr false b) in
-					     let nexpr = match expr with
-					       | Nth _ -> Nth(na,nb)
-					       | Plus _ -> Plus(na,nb)
-					       | Minus _ -> Minus(na,nb)
-					       | Mul _ -> Mul(na,nb)
-					     in
-					     let res =
-					       if (ExprMap.mem nexpr !map) then
-						 ExprMap.find nexpr !map
-					       else if (not is_a_lvalue) then
-						 let nvar = gen_var#get (ctype_of_expr nexpr) "g" in
-						 output:= (!output)@[Declare(nvar);Assign(nvar, nexpr)];
-						 nvar
-					       else
-						 nexpr
-					     in
-					     map := ExprMap.add expr res !map;
-					     map := ExprMap.add nexpr res !map;	
-					     (res)
-	| _ -> failwith("case not handled by simplify_expr : "^(string_of_expr expr))
-    in
+	| Plus(a, b) -> handle (Plus(z a, z b))
+	| Minus(a, b) -> handle (Minus(z a, z b))
+	| Mul(a, b) -> handle (Mul(z a, z b))
+	| Nth(a, b) -> handle (Nth(z a, z b))
+	| _ -> failwith("case not handled by z : "^(string_of_expr expr)) in
     let process_one_instruction (next_insn:code) : unit =
       match next_insn with
-      | Declare var -> set := ExprSet.add var !set
-						      
+      | Declare var ->
+	 set := ExprSet.add var !set
+
+      (*FIXME not proper, no substitution possible for the variable var*)
+      (*FIXME not proper, declaration*)
       | ArrayAllocate(var, ctype, rvalue) ->
-	 let (newrvalue) = simplify_expr false rvalue in
-	 output := (!output)@[Declare(var);ArrayAllocate(var, ctype, newrvalue)] (*FIXME not proper, no substitution*)
+	 output := (!output)@[Declare(var);ArrayAllocate(var, ctype, (z rvalue))] 
 	   
       | ArrayDeallocate(var, rvalue) ->
-	   let (newrvalue) = simplify_expr false rvalue in
-	   output:=(!output)@([ArrayDeallocate(var, newrvalue)])
+	 output:=(!output)@([ArrayDeallocate(var, (z rvalue))])
 	     
       | Loop (var,count,Chain code) ->
-	 output:=(!output)@([Loop(var, count, Chain(eliminate_within_a_chain !map code))]) (*FIXME count should be substituted *)
+	 output:=(!output)@([Loop(var, (z count), Chain(eliminate_within_a_chain !map code))])
 	   
-      | Chain x -> output:=(!output)@([Chain(eliminate_within_a_chain !map x)])
+      | Chain x ->
+	 output:=(!output)@([Chain(eliminate_within_a_chain !map x)])
 
-      (* FIXME no writes are assumed, this would require some invalidation*)
-      | Assign(lvalue, rvalue) ->
-	 (* first we want to simplify the rvalue if we can *)
-	 let (newrvalue) = simplify_expr false rvalue in
-	 let (newlvalue) = simplify_expr true lvalue in
-	 
-	 if (ExprSet.mem newlvalue !set) then (
-	   (* if the lvalue is a variable declared within the scope, then we can substitute all upcoming iterations*)
-	   map:=ExprMap.add lvalue newrvalue !map
-	 )
-	 else
-	   output:=(!output)@([Assign(newlvalue,newrvalue)])
-      | _ -> failwith ("what is this instruction? "^(string_of_code 0 next_insn)) 
+      (* the following assumes no writes are really needed, except those in memory*)
+      | Assign(Var _ as lvalue, rvalue) ->
+	 map:=ExprMap.add lvalue (z rvalue) !map	
+
+      | Assign(Nth(a, b), rvalue) ->
+	 output:=(!output)@([Assign(Nth(z a, z b),(z rvalue))])
+						 
+      | _ ->
+	 failwith ("what is this instruction? "^(string_of_code 0 next_insn)) 
     in
     List.iter process_one_instruction list;
     !output
