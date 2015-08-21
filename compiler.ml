@@ -94,7 +94,6 @@ let canonical_associative_form : code -> code =
 let common_subexpression_elimination (code:code) : code = 
   let rec eliminate_within_a_chain (map_orig:expr ExprMap.t) (list:code list): code list =
     let map = ref map_orig in (*represents the substitutions to be executed*)
-    let set = ref ExprSet.empty in (*represent the local variables*)
     let output = ref [] in
     let handle (nexpr:expr) : expr =
       if (ExprMap.mem nexpr !map) then 
@@ -119,10 +118,8 @@ let common_subexpression_elimination (code:code) : code =
     let process_one_instruction (next_insn:code) : unit =
       match next_insn with
       | Declare var ->
-	 set := ExprSet.add var !set
+	 ()
 
-      (*FIXME not proper, no substitution possible for the variable var*)
-      (*FIXME not proper, declaration*)
       | ArrayAllocate(var, ctype, rvalue) ->
 	 output := (!output)@[Declare(var);ArrayAllocate(var, ctype, (z rvalue))] 
 	   
@@ -154,8 +151,7 @@ let common_subexpression_elimination (code:code) : code =
 ;;
 		 
 let compile_bloc (code:code) : code =
-  (* let compilation_sequence = [unroll_loops; array_scalarization; common_subexpression_elimination] in  *)
-  let compilation_sequence = [common_subexpression_elimination] in 
+  let compilation_sequence = [unroll_loops; array_scalarization; common_subexpression_elimination] in  
   let f (code:code) (compilation_function:code->code) : code = compilation_function code in
   let res = List.fold_left f code compilation_sequence in 
   print_string(string_of_code 0 code);
