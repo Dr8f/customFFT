@@ -125,6 +125,10 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     List.fold_left g (Error("no applicable rules")) breakdowns
   in
 
+  let (name, rstep, cold, reinit, hot, funcs, breakdowns) = rstep_partitioned in 
+  let cons_args = (List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))))@(List.map expr_of_idxfunc funcs) in
+  let comp_args = _output::_input::List.map expr_of_intexpr (IntExprSet.elements hot) in
+  
   let comp_code_of_rstep ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) (output:expr) (input:expr): code =
     let rec prepare_comp (output:expr) (input:expr) (e:Spl.spl): code =
       match e with
@@ -164,7 +168,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
       | Spl.Diag _ -> let var = gen_var#get Int "t" in
 		      Loop(var, expr_of_intexpr(Spl.range(e)),
 			   Chain([Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ptr(Complex)),var)))]))
-      | Spl.BB spl -> Compiler.compile_bloc(prepare_comp output input spl)
+      | Spl.BB spl -> Compiler.compile_bloc (prepare_comp output input spl)
     in
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
@@ -178,12 +182,10 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     List.fold_left g (Error("internal error: no valid rule has been selected")) breakdowns
   in
 
-  let (name, rstep, cold, reinit, hot, funcs, breakdowns) = rstep_partitioned in 
-  let cons_args = (List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))))@(List.map expr_of_idxfunc funcs) in
   print_string ("=== Building "^name^" ===\n");
   Class (name, _rs, _rule::_dat::cons_args@(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned), [
     Constructor(cons_args, cons_code_of_rstep rstep_partitioned);	       
-    Method(Void, _compute, _output::_input::List.map expr_of_intexpr (IntExprSet.elements hot), comp_code_of_rstep rstep_partitioned _output _input)])
+    Method(Void, _compute, comp_args, comp_code_of_rstep rstep_partitioned _output _input)])
 ;;
 
 let code_of_envfunc ((name, f, args, fargs) : envfunc) : code =  
