@@ -154,8 +154,8 @@ let compile_bloc (code:code) : code =
   let compilation_sequence = [unroll_loops; array_scalarization; common_subexpression_elimination] in  
   let f (code:code) (compilation_function:code->code) : code = compilation_function code in
   let res = List.fold_left f code compilation_sequence in 
-  print_string(string_of_code 0 code);
-  print_string "\n\n => \n\n\n";
-  print_string(string_of_code 0 res);
+  (* print_string(string_of_code 0 code); *)
+  (* print_string "\n\n => \n\n\n"; *)
+  (* print_string(string_of_code 0 res); *)
   res
 ;;

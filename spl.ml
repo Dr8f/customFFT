@@ -37,6 +37,10 @@ type idxfunc =
 | Pre of idxfunc (* Precompute *)
 | PreWrap of string * intexpr list * idxfunc list * intexpr (*domain*)
 | FArg of string * intexpr (*domain*)
+| FHH of intexpr * intexpr * intexpr * intexpr * intexpr list
+(* FHH(domain, range, base, stride0, vector strides) maps Z**k x I(str) to I(dest) so FHH(d,r,b,s,vs)(j_k .. j_1, i) = b + i*s + Sum j_k * vs_k*)
+| FUp of idxfunc
+| FDown of idxfunc * intexpr * int
 ;;
 
 type spl =
@@ -59,6 +63,7 @@ DFT of intexpr
 | ISumReinitCompute of int * intexpr * intexpr * string * intexpr list * intexpr * intexpr
 | F of int
 | BB of spl
+| GT of spl * idxfunc * idxfunc * intexpr list
 ;;
 
 (*********************************************
@@ -650,13 +655,67 @@ let rule_compose_FL_FH : (spl -> spl) =
 let rule_compose_FH_FH : (spl -> spl) =
   let rec f (l : idxfunc list) : idxfunc list =
   match l with
-    FH(gn1,gnp,bp,sp) :: FH(n,gn2,b,s) :: tl -> f (FH(n, gnp, IPlus([bp;IMul([sp; b])]), IMul([sp; s])) :: tl) 
+    FH(gn1,gnp,bp,sp) :: FH(n,gn2,b,s) :: tl -> f (FH(n, gnp, IPlus([bp;IMul([sp; b])]), IMul([sp; s])) :: tl)
     (*gn1 = gn2 is not checked because that could be non-obvious*)
     | a::tl -> a :: (f tl)
     | [] -> []
   in
   meta_compose_idxfunc BottomUp f
 ;;
+
+let rule_compose_FHH_FHH : (spl -> spl) =
+  let rec f (l : idxfunc list) : idxfunc list =
+    match l with
+    | FHH(da,ra,ba,sa, vsa) :: FHH(db, rb, bb, sb, vsb) :: tl ->
+       let rec mul (a:intexpr list) (b:intexpr list) : intexpr list =
+	 match a,b with
+	 |[], [] -> []
+	 |[], (y::ys) -> IMul([sa;y])::(mul [] ys) 
+	 |x, [] -> x
+	 |(x::xs),(y::ys) -> IPlus([x;IMul([sa;y])])::(mul xs ys)
+       in
+       f (FHH(db,ra, IPlus([ba;IMul([sa; bb])]), IMul([sa; sb]), (mul vsa vsb)) :: tl)
+    (*rb = da is not checked because that could be non-obvious*)
+    | a::tl -> a :: (f tl)
+    | [] -> []
+  in
+  meta_compose_idxfunc BottomUp f
+;;
+
+let rule_distribute_uprank : (spl -> spl) =
+  meta_transform_idxfunc_on_spl TopDown ( function
+  | FUp (FCompose list) -> FCompose( List.map (fun x-> FUp(x)) list)
+  | x -> x)
+;;
+
+let rule_distribute_downrank : (spl -> spl) =
+  meta_transform_idxfunc_on_spl TopDown ( function
+  | FDown (FCompose list, j, l) -> FCompose( List.map (fun x-> FDown(x, j, l)) list)
+  | x -> x)
+;;
+
+let rule_uprank_FHH : (spl -> spl) =
+  meta_transform_idxfunc_on_spl TopDown ( function
+  | FUp (FHH(d,r,b,s,vs)) -> FHH(d,r,b,s,(IConstant 0::vs))
+  | x -> x)
+;;
+
+let rule_downrank_FHH : (spl -> spl) =
+  let rec extract (l:int) (vs:intexpr list) : intexpr * intexpr list =
+    let (x::xs)=vs in
+    if (l=0) then
+      (x, xs)
+    else
+      let (a,b) = extract (l-1) xs in
+      (a,x::b)
+  in
+  meta_transform_idxfunc_on_spl TopDown ( function
+  | FDown (FHH(d,r,b,s,vs), j , l) ->
+     let(content,remainder)= extract l vs in
+     FHH(d,r, IPlus([b;IMul([content;j])]), s, remainder)
+  | x -> x)
+;;
+
 
 let rule_suck_inside_pre : (spl -> spl) = 
   let rec f (l : idxfunc list) : idxfunc list =
@@ -695,6 +754,11 @@ let rec apply_rewriting_rules (e : spl) : spl =
       ("Compose Scatter BB", rule_compose_scatter_BB);
       ("Multiply by one", rule_multiply_by_one);
       ("Multiply and divide by the same", rule_multiply_and_divide_by_the_same);
+      ("Distribute uprank", rule_distribute_uprank);
+      ("Distribute downrank", rule_distribute_downrank);
+      ("Downrank FHH", rule_downrank_FHH);
+      ("Uprank FHH", rule_uprank_FHH);
+      ("FCompose FHH with FHH", rule_compose_FHH_FHH);
     ]
   in
   let apply_rewriting_rules_once (e : spl) : spl = 
