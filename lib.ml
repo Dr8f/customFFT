@@ -139,8 +139,8 @@ let rec extract_constraints_func (e : idxfunc) : (intexpr * intexpr) list =
 let rec extract_constraints_spl (e : spl) : (intexpr * intexpr) list =
   let rec extract_constraints_within_compose (e : spl list) ( res : (intexpr * intexpr) list) : (intexpr * intexpr) list = 
     match e with
-      x :: (y :: tl as etl) -> let dmn = domain x in
-			       let rng = range y in
+      x :: (y :: tl as etl) -> let dmn = apply_rewriting_rules intexpr_rulemap (domain x) in
+			       let rng = apply_rewriting_rules intexpr_rulemap (range y) in
 			       (* print_string ((string_of_intexpr dmn)^"="^(string_of_intexpr rng)^"\n") ;  *)
 			       extract_constraints_within_compose etl ((dmn, rng) :: res)
     | [x] -> res;
@@ -155,7 +155,7 @@ let rec extract_constraints_spl (e : spl) : (intexpr * intexpr) list =
 
 let rec reconcile_constraints_on_spl ((constraints,spl) : (((intexpr * intexpr) list) * spl)) : spl =
   match constraints with
-  | (l,r) :: tl -> print_string ("processing constraint:"^(string_of_intexpr l)^"="^(string_of_intexpr r)^"\n");
+  | (l,r) :: tl -> (* print_string ("processing constraint:"^(string_of_intexpr l)^"="^(string_of_intexpr r)^"\n"); *)
 		   let f (e : intexpr) : intexpr = if (e=r) then l else e in
 		   let t = (meta_transform_intexpr_on_spl TopDown f) spl in
 		   reconcile_constraints_on_spl ((List.map (fun (l,r) -> (f l, f r)) tl), t)
@@ -309,6 +309,7 @@ let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (
 
   let simplification_constraints = extract_constraints_spl desc in
   print_string ("Simplifying constraints\t\n");
+
   let simplified =  reconcile_constraints_on_spl (simplification_constraints, desc) in
   print_string ("Simplified desc:\t\t"^(string_of_spl simplified)^"\n");
 
@@ -323,30 +324,29 @@ let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (
     in
     (meta_transform_idxfunc_on_spl TopDown transf) e in
   
-  let wrapped_precomps = List.map wrap_precomputations rses in
-  
-  (* print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (\* WIP *\) *)
+  let wrapped_precomps = List.map wrap_precomputations rses in  
+  print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (* WIP *)
   
   let wrapped_intexpr = List.map wrap_intexprs_on_spl wrapped_precomps in
-  (* print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); *)
+  print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n");
   
   
   let constraints = List.map extract_constraints_spl wrapped_intexpr in
   let wrapped_RSes = List.map reconcile_constraints_on_spl (List.combine constraints wrapped_intexpr) in
   
-  (* print_string ("WIP DESC wrapped:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_RSes))^"\n\n"); (\* WIP *\) *)
+  print_string ("WIP DESC wrapped:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_RSes))^"\n\n"); (* WIP *)
   
   let new_steps = List.map unwrap_spl wrapped_RSes in
-  (* print_string ("WIP DESC new steps:\n"^(String.concat ",\n" (List.map string_of_spl new_steps))^"\n\n"); (\* WIP *\) *)
+  print_string ("WIP DESC new steps:\n"^(String.concat ",\n" (List.map string_of_spl new_steps))^"\n\n"); (* WIP *)
   
   let new_names = List.map ensure_name new_steps in
-  (* print_string ("WIP DESC newnames:\n"^(String.concat ",\n" (new_names))^"\n\n"); (\* WIP *\) *)
+  print_string ("WIP DESC newnames:\n"^(String.concat ",\n" (new_names))^"\n\n"); (* WIP *)
   
   let extracts_with_calls = List.map replace_by_a_call_spl (List.combine wrapped_RSes (List.combine new_names rses)) in
-  (* print_string ("WIP DESC extracts_with_calls:\n"^(String.concat ",\n" (List.map string_of_spl extracts_with_calls))^"\n\n"); (\* WIP *\) *)
+  print_string ("WIP DESC extracts_with_calls:\n"^(String.concat ",\n" (List.map string_of_spl extracts_with_calls))^"\n\n"); (* WIP *)
   
   let desc_with_calls = drop_RS (reintegrate_RS simplified extracts_with_calls) in
-  (* print_string ("WIP DESC with_calls:\n"^(string_of_spl desc_with_calls)^"\n\n"); (\* WIP *\) *)
+  print_string ("WIP DESC with_calls:\n"^(string_of_spl desc_with_calls)^"\n\n"); (* WIP *)
 
   (condition, freedoms, simplified, desc_with_calls)
 ;;
