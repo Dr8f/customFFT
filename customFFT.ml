@@ -5,7 +5,7 @@ TYPES
 print_string "= Building the library =\n"
 ;;
 
-let lib = Lib.make_lib [Spl.DFT(Spl.IArg(1))] [Algo.algo_cooley_tukey; Algo.algo_dft_base]
+let lib = Lib.make_lib [Spl.DFT(Intexpr.IArg(1))] [Algo.algo_cooley_tukey; Algo.algo_dft_base]
 ;;
 
 

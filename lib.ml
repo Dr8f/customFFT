@@ -5,6 +5,15 @@ open Util
 open Spl
 ;;
 
+open Intexpr
+;;
+
+open Idxfunc
+;;
+  
+open Boolexpr
+;;
+  
 module SplMap = Map.Make (struct
   type t = spl
   let compare = Pervasives.compare
@@ -146,9 +155,10 @@ let rec extract_constraints_spl (e : spl) : (intexpr * intexpr) list =
 
 let rec reconcile_constraints_on_spl ((constraints,spl) : (((intexpr * intexpr) list) * spl)) : spl =
   match constraints with
-    (l,r) :: tl -> let f (e : intexpr) : intexpr = if (e=r) then l else e in
-		   (* print_string ("constraint:"^(string_of_intexpr l)^"="^(string_of_intexpr r)^"\n"); *)
-		   reconcile_constraints_on_spl ((List.map (fun (l,r) -> (f l, f r)) tl), ((meta_transform_intexpr_on_spl TopDown f) spl))
+  | (l,r) :: tl -> print_string ("processing constraint:"^(string_of_intexpr l)^"="^(string_of_intexpr r)^"\n");
+		   let f (e : intexpr) : intexpr = if (e=r) then l else e in
+		   let t = (meta_transform_intexpr_on_spl TopDown f) spl in
+		   reconcile_constraints_on_spl ((List.map (fun (l,r) -> (f l, f r)) tl), t)
   | [] -> spl
 ;;
 
@@ -294,12 +304,13 @@ let collect_args (rstep : spl) : IntExprSet.t =
 let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (spl -> boolexpr * (intexpr*intexpr) list * spl)) (ensure_name: spl-> string) : (boolexpr * (intexpr*intexpr) list * spl * spl) =
   let (condition, freedoms, naive_desc) = algo rstep in
 
-  let desc = apply_rewriting_rules (mark_RS(naive_desc)) in
-  (* print_string ("Desc:\t\t"^(string_of_spl desc)^"\n"); *)
+  let desc = apply_rewriting_rules spl_rulemap (mark_RS(naive_desc)) in
+  print_string ("Desc:\t\t"^(string_of_spl desc)^"\n");
 
   let simplification_constraints = extract_constraints_spl desc in
+  print_string ("Simplifying constraints\t\n");
   let simplified =  reconcile_constraints_on_spl (simplification_constraints, desc) in
-  (* print_string ("Simplified desc:\t\t"^(string_of_spl simplified)^"\n"); *)
+  print_string ("Simplified desc:\t\t"^(string_of_spl simplified)^"\n");
 
 
   let rses = collect_RS simplified in

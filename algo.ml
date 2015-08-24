@@ -4,6 +4,12 @@ open Util
 open Spl
 ;;
 
+open Intexpr
+;;
+  
+open Boolexpr
+;;
+ 
 let gen_freedom_var =
 object 
   val tbl = ref 0;
@@ -12,8 +18,7 @@ object
     IFreedom !tbl
 end
 ;;
-
-
+  
 let algo_cooley_tukey : spl -> boolexpr * (intexpr*intexpr) list * spl =
   function (e:spl) ->
     let conditions = ref [] in

@@ -7,7 +7,6 @@ open Lib
 open Code
 ;;
 
-
 let _rs = "RS"
 ;;
 
@@ -30,10 +29,10 @@ let build_child_var (num:int) : expr =
   Var(Ptr(Env(_rs)),"child"^(string_of_int num))
 ;;
 
-let expr_of_intexpr (intexpr : Spl.intexpr) : expr =
+let expr_of_intexpr (intexpr : Intexpr.intexpr) : expr =
   match intexpr with
-    Spl.IConstant x -> IConst x
-  | x -> Var(Int, Spl.string_of_intexpr intexpr)
+    IConstant x -> IConst x
+  | x -> Var(Int, Intexpr.string_of_intexpr intexpr)
 ;;
 
 let _output = Var(Ptr(Complex),"Y")
@@ -43,22 +42,22 @@ let _input = Var(Ptr(Complex),"X")
 ;;
 
 
-let rec expr_of_idxfunc (idxfunc : Spl.idxfunc) : expr =
+let rec expr_of_idxfunc (idxfunc : Idxfunc.idxfunc) : expr =
   match idxfunc with
-  | Spl.FArg(n, _) -> Var(Func, n)
-  | Spl.PreWrap(n, l, funcs, _) -> FunctionCall(n, ((List.map expr_of_intexpr l)@(List.map expr_of_idxfunc funcs)))
+  | FArg(n, _) -> Var(Func, n)
+  | PreWrap(n, l, funcs, _) -> FunctionCall(n, ((List.map expr_of_intexpr l)@(List.map expr_of_idxfunc funcs)))
 ;;
 
 
-let rec code_of_func (func : Spl.idxfunc) ((input,code):expr * code list) : expr * code list =
+let rec code_of_func (func : Idxfunc.idxfunc) ((input,code):expr * code list) : expr * code list =
   match func with
-  |Spl.FH(_,_,b,s) -> let output = gen_var#get Int "t" in
+  |FH(_,_,b,s) -> let output = gen_var#get Int "t" in
 		      (output,code@[Declare(output);Assign(output, Plus((expr_of_intexpr b), Mul((expr_of_intexpr s),input)))])
-  |Spl.FD(n,k) -> let output = gen_var#get Complex "c" in
+  |FD(n,k) -> let output = gen_var#get Complex "c" in
 		  (output,code@[Declare(output);Assign(output, FunctionCall("omega", [(expr_of_intexpr n);UniMinus(Mul(Mod(input,(expr_of_intexpr k)), Divide(input,(expr_of_intexpr k))))]))])
-  |Spl.FArg(_,_) -> let output = gen_var#get Complex "c" in
+  |FArg(_,_) -> let output = gen_var#get Complex "c" in
 		    (output,code@[Declare(output);Assign(output, MethodCall(expr_of_idxfunc func, _at, [input]))])  
-  |Spl.FCompose l -> List.fold_right code_of_func l (input,[])
+  |FCompose l -> List.fold_right code_of_func l (input,[])
 ;;
 
 
@@ -101,7 +100,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	      (FunctionCall(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
 	  ))
 	])
-      | Spl.Diag Spl.Pre(idxfunc) -> let var = gen_var#get Int "t" in
+      | Spl.Diag Pre(idxfunc) -> let var = gen_var#get Int "t" in
 				     let (precomp, codelines) = code_of_func idxfunc (var,[]) in			    
 				     Chain([
 				       ArrayAllocate(_dat, Complex, expr_of_intexpr(Spl.range(e)));
@@ -117,8 +116,8 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
       let freedom_assigns = List.map (fun (l,r)->Assign(expr_of_intexpr l, expr_of_intexpr r)) freedoms in
       rulecount := !rulecount + 1;      
-      If( Var(Bool, Spl.string_of_boolexpr condition), 
-	 Chain( [Assign(_rule, expr_of_intexpr(Spl.IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]),
+      If( Var(Bool, Boolexpr.string_of_boolexpr condition), 
+	 Chain( [Assign(_rule, expr_of_intexpr(IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]),
 	 stmt)	
     in
     print_string "===== Building an rstep constructor =====\n";
@@ -173,7 +172,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
       rulecount := !rulecount + 1;
-      If(Equal(_rule, expr_of_intexpr(Spl.IConstant !rulecount)),
+      If(Equal(_rule, expr_of_intexpr(IConstant !rulecount)),
 	 prepare_comp output input desc_comp, 
 	 stmt)
 	
