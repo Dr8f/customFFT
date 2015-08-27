@@ -425,7 +425,6 @@ let spl_rulemap =
   ("Compose Scatter BB", rule_compose_scatter_BB);
 
   (* TODO 
-     (there may be an issue with not constraining when parametrizing the domain and ranges of GT (FHH) with that of the kernel, page 88)
      Currently breaks because DFT is applied within GT
      Should introduce GT downrank to verify that RS4 and RS 5 (page 88) are properly generated and that the all code runs
      Then introduce DFT within GT to breakdown the rest

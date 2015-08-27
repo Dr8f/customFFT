@@ -150,6 +150,7 @@ let rec extract_constraints_spl (e : spl) : (intexpr * intexpr) list =
     Compose l -> extract_constraints_within_compose l (List.flatten (List.map extract_constraints_spl l))
   | Diag x -> extract_constraints_func x
   | BB x -> extract_constraints_spl x
+  | GT(a,g,s,vecs) -> (domain a,func_domain g)::(range a, func_domain s)::(extract_constraints_spl a)
   | _ -> []    
 ;;
 
