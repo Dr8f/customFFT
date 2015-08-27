@@ -95,7 +95,7 @@ let meta_transform_idxfunc_on_spl (recursion_direction: recursion_direction) (f 
 let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f : intexpr -> intexpr) : (spl -> spl) =
   (* print_string "meta_transform_intexpr_on_spl\n"; *)
   let g = meta_transform_intexpr_on_intexpr recursion_direction f in
-  let intexprs_in_spl (e : spl) : spl = 
+  let z (e : spl) : spl = 
     match e with
     | Compose _ | Tensor _ | RS _ | Diag _ | G _| S _ -> e
     | ISum(v,c,a) -> ISum(g v,g c,a)
@@ -112,7 +112,7 @@ let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f 
     | _ -> failwith("meta_transform_intexpr_on_spl, not handled: "^(string_of_spl e))         		
   in
   fun (e : spl) ->
-    (meta_transform_spl_on_spl recursion_direction intexprs_in_spl) ((meta_transform_idxfunc_on_spl recursion_direction (meta_transform_intexpr_on_idxfunc recursion_direction g)) e)
+  (meta_transform_spl_on_spl recursion_direction z) ((meta_transform_idxfunc_on_spl recursion_direction (meta_transform_intexpr_on_idxfunc recursion_direction g)) e)
 ;;
 
 let meta_collect_spl_on_spl (f : spl -> 'a list) : (spl -> 'a list) =
@@ -144,7 +144,9 @@ let meta_collect_intexpr_on_spl (f : intexpr -> 'a list) : (spl -> 'a list) =
     | T (n, m) -> (ff n) @ (ff m)
     | I n -> ff n
     | DFT n -> ff n
+    | GT (a, g, s, l) -> List.flatten(List.map ff l)
     | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ | Construct _ -> assert false
+    | _ -> failwith("meta_collect_intexpr_on_spl, not handled: "^(string_of_spl e))         		
   in
   fun (e : spl) ->
     let ff = meta_collect_intexpr_on_intexpr f in
@@ -270,6 +272,17 @@ let rule_tensor_to_GT : (spl -> spl) =
   meta_tensorize_spl BottomUp f
 ;;
 
+let rule_suck_inside_GT : (spl -> spl) =
+  let rec f (l : spl list) : spl list = 
+  match l with
+  | GT(a, g, s, v)::L(n,k)::tl -> f ( GT( a, FCompose([FUp(FL(n,k));g]), s, v)::tl )
+  | GT(a, g, s, v)::Diag(d)::tl -> f ( GT( Compose([a;Diag(FCompose([FUp(d); g]))]), g, s, v)::tl )
+  | a::tl -> a :: (f tl)
+  | [] -> []
+  in
+  meta_compose_spl BottomUp f
+;;
+
 (* YSV thesis 2.44 *)
 let rule_suck_inside_isum : (spl -> spl) =
   let rec f (l : spl list) : spl list = 
@@ -284,18 +297,29 @@ let rule_suck_inside_isum : (spl -> spl) =
   meta_compose_spl BottomUp f
 ;;
 
+
 let rule_transorm_T_into_diag : (spl -> spl) =
   meta_transform_spl_on_spl BottomUp (function 
   | T(n,k) -> Diag(Pre(FD(n,k)))
   | x -> x
   )
 ;;
+  
+let rule_warp_GT_RS : (spl -> spl) =
+  meta_transform_spl_on_spl BottomUp (function 
+  | GT(RS a,g,s,l) -> RS(GT(a,g,s,l))
+  | x -> x
+)
+;;
+
 
 let rule_suck_inside_RS : (spl -> spl) =
   let rec f (l : spl list) : spl list = 
   match l with
-    RS(a)::b::tl -> f (RS(Compose([a;b])) :: tl)
-  | a::RS(b)::tl -> f (RS(Compose([a;b])) :: tl)
+  | RS(a)::(Diag _ as b)::tl -> f (RS(Compose([a;b])) :: tl)
+  | RS(a)::(G _ as b)::tl -> f (RS(Compose([a;b])) :: tl)
+  | RS(a)::(L _ as b)::tl -> f (RS(Compose([a;b])) :: tl)
+  | (S _ as a)::RS(b)::tl -> f (RS(Compose([a;b])) :: tl) 
   | a::tl -> a :: (f tl)
   | [] -> []
   in
@@ -386,8 +410,7 @@ let rule_compose_scatter_BB : (spl -> spl) =
 
 let spl_rulemap =
   List.fold_left (fun (map) (name, rule) -> StringMap.add name rule map ) StringMap.empty ([
-  ("Tensor to ISum", rule_tensor_to_isum);
-  (* ("Tensor to GT", rule_tensor_to_GT); *)
+  (* ("Tensor to ISum", rule_tensor_to_isum); *)
   ("Remove unary tensor", rule_remove_unary_tensor);
   ("Remove unary compose", rule_remove_unary_compose); 
   ("Transform T into diag", rule_transorm_T_into_diag);
@@ -400,6 +423,16 @@ let spl_rulemap =
   ("Compose BB Diag", rule_compose_BB_diag);
   ("Compose BB Gather", rule_compose_BB_gather);
   ("Compose Scatter BB", rule_compose_scatter_BB);
+
+  (* TODO 
+     (there may be an issue with not constraining when parametrizing the domain and ranges of GT (FHH) with that of the kernel, page 88)
+     Currently breaks because DFT is applied within GT
+     Should introduce GT downrank to verify that RS4 and RS 5 (page 88) are properly generated and that the all code runs
+     Then introduce DFT within GT to breakdown the rest
+   *)
+  ("Tensor to GT", rule_tensor_to_GT);
+  ("rule_suck_inside_GT", rule_suck_inside_GT);
+  ("rule_warp_GT_RS", rule_warp_GT_RS);
 ]
  @(List.map (fun (name,rule) -> ("Lifted "^name, meta_transform_intexpr_on_spl BottomUp rule)) (StringMap.bindings intexpr_rulemap))
  @(List.map (fun (name,rule) -> ("Lifted "^name, meta_transform_idxfunc_on_spl BottomUp rule)) (StringMap.bindings idxfunc_rulemap))

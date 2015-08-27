@@ -29,6 +29,7 @@ let rec string_of_idxfunc (e : idxfunc) : string =
   | FCompose(l) -> optional_short_infix_list_print "FCompose" " . " l string_of_idxfunc
 
   | Pre(l) -> "Pre("^(string_of_idxfunc l)^")"
+  | FUp(l) -> "FUp("^(string_of_idxfunc l)^")"
   | PreWrap(n, l, funcs, d) -> "PreWrap(\""^n^"\", ["^(String.concat "; " (List.map string_of_intexpr l))^"], ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"], "^(string_of_intexpr d)^")"
   | FArg(n, d) -> "FArg(\""^n^"\", "^(string_of_intexpr d)^")"
   | FHH(d, r, b, s, vs) -> "FHH("^(string_of_intexpr d)^", "^(string_of_intexpr r)^", "^(string_of_intexpr b)^" , "^(string_of_intexpr s)^", ["^(String.concat "; " (List.map string_of_intexpr vs))^"] )"
@@ -40,6 +41,7 @@ let meta_transform_idxfunc_on_idxfunc (recursion_direction: recursion_direction)
     match e with 
     | FCompose (l) -> FCompose (List.map g l)
     | Pre(l) -> Pre(g l)
+    | FUp(l) -> FUp(g l)
     | PreWrap(a, b, c, d) -> PreWrap(a,b, (List.map g c), d)
     | FHH _ | FD _ | FH _ | FL _ | FArg _ -> e
     | _ -> failwith("meta_transform_idxfunc_on_idxfunc, not handled: "^(string_of_idxfunc e))         		
@@ -50,16 +52,14 @@ let meta_transform_idxfunc_on_idxfunc (recursion_direction: recursion_direction)
 let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction) (f : intexpr -> intexpr) : (idxfunc -> idxfunc) =
   (* print_string "meta_transform_intexpr_on_idxfunc\n"; *)
   let g = meta_transform_intexpr_on_intexpr recursion_direction f in
-  let rec z (e : idxfunc) : idxfunc = 
-    match e with
+  meta_transform_idxfunc_on_idxfunc recursion_direction ( function
     | FH (a, b, c, d) -> let ga = g a in
   			 let gb = g b in
   			 let gc = g c in
   			 FH (ga, gb, gc, g d)
     | FL (a, b) -> let ga = g a in FL (ga, g b)
     | FD (a, b) -> let ga = g a in FD (ga, g b)
-    | FCompose a -> FCompose(List.map z a)
-    | Pre a -> Pre(z a) 
+    | FCompose _ | Pre _ | FUp _ as e -> e
     | PreWrap (n,f,funcs,d) -> PreWrap(n, f, funcs, (g d)) (*f is not parameterized because we don't want to parameterize inside the call*)
     | FArg (i,f) ->  FArg(i, (g f))
     | FHH (a, b, c, d, vs) -> let ga = g a in
@@ -67,19 +67,19 @@ let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction)
   			     let gc = g c in
 			     let gd = g d in			     
   			     FHH (ga, gb, gc, g d, List.map g vs)
-    | _ -> failwith("meta_transform_intexpr_on_idxfunc, not handled: "^(string_of_idxfunc e))         		
-  in
-  meta_transform_idxfunc_on_idxfunc recursion_direction z
+    | _ as e -> failwith("meta_transform_intexpr_on_idxfunc, not handled: "^(string_of_idxfunc e)))
 ;;
 
 let meta_collect_idxfunc_on_idxfunc (f : idxfunc -> 'a list) : (idxfunc -> 'a list) =
   let z (g : idxfunc -> 'a list) (e : idxfunc) : 'a list =
     match e with
-      FH _ | FL _ | FD _ -> []
+      FH _ | FL _ | FD _ | FHH _ -> []
     | FCompose l ->  List.flatten (List.map g l)
     | Pre x -> g x
     | PreWrap _ -> []
     | FArg _ -> []
+    | FUp x -> g x
+    | _ -> failwith("meta_collect_idxfunc_on_idxfunc, not handled: "^(string_of_idxfunc e))
   in
   recursion_collect f z
 ;;
@@ -109,6 +109,9 @@ let rec func_range (e : idxfunc) : intexpr =
 | FD (n, _) -> n
 | FCompose (l) -> func_range (List.hd l)
 | Pre(l) -> func_range l
+| FHH(_, r,_,_, _)-> r
+(* | FUp(l) -> func_range l (\*FIXME really correct?*\) *)
+| _ as e -> failwith("func_range, not handled: "^(string_of_idxfunc e))
 ;;
 
 let rec func_domain (e : idxfunc) : intexpr = 
@@ -118,8 +121,11 @@ let rec func_domain (e : idxfunc) : intexpr =
 | FD (n, _) -> n
 | FCompose (l) -> func_domain (List.hd (List.rev l))
 | Pre(l) -> func_domain l
+| FUp(l) -> func_domain l (*FIXME really correct?*)
+| FHH(d, _,_,_, _)-> d
 | PreWrap(_,_,_,d) -> d
 | FArg (_,d)->d
+| _ as e -> failwith("func_domain, not handled: "^(string_of_idxfunc e))		
 ;;
 
 let meta_compose_idxfunc (recursion_direction : recursion_direction) (f : idxfunc list -> idxfunc list) : (idxfunc -> idxfunc) =
@@ -147,10 +153,12 @@ let rule_remove_unary_fcompose : (idxfunc -> idxfunc) =
 let rule_compose_FL_FH : (idxfunc -> idxfunc) =
   let rec f (l : idxfunc list) : idxfunc list =
   match l with
-    FL(n1,k) :: FH(m1,n2,IMul(m2::multl), IConstant 1) :: tl when m1 = m2 -> f (FH(m1, n2, IMul(multl), k) :: tl) 
-    (*n1 = n2 is not checked because n could be mul(k,m) *)
-    | a::tl -> a :: (f tl)
-    | [] -> []
+  | FL(n1,k) :: FH(m1,n2,IMul(m2::multl), IConstant 1) :: tl when m1 = m2 -> f (FH(m1, n2, IMul(multl), k) :: tl) 
+  (*n1 = n2 is not checked because n could be mul(k,m) *)
+  | FUp(FL(n,k)) :: FHH(d, r, b, IConstant 1, m::vstl) :: tl -> f (FHH(d, r, b, k, (IConstant 1)::vstl) :: tl) (*FIXME seems correct not checked*)
+  (*n1 = n2 is not checked because n could be mul(k,m) *)
+  | a::tl -> a :: (f tl)
+  | [] -> []
   in
   meta_compose_idxfunc BottomUp f
 ;;
@@ -199,6 +207,7 @@ let rule_suck_inside_pre : (idxfunc -> idxfunc) =
 let rule_distribute_uprank : (idxfunc -> idxfunc) =
   meta_transform_idxfunc_on_idxfunc TopDown ( function
   | FUp (FCompose list) -> FCompose( List.map (fun x-> FUp(x)) list)
+  | FUp (Pre p) -> Pre(FUp(p))
   | x -> x)
 ;;
 
