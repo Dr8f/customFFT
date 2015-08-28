@@ -23,7 +23,7 @@ let algo_cooley_tukey : spl -> boolexpr * (intexpr*intexpr) list * spl =
   function (e:spl) ->
     let conditions = ref [] in
     let freedoms = ref [] in 
-    let f = meta_transform_spl_on_spl BottomUp ( function
+    let f = meta_transform_spl_on_spl_gt_limit BottomUp ( function
       |DFT n -> 	    
 	conditions := Not(IsPrime(n)) :: !conditions;
 	let k = gen_freedom_var#get () in
@@ -51,6 +51,11 @@ let algo_dft_base : spl -> boolexpr * (intexpr*intexpr) list * spl =
       |DFT n ->
 	conditions := Equal(n,IConstant(2)) :: !conditions;
 	BB(F(2))
+	  
+      (* GT rank 1 downrank, should later be part of all base cases *)
+      | Spl.GT(a, g, s, v::[]) -> let i = Intexpr.gen_loop_counter#get () in 
+				  ISum(i, v, Compose([S(FDown(s, i, 0));a;G(FDown(g, i, 0))]))
+				      
       | x -> x) in
     ((And !conditions), [], f e)
 ;;

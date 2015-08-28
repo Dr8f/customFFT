@@ -84,6 +84,12 @@ let meta_multiply_intexpr (recursion_direction : recursion_direction) (f : intex
 					       | x -> x)
 ;;
 
+let meta_addition_intexpr (recursion_direction : recursion_direction) (f : intexpr list -> intexpr list) : (intexpr -> intexpr) =
+  meta_transform_intexpr_on_intexpr recursion_direction ( function 
+					       | IPlus (l) -> IPlus (f l) 
+					       | x -> x)
+;;
+
 let rule_remove_unary_fmul_on_intexpr : (intexpr -> intexpr) =
   meta_transform_intexpr_on_intexpr BottomUp ( function 
   | IMul ([x]) -> x
@@ -94,12 +100,23 @@ let rule_multiply_by_one_on_intexpr : (intexpr -> intexpr) =
   let rec f (l : intexpr list) : intexpr list =
     match l with
     | IConstant 1 :: tl -> f tl
+    | a :: IConstant 1 :: tl -> f (a :: tl)
     | a :: tl -> a :: (f tl)
     | [] -> []
   in
   meta_multiply_intexpr BottomUp f
 ;;
-  
+
+let rule_addition_zero_on_intexpr : (intexpr -> intexpr) =
+  let rec f (l : intexpr list) : intexpr list =
+    match l with
+    | IConstant 0 :: tl -> f tl
+    | a :: IConstant 0 :: tl -> f (a :: tl)
+    | a :: tl -> a :: (f tl)
+    | [] -> []
+  in
+  meta_addition_intexpr BottomUp f
+;;
 
 
 let rule_multiply_and_divide_by_the_same_on_intexpr : (intexpr -> intexpr) =
@@ -117,5 +134,6 @@ let intexpr_rulemap =
     List.fold_left (fun (map) (name, rule) -> StringMap.add name rule map ) StringMap.empty ([
   ("Remove unary fmul", rule_remove_unary_fmul_on_intexpr);
   ("Multiply by one", rule_multiply_by_one_on_intexpr);
+  ("Addition zero", rule_addition_zero_on_intexpr);
   ("Multiply and divide by the same", rule_multiply_and_divide_by_the_same_on_intexpr) ])
 ;;

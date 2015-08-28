@@ -24,15 +24,16 @@ type idxfunc =
 let rec string_of_idxfunc (e : idxfunc) : string =
   match e with
     FH(src, dest, j,k) -> "FH("^(string_of_intexpr src)^","^(string_of_intexpr dest)^","^(string_of_intexpr j)^","^(string_of_intexpr k)^")"
-  | FL(j,k) -> "FL("^(string_of_intexpr j)^","^(string_of_intexpr k)^")"      
-  | FD(n,k) -> "FD("^(string_of_intexpr n)^","^(string_of_intexpr k)^")"      
+  | FL(j,k) -> "FL("^(string_of_intexpr j)^", "^(string_of_intexpr k)^")"      
+  | FD(n,k) -> "FD("^(string_of_intexpr n)^", "^(string_of_intexpr k)^")"      
   | FCompose(l) -> optional_short_infix_list_print "FCompose" " . " l string_of_idxfunc
 
   | Pre(l) -> "Pre("^(string_of_idxfunc l)^")"
   | FUp(l) -> "FUp("^(string_of_idxfunc l)^")"
+  | FDown(f,l,d) -> "FDown("^(string_of_idxfunc f)^", "^(string_of_intexpr l)^", "^(string_of_int d)^")"      
   | PreWrap(n, l, funcs, d) -> "PreWrap(\""^n^"\", ["^(String.concat "; " (List.map string_of_intexpr l))^"], ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"], "^(string_of_intexpr d)^")"
   | FArg(n, d) -> "FArg(\""^n^"\", "^(string_of_intexpr d)^")"
-  | FHH(d, r, b, s, vs) -> "FHH("^(string_of_intexpr d)^", "^(string_of_intexpr r)^", "^(string_of_intexpr b)^" , "^(string_of_intexpr s)^", ["^(String.concat "; " (List.map string_of_intexpr vs))^"] )"
+  | FHH(d, r, b, s, vs) -> "FHH("^(string_of_intexpr d)^", "^(string_of_intexpr r)^", "^(string_of_intexpr b)^", "^(string_of_intexpr s)^", ["^(String.concat "; " (List.map string_of_intexpr vs))^"] )"
 ;;
 
 let meta_transform_idxfunc_on_idxfunc (recursion_direction: recursion_direction) (f : idxfunc -> idxfunc) : (idxfunc -> idxfunc) =
@@ -42,6 +43,7 @@ let meta_transform_idxfunc_on_idxfunc (recursion_direction: recursion_direction)
     | FCompose (l) -> FCompose (List.map g l)
     | Pre(l) -> Pre(g l)
     | FUp(l) -> FUp(g l)
+    | FDown(f, a, b) -> FDown(g f, a, b)
     | PreWrap(a, b, c, d) -> PreWrap(a,b, (List.map g c), d)
     | FHH _ | FD _ | FH _ | FL _ | FArg _ -> e
     | _ -> failwith("meta_transform_idxfunc_on_idxfunc, not handled: "^(string_of_idxfunc e))         		
@@ -62,6 +64,7 @@ let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction)
     | FCompose _ | Pre _ | FUp _ as e -> e
     | PreWrap (n,f,funcs,d) -> PreWrap(n, f, funcs, (g d)) (*f is not parameterized because we don't want to parameterize inside the call*)
     | FArg (i,f) ->  FArg(i, (g f))
+    | FDown(f, a, i) -> FDown(f, g a, i)
     | FHH (a, b, c, d, vs) -> let ga = g a in
   			     let gb = g b in
   			     let gc = g c in
@@ -239,6 +242,12 @@ let rule_downrank_FHH : (idxfunc -> idxfunc) =
   | x -> x)
 ;;
 
+let rule_FHH_to_FH : (idxfunc -> idxfunc) =
+  meta_transform_idxfunc_on_idxfunc TopDown ( function
+  | FHH(d,r,b,s,[]) -> FH(d,r,b,s)
+  | x -> x)
+;;
+  
 let idxfunc_rulemap = 
   List.fold_left (fun (map) (name, rule) -> StringMap.add name rule map ) StringMap.empty (
 		   [
@@ -252,6 +261,7 @@ let idxfunc_rulemap =
 		     ("Distribute downrank", rule_distribute_downrank);
 		     ("Downrank FHH", rule_downrank_FHH);
 		     ("Uprank FHH", rule_uprank_FHH);
+		     ("rule_FHH_to_FH", rule_FHH_to_FH);
 		   ]
 		   @(List.map (fun (name,rule) -> ("Lifted "^name, meta_transform_intexpr_on_idxfunc BottomUp rule)) (StringMap.bindings intexpr_rulemap))
 )

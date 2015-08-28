@@ -79,6 +79,22 @@ let meta_transform_spl_on_spl (recursion_direction: recursion_direction) (f : sp
   recursion_transform recursion_direction f z
 ;;
 
+(*FIXME ugly*)
+let meta_transform_spl_on_spl_gt_limit (recursion_direction: recursion_direction) (f : spl -> spl) : (spl -> spl) =
+  let z (g : spl -> spl) (e : spl) : spl = 
+    match e with
+    | Compose (l) -> Compose (List.map g l)
+    | Tensor (l) -> Tensor (List.map g l)
+    | ISum(v,c,a) -> ISum(v,c, (g a))
+    | RS (l) -> RS(g l)
+    | BB (l) -> BB(g l)
+    | GT (a, c, s, l) -> GT(a, c, s, l)
+    | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _-> e
+    | _ -> failwith("meta_transform_spl_on_spl, not handled: "^(string_of_spl e))         
+  in
+  recursion_transform recursion_direction f z
+;;
+
 let meta_transform_idxfunc_on_spl (recursion_direction: recursion_direction) (f : idxfunc -> idxfunc) : (spl -> spl) =
   (* print_string "meta_transform_idxfunc_on_spl\n"; *)
   let g = meta_transform_idxfunc_on_idxfunc recursion_direction f in

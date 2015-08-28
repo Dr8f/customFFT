@@ -58,6 +58,7 @@ let rec code_of_func (func : Idxfunc.idxfunc) ((input,code):expr * code list) : 
   |FArg(_,_) -> let output = gen_var#get Complex "c" in
 		    (output,code@[Declare(output);Assign(output, MethodCall(expr_of_idxfunc func, _at, [input]))])  
   |FCompose l -> List.fold_right code_of_func l (input,[])
+  | _ -> failwith("meta_code_of_func, not handled: "^(Idxfunc.string_of_idxfunc func))        		
 ;;
 
 
@@ -86,7 +87,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 
   let cons_code_of_rstep ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : code =
     let rec prepare_cons (e:Spl.spl) : code =
-      (* print_string ("BOOM:"^(Spl.string_of_spl e)^"\n"); *)
+      (* print_string ("cons code:"^(Spl.string_of_spl e)^"\n"); *)
       match e with
       | Spl.Compose l -> Chain (List.map prepare_cons (List.rev l)) 
       | Spl.Construct(numchild, rs, args, funcs) -> Assign(build_child_var(numchild), New(FunctionCall(rs, (List.map expr_of_intexpr (args))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
@@ -109,8 +110,8 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 					      Assign((Nth(Cast(_dat,Ptr(Complex)),var)),precomp)]))
 				     ])
       | Spl.S _ | Spl.G _ | Spl.F _ -> Chain([])
-      | Spl.BB spl -> prepare_cons spl
-
+      | Spl.BB spl | Spl.ISum(_, _, spl) -> prepare_cons spl
+      | _ -> failwith("prepare_cons, not handled: "^(Spl.string_of_spl e))
     in
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
@@ -120,7 +121,6 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	 Chain( [Assign(_rule, expr_of_intexpr(IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]),
 	 stmt)	
     in
-    print_string "===== Building an rstep constructor =====\n";
     List.fold_left g (Error("no applicable rules")) breakdowns
   in
 
@@ -130,6 +130,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   
   let comp_code_of_rstep ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) (output:expr) (input:expr): code =
     let rec prepare_comp (output:expr) (input:expr) (e:Spl.spl): code =
+      (* print_string ("comp code:"^(Spl.string_of_spl e)^"\n"); *)
       match e with
       | Spl.Compose l -> let ctype = Complex in
 			 let buffernames = 
@@ -177,21 +178,24 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	 stmt)
 	
     in
-    print_string "===== Building an rstep content =====\n";
     List.fold_left g (Error("internal error: no valid rule has been selected")) breakdowns
   in
 
   print_string ("=== Building "^name^" ===\n");
-  Class (name, _rs, _rule::_dat::cons_args@(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned), [
-    Constructor(cons_args, cons_code_of_rstep rstep_partitioned);	       
-    Method(Void, _compute, comp_args, comp_code_of_rstep rstep_partitioned _output _input)])
+  let met = Method(Void, _compute, comp_args, comp_code_of_rstep rstep_partitioned _output _input) in
+  print_string ("... built method \n");
+  let cons = Constructor(cons_args, cons_code_of_rstep rstep_partitioned) in
+  print_string ("... built constructor \n");
+  let claz = Class (name, _rs, _rule::_dat::cons_args@(collect_children rstep_partitioned) @ (collect_freedoms rstep_partitioned), [cons;met]) in
+  print_string ("... built class \n");
+  claz
 ;;
 
 let code_of_envfunc ((name, f, args, fargs) : envfunc) : code =  
+  print_string ("=== Building "^name^" ===\n");
   let input = gen_var#get Int "t" in
   let(output, code) = (code_of_func f (input,[])) in
   let cons_args = (List.map expr_of_intexpr args)@(List.map expr_of_idxfunc fargs) in
-  print_string ("=== Building "^name^" ===\n");
   Class(name, _func, cons_args, [
     Constructor(cons_args, Noop);
     Method(Complex, _at, [input], Chain(code@[Return(output)]))])

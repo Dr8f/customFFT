@@ -69,13 +69,14 @@ end)
 
 (******** PRINTING *******)
 
-let string_of_breakdown_enhanced ((condition, freedoms, desc, desc_with_calls, desc_with_calls_cons, desc_with_calls_comp):breakdown_enhanced) : string = 
-  "APPLICABLE\t\t"^(string_of_boolexpr condition)^"\n"
-  ^"FREEDOM\t\t\t"^(String.concat ", " (List.map string_of_intexpr_intexpr freedoms))^"\n"
-  ^"DESCEND\t\t\t"^(string_of_spl desc)^"\n"
-  ^"DESCEND - CALLS\t\t"^(string_of_spl desc_with_calls)^"\n"
-  ^"DESCEND - CALLS CONS\t"^(string_of_spl desc_with_calls_cons)^"\n"
-  ^"DESCEND - CALLS COMP\t"^(string_of_spl desc_with_calls_comp)^"\n"
+let string_of_breakdown_enhanced ((condition, freedoms, desc, desc_with_calls, desc_with_calls_cons, desc_with_calls_comp):breakdown_enhanced) : string =
+  "---breakdown\n"
+  ^"   APPLICABILITY\t\t"^(string_of_boolexpr condition)^"\n"
+  ^"   FREEDOM\t\t\t"^(String.concat ", " (List.map string_of_intexpr_intexpr freedoms))^"\n"
+  ^"   DESCEND\t\t\t"^(string_of_spl desc)^"\n"
+  ^"   DESCEND - CALLS\t\t"^(string_of_spl desc_with_calls)^"\n"
+  ^"   DESCEND - CALLS CONS\t"^(string_of_spl desc_with_calls_cons)^"\n"
+  ^"   DESCEND - CALLS COMP\t"^(string_of_spl desc_with_calls_comp)^"\n"
 ;;
 
 let string_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdowns ): rstep_partitioned) : string =
@@ -306,13 +307,13 @@ let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (
   let (condition, freedoms, naive_desc) = algo rstep in
 
   let desc = apply_rewriting_rules spl_rulemap (mark_RS(naive_desc)) in
-  print_string ("Desc:\t\t"^(string_of_spl desc)^"\n");
+  (* print_string ("Desc:\t\t"^(string_of_spl desc)^"\n"); *)
 
   let simplification_constraints = extract_constraints_spl desc in
-  print_string ("Simplifying constraints\t\n");
+  (* print_string ("Simplifying constraints\t\n"); *)
 
   let simplified =  reconcile_constraints_on_spl (simplification_constraints, desc) in
-  print_string ("Simplified desc:\t\t"^(string_of_spl simplified)^"\n");
+  (* print_string ("Simplified desc:\t\t"^(string_of_spl simplified)^"\n"); *)
 
 
   let rses = collect_RS simplified in
@@ -326,28 +327,28 @@ let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (
     (meta_transform_idxfunc_on_spl TopDown transf) e in
   
   let wrapped_precomps = List.map wrap_precomputations rses in  
-  print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (* WIP *)
+  (* print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (\* WIP *\) *)
   
   let wrapped_intexpr = List.map wrap_intexprs_on_spl wrapped_precomps in
-  print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n");
+  (* print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); *)
   
   
   let constraints = List.map extract_constraints_spl wrapped_intexpr in
   let wrapped_RSes = List.map reconcile_constraints_on_spl (List.combine constraints wrapped_intexpr) in
   
-  print_string ("WIP DESC wrapped:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_RSes))^"\n\n"); (* WIP *)
+  (* print_string ("WIP DESC wrapped:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_RSes))^"\n\n"); (\* WIP *\) *)
   
   let new_steps = List.map unwrap_spl wrapped_RSes in
-  print_string ("WIP DESC new steps:\n"^(String.concat ",\n" (List.map string_of_spl new_steps))^"\n\n"); (* WIP *)
+  (* print_string ("WIP DESC new steps:\n"^(String.concat ",\n" (List.map string_of_spl new_steps))^"\n\n"); (\* WIP *\) *)
   
   let new_names = List.map ensure_name new_steps in
-  print_string ("WIP DESC newnames:\n"^(String.concat ",\n" (new_names))^"\n\n"); (* WIP *)
+  (* print_string ("WIP DESC newnames:\n"^(String.concat ",\n" (new_names))^"\n\n"); (\* WIP *\) *)
   
   let extracts_with_calls = List.map replace_by_a_call_spl (List.combine wrapped_RSes (List.combine new_names rses)) in
-  print_string ("WIP DESC extracts_with_calls:\n"^(String.concat ",\n" (List.map string_of_spl extracts_with_calls))^"\n\n"); (* WIP *)
+  (* print_string ("WIP DESC extracts_with_calls:\n"^(String.concat ",\n" (List.map string_of_spl extracts_with_calls))^"\n\n"); (\* WIP *\) *)
   
   let desc_with_calls = drop_RS (reintegrate_RS simplified extracts_with_calls) in
-  print_string ("WIP DESC with_calls:\n"^(string_of_spl desc_with_calls)^"\n\n"); (* WIP *)
+  (* print_string ("WIP DESC with_calls:\n"^(string_of_spl desc_with_calls)^"\n\n"); (\* WIP *\) *)
 
   (condition, freedoms, simplified, desc_with_calls)
 ;;

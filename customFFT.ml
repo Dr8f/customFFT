@@ -8,9 +8,8 @@ print_string "= Building the library =\n"
 let lib = Lib.make_lib [Spl.DFT(Intexpr.IArg(1))] [Algo.algo_cooley_tukey; Algo.algo_dft_base]
 ;;
 
-
-(* print_string (Lib.string_of_lib lib) *)
-(* ;; *)
+print_string (Lib.string_of_lib lib)
+;;
 
 print_string "= Building the code =\n"
 ;;
