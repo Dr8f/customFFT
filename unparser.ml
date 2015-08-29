@@ -17,7 +17,7 @@ let rec ctype_of_expr (expr:expr) : ctype =
 let rec string_of_ctype (t : ctype) : string =
   match t with
   |Int -> "int"
-  |Func -> "func*"
+  |Func(r) -> "TFunc_T"^(String.concat "_T" (List.map Code.string_of_ctype r))^"*"
   |Env(rs) -> rs
   |Ptr(ctype)->(string_of_ctype ctype)^" *"
   |Char -> "char"
@@ -173,7 +173,9 @@ let string_of_codes (n:int) (codes : code list) : string =
   ^ "static complex_t omega(int N, int k) { return cosf(2*PI*k/N) + __I__ * sinf(2*PI*k/N); }\n"
   ^ "struct RS { virtual ~RS(){}};\n"
   ^ "template<class T> struct TFunc_TInt_T : public RS { virtual T at(int) = 0; };\n"
-  ^ "struct func : public TFunc_TInt_T<complex_t> {};\n\n"
+  ^ "template<class T> struct TFunc_TInt_TInt_T : public RS { virtual T at(int,int) = 0; };\n"
+  ^ "struct TFunc_TInt_TComplex : public TFunc_TInt_T<complex_t> {};\n\n"
+  ^ "struct TFunc_TInt_TInt_TComplex : public TFunc_TInt_TInt_T<complex_t> {};\n\n"
   ^ String.concat "" (List.map (cpp_string_of_code Prototype n) codes)
   ^ String.concat "" (List.map (cpp_string_of_code Implementation n) codes)
 ;;

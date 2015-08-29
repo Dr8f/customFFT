@@ -10,7 +10,7 @@ open Code
 let _rs = "RS"
 ;;
 
-let _func = "func"
+let _func = "TFunc_TInt_TComplex"
 ;;
 
 let _at = "at"
@@ -44,7 +44,7 @@ let _input = Var(Ptr(Complex),"X")
 
 let rec expr_of_idxfunc (idxfunc : Idxfunc.idxfunc) : expr =
   match idxfunc with
-  | FArg(n, _) -> Var(Func, n)
+  | FArg(n, _) -> Var(Func([Int; Complex]), n)
   | PreWrap(n, l, funcs, _) -> FunctionCall(n, ((List.map expr_of_intexpr l)@(List.map expr_of_idxfunc funcs)))
 ;;
 

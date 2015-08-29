@@ -327,7 +327,7 @@ let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (
     (meta_transform_idxfunc_on_spl TopDown transf) e in
   
   let wrapped_precomps = List.map wrap_precomputations rses in  
-  (* print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (\* WIP *\) *)
+  print_string ("WIP DESC wrapped precomps:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_precomps))^"\n\n"); (* WIP *)
   
   let wrapped_intexpr = List.map wrap_intexprs_on_spl wrapped_precomps in
   (* print_string ("WIP DESC wrapped intexprs:\n"^(String.concat ",\n" (List.map string_of_spl wrapped_intexpr))^"\n\n"); *)

@@ -8,7 +8,7 @@ open Util
 type ctype = 
   Int
 | Env of string
-| Func
+| Func of ctype list
 | Ptr of ctype
 | Char
 | Complex
@@ -91,7 +91,7 @@ let rec ctype_of_expr (e : expr) : ctype =
 let rec string_of_ctype (t : ctype) : string =
   match t with
   |Int -> "Int"
-  |Func -> "Func"
+  |Func(r) -> "Func("^(String.concat ", " (List.map string_of_ctype r))^")"
   |Env(rs) -> "Env(\""^rs^"\")"
   |Ptr(ctype)->"Ptr("^(string_of_ctype ctype)^")"
   |Char -> "Char"
