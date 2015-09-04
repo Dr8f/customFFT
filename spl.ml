@@ -79,6 +79,37 @@ let meta_transform_spl_on_spl (recursion_direction: recursion_direction) (f : sp
   recursion_transform recursion_direction f z
 ;;
 
+let recursion_transform_ctx (recursion_direction: recursion_direction) (f : 'a -> 'a list -> 'a) (z : ('a -> 'a) -> ('a * 'a list) -> 'a) (o:'a) : 'a =
+  let fst (x,y) = x in
+  let rec g ((e, l) : ('a * 'a list)) : ('a * 'a list) =
+    print_string ("Applying the compounded rule to "^(string_of_spl e)^" Context is ["^(String.concat ", " (List.map string_of_spl l))^"]\n");
+    let stuff = 
+      let g_simp (elt:'a) : 'a = 
+	    print_string ("Applying the simplified recursion to "^(string_of_spl e)^"\n");
+	    fst (g (elt, e::l))
+      in
+      match recursion_direction with
+      | BottomUp -> (f (z g_simp (e,l)) l)
+      | TopDown -> (z g_simp (f e l, l))
+    in
+    (stuff, e::l)
+  in
+  fst (g (o,[]))
+;;
+
+  
+let meta_transform_spl_on_spl_context (recursion_direction: recursion_direction) (f : spl -> spl list -> spl) : spl -> spl=
+  let z (g : spl -> spl) ((e,ctx) : spl * spl list) : spl =
+    print_string ("Applying the structural rule to "^(string_of_spl e)^" Context is ["^(String.concat ", " (List.map string_of_spl ctx))^"]\n");
+    match e with
+    | RS (l) -> RS(g(l))
+    | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _-> e
+    | _ -> failwith("meta_transform_spl_on_spl_context, not handled: "^(string_of_spl e))
+  in
+  recursion_transform_ctx recursion_direction f z
+;;
+  
+
 (*FIXME ugly*)
 let meta_transform_spl_on_spl_gt_limit (recursion_direction: recursion_direction) (f : spl -> spl) : (spl -> spl) =
   let z (g : spl -> spl) (e : spl) : spl = 
@@ -125,7 +156,7 @@ let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f 
     | PartitionnedCall _ -> e
     | F _ -> e
     | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ | Construct _ -> assert false
-    | _ -> failwith("meta_transform_intexpr_on_spl, not handled: "^(string_of_spl e))         		
+    (* | _ -> failwith("meta_transform_intexpr_on_spl, not handled: "^(string_of_spl e))         		 *)
   in
   fun (e : spl) ->
   (meta_transform_spl_on_spl recursion_direction z) ((meta_transform_idxfunc_on_spl recursion_direction (meta_transform_intexpr_on_idxfunc recursion_direction g)) e)
@@ -426,7 +457,7 @@ let rule_compose_scatter_BB : (spl -> spl) =
 
 let spl_rulemap =
   List.fold_left (fun (map) (name, rule) -> StringMap.add name rule map ) StringMap.empty ([
-  ("Tensor to ISum", rule_tensor_to_isum);
+  (* ("Tensor to ISum", rule_tensor_to_isum); *)
   ("Remove unary tensor", rule_remove_unary_tensor);
   ("Remove unary compose", rule_remove_unary_compose); 
   ("Transform T into diag", rule_transorm_T_into_diag);
@@ -445,7 +476,7 @@ let spl_rulemap =
      Should introduce GT downrank to verify that RS4 and RS 5 (page 88) are properly generated and that the all code runs
      Then introduce DFT within GT to breakdown the rest
    *)
-  (* ("Tensor to GT", rule_tensor_to_GT); *)
+  ("Tensor to GT", rule_tensor_to_GT);
   ("rule_suck_inside_GT", rule_suck_inside_GT);
   ("rule_warp_GT_RS", rule_warp_GT_RS);
 ]

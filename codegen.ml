@@ -50,6 +50,7 @@ let rec expr_of_idxfunc (idxfunc : Idxfunc.idxfunc) : expr =
 
 
 let rec code_of_func (func : Idxfunc.idxfunc) ((input,code):expr * code list) : expr * code list =
+  print_string ("Processing "^(Idxfunc.string_of_idxfunc func)^"\n");
   match func with
   |FH(_,_,b,s) -> let output = gen_var#get Int "t" in
 		      (output,code@[Declare(output);Assign(output, Plus((expr_of_intexpr b), Mul((expr_of_intexpr s),input)))])
@@ -58,7 +59,7 @@ let rec code_of_func (func : Idxfunc.idxfunc) ((input,code):expr * code list) : 
   |FArg(_,_) -> let output = gen_var#get Complex "c" in
 		    (output,code@[Declare(output);Assign(output, MethodCall(expr_of_idxfunc func, _at, [input]))])  
   |FCompose l -> List.fold_right code_of_func l (input,[])
-  | _ -> failwith("meta_code_of_func, not handled: "^(Idxfunc.string_of_idxfunc func))        		
+  | _ -> failwith("code_of_func, not handled: "^(Idxfunc.string_of_idxfunc func))        		
 ;;
 
 
