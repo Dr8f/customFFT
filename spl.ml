@@ -79,7 +79,7 @@ let meta_transform_spl_on_spl (recursion_direction: recursion_direction) (f : sp
   recursion_transform recursion_direction f z
 ;;
 
-let recursion_transform_ctx (recursion_direction: recursion_direction) (f : 'a -> 'a list -> 'a) (z : ('a -> 'a) -> ('a * 'a list) -> 'a) (o:'a) : 'a =
+let recursion_transform_ctx (recursion_direction: recursion_direction) (f : 'a -> 'a list -> 'a) (z : ('a -> 'a) -> 'a -> 'a list -> 'a) (o:'a) : 'a =
   let fst (x,y) = x in
   let rec g ((e, l) : ('a * 'a list)) : ('a * 'a list) =
     print_string ("Applying the compounded rule to "^(string_of_spl e)^" Context is ["^(String.concat ", " (List.map string_of_spl l))^"]\n");
@@ -89,8 +89,8 @@ let recursion_transform_ctx (recursion_direction: recursion_direction) (f : 'a -
 	    fst (g (elt, e::l))
       in
       match recursion_direction with
-      | BottomUp -> (f (z g_simp (e,l)) l)
-      | TopDown -> (z g_simp (f e l, l))
+      | BottomUp -> f (z g_simp  e l) l
+      | TopDown -> z g_simp (f e l) l
     in
     (stuff, e::l)
   in
@@ -99,7 +99,7 @@ let recursion_transform_ctx (recursion_direction: recursion_direction) (f : 'a -
 
   
 let meta_transform_spl_on_spl_context (recursion_direction: recursion_direction) (f : spl -> spl list -> spl) : spl -> spl=
-  let z (g : spl -> spl) ((e,ctx) : spl * spl list) : spl =
+  let z (g : spl -> spl) (e : spl) (ctx:spl list) : spl =
     print_string ("Applying the structural rule to "^(string_of_spl e)^" Context is ["^(String.concat ", " (List.map string_of_spl ctx))^"]\n");
     match e with
     | RS (l) -> RS(g(l))
