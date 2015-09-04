@@ -31,10 +31,23 @@ type recursion_direction =
 ;;
 
 let recursion_transform (recursion_direction: recursion_direction) (f : 'a -> 'a) (z : ('a -> 'a) -> 'a -> 'a) : ('a -> 'a) =
-  match recursion_direction with
-  | BottomUp -> let rec g (e : 'a) : 'a = f (z g e) in g
-  | TopDown -> let rec g (e : 'a) : 'a = z g (f e) in g							
+  let rec g (e : 'a) : 'a =
+    let s = z g in
+    match recursion_direction with
+    | BottomUp -> f (s e)
+    | TopDown -> s (f e)
+  in g
 ;;
+
+let recursion_transform_ctx (recursion_direction: recursion_direction) (z : ('a -> 'a) -> 'a list -> 'a -> 'a) (f : 'a list -> 'a -> 'a) : ('a -> 'a) =
+  let rec g (ctx:'a list) (e : 'a) : 'a =
+    let s = z (fun a -> g (e::ctx) a) ctx in
+    match recursion_direction with
+    | BottomUp -> f ctx (s e)
+    | TopDown -> s (f ctx e)
+  in g []
+;;
+
   
 let recursion_collect (f : 'a -> 'b list) (z : ('a -> 'b list) -> 'a -> 'b list) : ('a -> 'b list) =
   let rec g (e : 'a) : 'b list =

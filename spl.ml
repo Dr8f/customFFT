@@ -79,36 +79,32 @@ let meta_transform_spl_on_spl (recursion_direction: recursion_direction) (f : sp
   recursion_transform recursion_direction f z
 ;;
 
-let recursion_transform_ctx (recursion_direction: recursion_direction) (f : 'a -> 'a list -> 'a) (z : ('a -> 'a) -> 'a -> 'a list -> 'a) (o:'a) : 'a =
-  let fst (x,y) = x in
-  let rec g ((e, l) : ('a * 'a list)) : ('a * 'a list) =
-    print_string ("Applying the compounded rule to "^(string_of_spl e)^" Context is ["^(String.concat ", " (List.map string_of_spl l))^"]\n");
-    let stuff = 
-      let g_simp (elt:'a) : 'a = 
-	    print_string ("Applying the simplified recursion to "^(string_of_spl e)^"\n");
-	    fst (g (elt, e::l))
-      in
-      match recursion_direction with
-      | BottomUp -> f (z g_simp  e l) l
-      | TopDown -> z g_simp (f e l) l
-    in
-    (stuff, e::l)
-  in
-  fst (g (o,[]))
-;;
+(* FIXME *)
 
-  
-let meta_transform_spl_on_spl_context (recursion_direction: recursion_direction) (f : spl -> spl list -> spl) : spl -> spl=
-  let z (g : spl -> spl) (e : spl) (ctx:spl list) : spl =
-    print_string ("Applying the structural rule to "^(string_of_spl e)^" Context is ["^(String.concat ", " (List.map string_of_spl ctx))^"]\n");
+let meta_transform_spl_on_spl_context (recursion_direction: recursion_direction) : (spl list -> spl -> spl) -> spl -> spl =
+  let z (g : spl -> spl) (ctx:spl list) (e : spl) : spl =
     match e with
     | RS (l) -> RS(g(l))
     | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _-> e
     | _ -> failwith("meta_transform_spl_on_spl_context, not handled: "^(string_of_spl e))
   in
-  recursion_transform_ctx recursion_direction f z
+  recursion_transform_ctx recursion_direction z
 ;;
-  
+
+let myrule : spl -> spl = 
+  let f (ctx:spl list) (s:spl) : spl =
+    match s with 
+    | T(n,k) -> Diag(Pre(FD(n,k)))
+    | x -> x
+  in
+  meta_transform_spl_on_spl_context TopDown f
+;;
+
+let my_in = RS(RS(T(IConstant 1, IConstant 3))) in
+    let z = myrule (my_in) in
+    z
+;;
+
 
 (*FIXME ugly*)
 let meta_transform_spl_on_spl_gt_limit (recursion_direction: recursion_direction) (f : spl -> spl) : (spl -> spl) =
