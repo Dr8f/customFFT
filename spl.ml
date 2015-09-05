@@ -79,10 +79,10 @@ let meta_transform_spl_on_spl (recursion_direction: recursion_direction) : (spl 
   recursion_transform recursion_direction z
 ;;
 
-(* FIXME *)
+(* FIXME developping ctx*)
 
 let meta_transform_spl_on_spl_context (recursion_direction: recursion_direction) : (spl list -> spl -> spl) -> spl -> spl =
-  let z (g : spl -> spl) (ctx:spl list) (e : spl) : spl =
+  let z (g : spl -> spl) (_:spl list) (e : spl) : spl =
     match e with
     | RS (l) -> RS(g(l))
     | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _-> e
@@ -92,7 +92,7 @@ let meta_transform_spl_on_spl_context (recursion_direction: recursion_direction)
 ;;
 
 let myrule : spl -> spl = 
-  let f (ctx:spl list) (s:spl) : spl =
+  let f (_:spl list) (s:spl) : spl =
     match s with 
     | T(n,k) -> Diag(Pre(FD(n,k)))
     | x -> x
@@ -182,12 +182,9 @@ let meta_collect_intexpr_on_spl (f : intexpr -> 'a list) : (spl -> 'a list) =
   let direct_from_spl (ff : intexpr -> 'a list) (e : spl) : 'a list =
     match e with
       Compose _ | Tensor _ | RS _ | Diag _ | G _| S _ | UnpartitionnedCall _ | PartitionnedCall _ -> []
-    | ISum(v,c,a) -> (ff v) @ (ff c)
-    | L (n, m) -> (ff n) @ (ff m)
-    | T (n, m) -> (ff n) @ (ff m)
-    | I n -> ff n
-    | DFT n -> ff n
-    | GT (a, g, s, l) -> List.flatten(List.map ff l)
+    | ISum(n, m, _) | L (n, m) | T (n, m)-> (ff n) @ (ff m)
+    | I n  | DFT n -> ff n
+    | GT (_, _, _, l) -> List.flatten(List.map ff l)
     | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ | Construct _ -> assert false
     | _ -> failwith("meta_collect_intexpr_on_spl, not handled: "^(string_of_spl e))         		
   in
@@ -228,52 +225,34 @@ let meta_tensorize_spl (recursion_direction: recursion_direction) (f : spl list 
 (*********************************************
 	 RANGE AND DOMAIN                 
 *********************************************)
-let rec range (e :spl) : intexpr = 
+let rec spl_range (e :spl) : intexpr = 
   match e with
-    DFT(n) -> n
-  | Tensor (list) -> IMul(List.map range list)
-  | GT (a, g, s, l) -> IMul(range a :: l)
-  | I(n) -> n
-  | T(n, _) -> n
-  | L(n, _) -> n
-  | Compose ( list ) -> range (List.hd list)
+  | Tensor (list) -> IMul(List.map spl_range list)
+  | GT (a, _, _, l) -> IMul(spl_range a :: l)
+  | I(n) | T(n, _) | L(n, _) | DFT(n) -> n
+  | Compose ( list ) -> spl_range (List.hd list)
   | S (f) -> func_range f
-  | G (f) -> func_domain f
-  | Diag (f) -> func_domain f
-  | ISum (_, _, spl) -> range spl
-  | RS (spl) -> range spl
+  | G (f) | Diag (f) -> func_domain f
+  | ISum (_, _, s) | RS (s) | BB(s) -> spl_range s
   | F(n) -> IConstant n
-  | BB(spl) -> range spl
-  | UnpartitionnedCall _ -> assert false
-  | PartitionnedCall _ -> assert false
-  | ISumReinitCompute (_, _, _, _, _, range, _) -> range
-  | Compute (_,_,_,range,_) -> range
-  | ISumReinitConstruct _ -> assert false
-  | Construct _ -> assert false
+  | ISumReinitCompute (_, _, _, _, _, r, _)  | Compute (_,_,_,r,_) -> r
+  | ISumReinitConstruct _ | Construct _ | UnpartitionnedCall _ | PartitionnedCall _ -> assert false
 ;;    
 
-let rec domain (e :spl) : intexpr = 
+let rec spl_domain (e :spl) : intexpr = 
   match e with
-    DFT(n) -> n
   | F(n) -> IConstant n
-  | Tensor (list) -> IMul(List.map domain list)
-  | GT (a, g, s, l) -> IMul(domain a :: l)
-  | I(n) -> n
-  | T(n, _) -> n
-  | L(n, _) -> n
-  | Compose ( list ) -> domain (List.hd (List.rev list))
+  | Tensor (list) -> IMul(List.map spl_domain list)
+  | GT (a, _, _, l) -> IMul(spl_domain a :: l)
+  | DFT(n) | I(n) | T(n, _) | L(n, _) -> n
+  | Compose ( list ) -> spl_domain (List.hd (List.rev list))
   | S (f) -> func_domain f
   | G (f) -> func_range f
   | Diag (f) -> func_domain f (* by definition a diag range is equal to a diag domain. However the range of the function is larger but noone cares since its precomputed*)
-  | ISum (_, _, spl) -> domain spl
-  | RS (spl) -> domain spl
-  | BB(spl) -> domain spl
-  | UnpartitionnedCall _ -> assert false
-  | PartitionnedCall _ -> assert false
-  | ISumReinitCompute (_, _, _, _, _, _, domain) -> domain
-  | Compute (_,_,_,_,domain) -> domain
-  | ISumReinitConstruct _ -> assert false
-  | Construct _ -> assert false
+  | ISum (_, _, s) | RS (s) | BB(s)-> spl_domain s
+  | UnpartitionnedCall _ | PartitionnedCall _ | ISumReinitConstruct _ | Construct _ -> assert false
+  | ISumReinitCompute (_, _, _, _, _, _, d)   | Compute (_,_,_,_,d) -> d
+
 ;;    
 
 (*********************************************
@@ -286,10 +265,10 @@ let rule_tensor_to_isum : (spl -> spl) =
     match l with
       I(k) :: a :: tl ->
 	let i = gen_loop_counter#get () in 
-	f ( ISum(i, k, Compose( [S(FH(range a, IMul([range a; k]), IMul([range a; i]), IConstant 1)); a ; G(FH(domain a, IMul([domain a; k]), IMul([domain a; i]), IConstant 1)) ] )) :: tl)
+	f ( ISum(i, k, Compose( [S(FH(spl_range a, IMul([spl_range a; k]), IMul([spl_range a; i]), IConstant 1)); a ; G(FH(spl_domain a, IMul([spl_domain a; k]), IMul([spl_domain a; i]), IConstant 1)) ] )) :: tl)
     | a :: I(k) :: tl -> 
       let i = gen_loop_counter#get () in 
-      f ( ISum(i, k, Compose( [S(FH(range a, IMul([range a; k]), i, k)); a; G(FH(domain a, IMul([domain a; k]), i, k)) ] )) :: tl)
+      f ( ISum(i, k, Compose( [S(FH(spl_range a, IMul([spl_range a; k]), i, k)); a; G(FH(spl_domain a, IMul([spl_domain a; k]), i, k)) ] )) :: tl)
     | a::tl -> a :: (f tl)
     | [] -> []
   in
@@ -301,13 +280,13 @@ let rule_tensor_to_GT : (spl -> spl) =
     match l with
     | I(k) :: a :: tl ->
        GT(a
-	 , FHH(domain a, domain a, IConstant 0, IConstant 1, [domain a])
-	 , FHH(range a, range a, IConstant 0, IConstant 1, [range a])
+	 , FHH(spl_domain a, spl_domain a, IConstant 0, IConstant 1, [spl_domain a])
+	 , FHH(spl_range a, spl_range a, IConstant 0, IConstant 1, [spl_range a])
 	 , [k]) :: tl
     | a :: I(k) :: tl ->
        GT(a
-	 , FHH(domain a, domain a, IConstant 0, k, [IConstant 1])
-	 , FHH(range a, range a, IConstant 0, k, [IConstant 1])
+	 , FHH(spl_domain a, spl_domain a, IConstant 0, k, [IConstant 1])
+	 , FHH(spl_range a, spl_range a, IConstant 0, k, [IConstant 1])
 	 , [k]) :: tl		      
     | a::tl -> a :: (f tl)
     | [] -> []

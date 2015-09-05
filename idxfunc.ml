@@ -157,10 +157,9 @@ let rule_remove_unary_fcompose : (idxfunc -> idxfunc) =
 let rule_compose_FL_FH : (idxfunc -> idxfunc) =
   let rec f (l : idxfunc list) : idxfunc list =
   match l with
-  | FL(n1,k) :: FH(m1,n2,IMul(m2::multl), IConstant 1) :: tl when m1 = m2 -> f (FH(m1, n2, IMul(multl), k) :: tl) 
+  | FL(_(*n1*),k) :: FH(m1,n2,IMul(m2::multl), IConstant 1) :: tl when m1 = m2 -> f (FH(m1, n2, IMul(multl), k) :: tl) 
   (*n1 = n2 is not checked because n could be mul(k,m) *)
-  | FUp(FL(n,k)) :: FHH(d, r, b, IConstant 1, m::vstl) :: tl -> f (FHH(d, r, b, k, (IConstant 1)::vstl) :: tl) (*FIXME seems correct not checked*)
-  (*n1 = n2 is not checked because n could be mul(k,m) *)
+  | FUp(FL(_,k)) :: FHH(d, r, b, IConstant 1, _::vstl) :: tl -> f (FHH(d, r, b, k, (IConstant 1)::vstl) :: tl) (*FIXME seems correct but needs guards for n and k!*)
   | a::tl -> a :: (f tl)
   | [] -> []
   in
@@ -170,7 +169,7 @@ let rule_compose_FL_FH : (idxfunc -> idxfunc) =
 let rule_compose_FH_FH : (idxfunc -> idxfunc) =
   let rec f (l : idxfunc list) : idxfunc list =
   match l with
-    FH(gn1,gnp,bp,sp) :: FH(n,gn2,b,s) :: tl -> f (FH(n, gnp, IPlus([bp;IMul([sp; b])]), IMul([sp; s])) :: tl)
+    FH(_,gnp,bp,sp) :: FH(n,_,b,s) :: tl -> f (FH(n, gnp, IPlus([bp;IMul([sp; b])]), IMul([sp; s])) :: tl)
     (*gn1 = gn2 is not checked because that could be non-obvious*)
     | a::tl -> a :: (f tl)
     | [] -> []
@@ -181,7 +180,7 @@ let rule_compose_FH_FH : (idxfunc -> idxfunc) =
 let rule_compose_FHH_FHH : (idxfunc -> idxfunc) =
   let rec f (l : idxfunc list) : idxfunc list =
     match l with
-    | FHH(da,ra,ba,sa, vsa) :: FHH(db, rb, bb, sb, vsb) :: tl ->
+    | FHH(_,ra,ba,sa, vsa) :: FHH(db, _, bb, sb, vsb) :: tl ->
        let rec mul (a:intexpr list) (b:intexpr list) : intexpr list =
 	 match a,b with
 	 |[], [] -> []

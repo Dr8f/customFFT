@@ -22,7 +22,7 @@ let flatten_chain : (code -> code) =
 
 let remove_decls : (code -> code) =
   meta_transform_code_on_code BottomUp ( function
-  | Declare x -> Noop
+  | Declare _ -> Noop
   | x -> x
   )
 ;;
@@ -38,7 +38,7 @@ let replace_bound_vars (code:code) : code =
 (* lots of missing stuff here *)
 let constant_folding : code -> code =
   meta_transform_expr_on_code BottomUp ( function
-  | Mul((IConst 0), x) | Mul(x, (IConst 0)) -> IConst 0
+  | Mul((IConst 0), _) | Mul(_, (IConst 0)) -> IConst 0
   | Mul((IConst 1), x) | Mul(x, (IConst 1)) -> x
   | Plus((IConst 0), x) | Plus(x, (IConst 0)) -> x						 
   | x -> x)
@@ -117,7 +117,7 @@ let common_subexpression_elimination (code:code) : code =
 	| _ -> failwith("case not handled by z : "^(string_of_expr expr)) in
     let process_one_instruction (next_insn:code) : unit =
       match next_insn with
-      | Declare var ->
+      | Declare _ ->
 	 ()
 
       | ArrayAllocate(var, ctype, rvalue) ->

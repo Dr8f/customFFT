@@ -32,7 +32,7 @@ let build_child_var (num:int) : expr =
 let expr_of_intexpr (intexpr : Intexpr.intexpr) : expr =
   match intexpr with
     Intexpr.IConstant x -> IConst x
-  | x -> Var(Int, Intexpr.string_of_intexpr intexpr)
+  | _ -> Var(Int, Intexpr.string_of_intexpr intexpr)
 ;;
 
 let _output = Var(Ptr(Complex),"Y")
@@ -65,9 +65,9 @@ let rec code_of_func (func : Idxfunc.idxfunc) ((input,code):expr * code list) : 
 
 
 let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
-  let collect_children ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
+  let collect_children ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) : expr list =
     let res = ref IntSet.empty in  
-    let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
+    let g ((_,_,_,_,desc_cons,_):breakdown_enhanced) : _ =
       Spl.meta_iter_spl_on_spl (function
       | Spl.Construct(numchild, _, _, _) | Spl.ISumReinitConstruct(numchild, _, _, _, _, _, _) -> res := IntSet.add numchild !res
       | _ -> ()
@@ -78,16 +78,16 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   in
 
 (*we should probably generate content while we are generating it instead of doing another pass*)
-  let collect_freedoms ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : expr list =
+  let collect_freedoms ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) : expr list =
     let res = ref [] in  
-    let g ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : _ =
-      res := (List.map (fun (l,r)->expr_of_intexpr l) freedoms) @ !res    
+    let g ((_,freedoms,_,_,_,_):breakdown_enhanced) : _ =
+      res := (List.map (fun (l,_)->expr_of_intexpr l) freedoms) @ !res    
     in
     List.iter g breakdowns;
     !res  
   in
 
-  let cons_code_of_rstep ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) : code =
+  let cons_code_of_rstep ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) : code =
     let rec prepare_cons (e:Spl.spl) : code =
       (* print_string ("cons code:"^(Spl.string_of_spl e)^"\n"); *)
       match e with
@@ -106,8 +106,8 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
       | Spl.Diag Idxfunc.Pre(idxfunc) -> let var = gen_var#get Int "t" in
 				     let (precomp, codelines) = code_of_func idxfunc (var,[]) in			    
 				     Chain([
-				       ArrayAllocate(_dat, Complex, expr_of_intexpr(Spl.range(e)));
-				       Loop(var, expr_of_intexpr(Spl.range(e)),
+				       ArrayAllocate(_dat, Complex, expr_of_intexpr(Spl.spl_range(e)));
+				       Loop(var, expr_of_intexpr(Spl.spl_range(e)),
 					    Chain(codelines@[
 					      Assign((Nth(Cast(_dat,Ptr(Complex)),var)),precomp)]))
 				     ])
@@ -116,7 +116,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
       | _ -> failwith("prepare_cons, not handled: "^(Spl.string_of_spl e))
     in
     let rulecount = ref 0 in
-    let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
+    let g (stmt:code) ((condition,freedoms,_,_,desc_cons,_):breakdown_enhanced) : code  =
       let freedom_assigns = List.map (fun (l,r)->Assign(expr_of_intexpr l, expr_of_intexpr r)) freedoms in
       rulecount := !rulecount + 1;      
       If( Var(Bool, Boolexpr.string_of_boolexpr condition), 
@@ -126,11 +126,11 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     List.fold_left g (Error("no applicable rules")) breakdowns
   in
 
-  let (name, rstep, cold, reinit, hot, funcs, breakdowns) = rstep_partitioned in 
+  let (name, _, cold, reinit, hot, funcs, _) = rstep_partitioned in 
   let cons_args = (List.map expr_of_intexpr ((IntExprSet.elements (cold))@(IntExprSet.elements (reinit))))@(List.map expr_of_idxfunc funcs) in
   let comp_args = _output::_input::List.map expr_of_intexpr (IntExprSet.elements hot) in
   
-  let comp_code_of_rstep ((name, rstep, cold, reinit, hot, funcs, breakdowns ) : rstep_partitioned) (output:expr) (input:expr): code =
+  let comp_code_of_rstep ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) (output:expr) (input:expr): code =
     let rec prepare_comp (output:expr) (input:expr) (e:Spl.spl): code =
       (* print_string ("comp code:"^(Spl.string_of_spl e)^"\n"); *)
       match e with
@@ -143,9 +143,9 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 			   in
 			   List.fold_left g [] (List.tl l) in
 			 let out_in_spl = (List.combine (List.combine (buffernames @ [ output ]) (input :: buffernames)) (List.rev l)) in
-			 let buffers = (List.combine (buffernames) (List.map Spl.range (List.rev (List.tl l)))) in
+			 let buffers = (List.combine (buffernames) (List.map Spl.spl_range (List.rev (List.tl l)))) in
 			 Chain (
-			   (List.map (fun (output,size)->(Declare output)) buffers)
+			   (List.map (fun (output,_)->(Declare output)) buffers)
 			   @ (List.map (fun (output,size)->(ArrayAllocate(output,ctype,expr_of_intexpr(size)))) buffers)
 			   @ (List.map (fun ((output,input),spl)->(prepare_comp output input spl)) out_in_spl)
 			   @ (List.map (fun (output,size)->(ArrayDeallocate(output,expr_of_intexpr(size)))) buffers)
@@ -161,20 +161,20 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	Assign ((Nth(output,(IConst 1))), (Minus (Nth(input, (IConst 0)), (Nth(input, (IConst 1))))))])
       | Spl.S idxfunc -> let var = gen_var#get Int "t" in
 			 let (index, codelines) = code_of_func idxfunc (var,[]) in			    
-			     Loop(var, expr_of_intexpr(Spl.domain(e)),
+			     Loop(var, expr_of_intexpr(Spl.spl_domain(e)),
 				  Chain(codelines@[Assign((Nth(output,index)), (Nth(input,var)))])) 
       | Spl.G idxfunc -> let var = gen_var#get Int "t" in
 			 let (index, codelines) = code_of_func idxfunc (var,[]) in			    
-			     Loop(var, expr_of_intexpr(Spl.range(e)),
+			     Loop(var, expr_of_intexpr(Spl.spl_range(e)),
 				  Chain(codelines@[Assign((Nth(output,var)), (Nth(input,index)))])) 
       | Spl.Diag _ -> let var = gen_var#get Int "t" in
-		      Loop(var, expr_of_intexpr(Spl.range(e)),
+		      Loop(var, expr_of_intexpr(Spl.spl_range(e)),
 			   Chain([Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ptr(Complex)),var)))]))
       | Spl.BB spl -> Compiler.compile_bloc (prepare_comp output input spl)
       | _ -> failwith("prepare_comp, not handled: "^(Spl.string_of_spl e))
     in
     let rulecount = ref 0 in
-    let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
+    let g (stmt:code) ((_,_,_,_,_,desc_comp):breakdown_enhanced) : code  =
       rulecount := !rulecount + 1;
       If(Equal(_rule, expr_of_intexpr(Intexpr.IConstant !rulecount)),
 	 prepare_comp output input desc_comp, 

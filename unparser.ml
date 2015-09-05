@@ -9,7 +9,7 @@ type unparse_type =
 | Implementation
 ;;
 
-let rec ctype_of_expr (e:expr) : ctype =
+let ctype_of_expr (e:expr) : ctype =
   match e with
   | Var(ctype, _) -> ctype
   | _ -> failwith("ctype_of_expr, not handled: "^(string_of_expr e))
@@ -78,7 +78,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_expr cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
   | Loop(var, expr, code) -> (white n)^"for(int "^(string_of_expr var)^" = 0; "^(string_of_expr var)^" < "^(string_of_expr expr)^"; "^(string_of_expr var)^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | ArrayAllocate(expr,elttype,int) -> (white n)^(string_of_expr expr)^" = ("^(string_of_ctype(Ptr(elttype)))^") malloc (sizeof("^(string_of_ctype(elttype))^") * "^(string_of_expr int)^");\n"
-  | ArrayDeallocate(buf, size) -> (white n)^"free("^(string_of_expr buf)^");\n"
+  | ArrayDeallocate(buf, _) -> (white n)^"free("^(string_of_expr buf)^");\n"
   | Return(expr) -> (white n)^"return "^(string_of_expr expr)^";\n"
   | Declare(expr) -> (white n)^(string_of_ctype(ctype_of_expr expr))^" "^(string_of_expr expr)^";\n"
   | Ignore(expr) -> (white n)^(string_of_expr expr)^";\n"

@@ -123,11 +123,11 @@ let collect_RS: spl -> spl list =
 let rec extract_constraints_func (e : idxfunc) : (intexpr * intexpr) list =
   let rec extract_constraints_within_fcompose (e : idxfunc list) (res : (intexpr * intexpr) list) : (intexpr * intexpr) list = 
     match e with
-      x :: (y :: tl as etl) -> let dmn = func_domain x in
+      x :: (y :: _ as tl) -> let dmn = func_domain x in
 			       let rng = func_range y in
 			       (* print_string ("!!!!"^(string_of_intexpr dmn)^"="^(string_of_intexpr rng)^"\n") ;   *)
-			       extract_constraints_within_fcompose etl ((dmn, rng) :: res)
-    | [x] -> res;
+			       extract_constraints_within_fcompose tl ((dmn, rng) :: res)
+    | [_] -> res;
     | [] -> res
   in
   match e with
@@ -140,18 +140,18 @@ let rec extract_constraints_func (e : idxfunc) : (intexpr * intexpr) list =
 let rec extract_constraints_spl (e : spl) : (intexpr * intexpr) list =
   let rec extract_constraints_within_compose (e : spl list) ( res : (intexpr * intexpr) list) : (intexpr * intexpr) list = 
     match e with
-      x :: (y :: tl as etl) -> let dmn = apply_rewriting_rules intexpr_rulemap (domain x) in
-			       let rng = apply_rewriting_rules intexpr_rulemap (range y) in
+      x :: (y :: _ as tl) -> let dmn = apply_rewriting_rules intexpr_rulemap (spl_domain x) in
+		             let rng = apply_rewriting_rules intexpr_rulemap (spl_range y) in
 			       (* print_string ((string_of_intexpr dmn)^"="^(string_of_intexpr rng)^"\n") ;  *)
-			       extract_constraints_within_compose etl ((dmn, rng) :: res)
-    | [x] -> res;
+			       extract_constraints_within_compose tl ((dmn, rng) :: res)
+    | [_] -> res;
     | [] -> res
   in
   match e with 
     Compose l -> extract_constraints_within_compose l (List.flatten (List.map extract_constraints_spl l))
   | Diag x -> extract_constraints_func x
   | BB x -> extract_constraints_spl x
-  | GT(a,g,s,vecs) -> (domain a,func_domain g)::(range a, func_domain s)::(extract_constraints_spl a)
+  | GT(a,g,s,_) -> (spl_domain a,func_domain g)::(spl_range a, func_domain s)::(extract_constraints_spl a)
   | _ -> []    
 ;;
 
@@ -193,7 +193,7 @@ let unwrap_idxfunc (e:idxfunc) : idxfunc =
   let count = ref 0 in
   let h (e:idxfunc) : idxfunc = 
     match e with
-      PreWrap(n,x,funcs,d)->
+      PreWrap(_,_,_,d)->
       (print_string ("now unwrapping "^(string_of_idxfunc e)^"\n");
        count := !count + 1;
        Pre(FArg(("lambda"^(string_of_int !count)),d)))
@@ -204,7 +204,7 @@ let unwrap_idxfunc (e:idxfunc) : idxfunc =
 
 let unwrap_intexpr (e:intexpr) : intexpr = 
   match e with
-    ICountWrap(l,r)->IArg l
+    ICountWrap(l,_)->IArg l
   | x -> x
 ;;
 
@@ -288,7 +288,7 @@ let replace_by_a_call_spl ((wrapped,(name,unwrapped)) : (spl * (string * spl))) 
       PreWrap _ -> [i]
     | _ -> []
   in
-  let res = UnpartitionnedCall(name, (mapify (meta_collect_intexpr_on_spl collect_intexpr_binds wrapped) IntMap.empty), (meta_collect_idxfunc_on_spl collect_idxfunc_binds wrapped), (range unwrapped), (domain unwrapped)) in 
+  let res = UnpartitionnedCall(name, (mapify (meta_collect_intexpr_on_spl collect_intexpr_binds wrapped) IntMap.empty), (meta_collect_idxfunc_on_spl collect_idxfunc_binds wrapped), (spl_range unwrapped), (spl_domain unwrapped)) in 
   (* print_string ("WIP REPLACING:\nwrapped:"^(string_of_spl wrapped)^"\nunwrapped:"^(string_of_spl unwrapped)^"\nres:"^(string_of_spl res)^"\n\n"); *)
   res
 ;;
@@ -423,7 +423,7 @@ let dependency_map_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t S
 
 let initial_hots_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t =
   let hot_set = ref SpecArgSet.empty in
-  let per_rstep ((name, _, _, breakdowns) : rstep_unpartitioned) : _=   
+  let per_rstep ((_, _, _, breakdowns) : rstep_unpartitioned) : _=   
     let per_rule ((_,_,_,desc_with_calls):breakdown) : _ = 
       meta_iter_spl_on_spl ( function
       | UnpartitionnedCall(callee, vars, _, _, _) ->
@@ -450,12 +450,12 @@ let initial_hots_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t =
 let initial_colds_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t =
   let cold_set = ref SpecArgSet.empty in
 
-  let init_rstep ((name, rstep, args, breakdowns) : rstep_unpartitioned) : _=
+  let init_rstep ((name, rstep, _, breakdowns) : rstep_unpartitioned) : _=
     let add_args_to_cold (e:intexpr) : _ =
       match e with
 	IArg i -> 
 	  cold_set := SpecArgSet.add (name,i) !cold_set
-      | x -> ()
+      | _ -> ()
     in
     (* all arguments in the pre() marker must be cold *)
     let add_all_pre_to_cold (e:idxfunc) : _ =
@@ -466,7 +466,7 @@ let initial_colds_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t =
     in
     meta_iter_idxfunc_on_spl add_all_pre_to_cold rstep;
     
-    let init_rule ((condition,freedoms,desc,desc_with_calls):breakdown) : _ = 
+    let init_rule ((condition,freedoms,_,_):breakdown) : _ = 
       (* all arguments in condition (intexpr list) *)
       meta_iter_intexpr_on_boolexpr add_args_to_cold condition;
       
@@ -546,7 +546,7 @@ let partition_map_of_rsteps (rsteps: rstep_unpartitioned list) : (IntExprSet.t S
   let colds = ref StringMap.empty in
   let reinits = ref StringMap.empty in
   let hots = ref StringMap.empty in
-  let partition_args ((name, rstep, args, breakdowns) : rstep_unpartitioned) : _=
+  let partition_args ((name, _, args, _) : rstep_unpartitioned) : _=
     let necessarily_colds = filter_by_rstep name all_colds in
     let necessarily_hots = filter_by_rstep name all_hots in
     let not_constrained = IntExprSet.diff args (IntExprSet.union necessarily_colds necessarily_hots) in
@@ -559,8 +559,8 @@ let partition_map_of_rsteps (rsteps: rstep_unpartitioned list) : (IntExprSet.t S
   (!colds,!reinits,!hots)
 ;;
 
-(* FIXME var is never used in this function ?! how does this even works? *)
-let depends_on (funcs : idxfunc list) (var : intexpr) : bool =
+(* FIXME second arg is never used in this function ?! how does this even works? *)
+let depends_on (funcs : idxfunc list) (_ : intexpr) : bool =
   (* print_string ("Does ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"] depends on "^(string_of_intexpr var)^"?\n"); *)
   let res = ref false in
   let f (idxfunc: idxfunc) : _=
@@ -575,7 +575,7 @@ let depends_on (funcs : idxfunc list) (var : intexpr) : bool =
 
 let lib_from_closure ((funcs, rsteps): closure) : lib =
   let filter_by (args:intexpr IntMap.t) (set:IntExprSet.t) : intexpr list =
-    List.map snd (List.filter (fun ((i,expr):int*intexpr) -> IntExprSet.mem (IArg i) set) (IntMap.bindings args))
+    List.map snd (List.filter (fun ((i,_):int*intexpr) -> IntExprSet.mem (IArg i) set) (IntMap.bindings args))
   in
   let (cold,reinit,hot) = partition_map_of_rsteps rsteps in
   let f ((name, rstep, _, breakdowns) : rstep_unpartitioned) : rstep_partitioned =

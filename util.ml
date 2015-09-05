@@ -74,10 +74,10 @@ let optional_short_infix_list_print (name:string) (infix:string) (l:'a list) (f:
 (*********************************************
 	 APPLYING RULES
 *********************************************)
-
+ 
 let rec apply_rewriting_rules (rules:('a -> 'a) StringMap.t) (e : 'a) : 'a = 
   let apply_rewriting_rules_once (e : 'a) : 'a = 
-    let f (name:string) (rule : 'a -> 'a) (e : 'a) : 'a=
+    let f (_:string) (rule : 'a -> 'a) (e : 'a) : 'a=
 (*      if (e <> outcome) then print_endline ("===  " ^ name ^ "  ===\n    " ^ (string_of_'a e) ^ "\n    " ^ (string_of_spl outcome) ^ "\n") ;  *)
       rule e
     in

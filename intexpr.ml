@@ -41,9 +41,9 @@ let meta_transform_intexpr_on_intexpr (recursion_direction: recursion_direction)
     | IMul (l) -> IMul(List.map g l)
     | IPlus (l) -> IPlus(List.map g l)
     | IDivPerfect(a,b) -> IDivPerfect(g a,g b)
-    | ICountWrap(a,b) -> e (*FIXME this seems just wrong*)
+    | ICountWrap(_,_) -> e (*FIXME this seems just wrong*)
+    | IDivisor(l) -> IDivisor(g l)
     | IFreedom _ | IArg _ | IConstant _ | ILoopCounter _ -> e
-    | _ -> failwith("meta_transform_intexpr_on_intexpr, not handled: "^(string_of_intexpr e))         		
   in
   recursion_transform recursion_direction z
 ;;
@@ -54,8 +54,8 @@ let meta_collect_intexpr_on_intexpr (f : intexpr -> 'a list) : (intexpr -> 'a li
     | IMul (l) -> List.flatten (List.map g l)
     | IPlus (l) -> List.flatten (List.map g l)
     | IDivPerfect (a,b) -> (g a)@(g b)
-    | IDivisor (l) -> g l
-    | _ -> []
+    | IDivisor (b) | ICountWrap(_,b) -> g b
+    | IFreedom _ | IArg _ | IConstant _ | ILoopCounter _ -> []
   in
   recursion_collect f z
 ;;
