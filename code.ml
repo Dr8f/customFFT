@@ -131,6 +131,7 @@ let rec string_of_code (n:int) (code : code) : string =
     | Return(expr) -> "Return("^(string_of_expr expr)^")"
     | Declare(expr) -> "Declare("^(string_of_expr expr)^")"
     | Noop -> "Noop"
+    | _ -> failwith("string_of_code, not handled")
    )   
 ;;
 
@@ -138,14 +139,15 @@ let rec string_of_code (n:int) (code : code) : string =
 	 METARULES                 
 *********************************************)
 
-let meta_transform_code_on_code (recursion_direction: recursion_direction) (f : code -> code) : (code -> code) =
+let meta_transform_code_on_code (recursion_direction: recursion_direction) : (code -> code) -> (code -> code) =
   let z (g : code -> code) (e : code) : code = 
     match e with
     | Chain l -> Chain (List.map g l)
     | Loop(var, expr, code) -> Loop(var, expr, (g code))
-    | PlacementNew _ | Assign _ | ArrayAllocate _ | ArrayDeallocate _ | Return _ | Declare _ | Noop _ -> e
+    | PlacementNew _ | Assign _ | ArrayAllocate _ | ArrayDeallocate _ | Return _ | Declare _ | Noop -> e
+    | _ -> failwith("string_of_code, not handled "^(string_of_code 0 e))
   in
-  recursion_transform recursion_direction f z
+  recursion_transform recursion_direction z
 ;;
 
 let meta_collect_code_on_code (f : code -> 'a list) : (code -> 'a list) =
@@ -190,7 +192,7 @@ let meta_collect_expr_on_code (f : expr -> 'a list) : (code -> 'a list) =
 ;;
 
   
-let meta_transform_expr_on_expr (recursion_direction: recursion_direction) (f : expr -> expr) : (expr -> expr) =
+let meta_transform_expr_on_expr (recursion_direction: recursion_direction) : (expr -> expr) -> (expr -> expr) =
   let z (g : expr -> expr) (e : expr) : expr = 
     match e with
     | Equal(a,b) -> Equal(g a, g b)
@@ -202,7 +204,7 @@ let meta_transform_expr_on_expr (recursion_direction: recursion_direction) (f : 
     | Var _ | IConst _ -> e
     | x -> failwith ("Pattern_matching failed:\n"^(string_of_expr x))
   in
-  recursion_transform recursion_direction f z
+  recursion_transform recursion_direction z
 ;;
 
 let meta_transform_expr_on_code (recursion_direction: recursion_direction) (f : expr -> expr) : (code -> code) =

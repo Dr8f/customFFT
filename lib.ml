@@ -559,14 +559,16 @@ let partition_map_of_rsteps (rsteps: rstep_unpartitioned list) : (IntExprSet.t S
   (!colds,!reinits,!hots)
 ;;
 
+(* FIXME var is never used in this function ?! how does this even works? *)
 let depends_on (funcs : idxfunc list) (var : intexpr) : bool =
   (* print_string ("Does ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"] depends on "^(string_of_intexpr var)^"?\n"); *)
   let res = ref false in
   let f (idxfunc: idxfunc) : _=
     match idxfunc with
-    |PreWrap _ -> res := true
+    | PreWrap _ -> res := true
+    | _ -> failwith("This function is not a prewrap ?!")
   in
-  List.map (fun x -> meta_iter_idxfunc_on_idxfunc f x) funcs;
+  List.iter (fun x -> meta_iter_idxfunc_on_idxfunc f x) funcs;
   (* print_string ((string_of_bool !res)^"\n\n"); *)
   !res
 ;;

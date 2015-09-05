@@ -30,7 +30,7 @@ type recursion_direction =
 | TopDown
 ;;
 
-let recursion_transform (recursion_direction: recursion_direction) (f : 'a -> 'a) (z : ('a -> 'a) -> 'a -> 'a) : ('a -> 'a) =
+let recursion_transform (recursion_direction: recursion_direction) (z : ('a -> 'a) -> 'a -> 'a) (f : 'a -> 'a) : ('a -> 'a) =
   let rec g (e : 'a) : 'a =
     let s = z g in
     match recursion_direction with

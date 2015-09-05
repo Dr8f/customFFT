@@ -63,7 +63,7 @@ let rec string_of_spl (e : spl) : string =
 	 METARULES                 
 *********************************************)
 
-let meta_transform_spl_on_spl (recursion_direction: recursion_direction) (f : spl -> spl) : (spl -> spl) =
+let meta_transform_spl_on_spl (recursion_direction: recursion_direction) : (spl -> spl) -> (spl -> spl) =
   (* print_string "meta_transform_spl_on_spl\n"; *)
   let z (g : spl -> spl) (e : spl) : spl = 
     match e with
@@ -76,7 +76,7 @@ let meta_transform_spl_on_spl (recursion_direction: recursion_direction) (f : sp
     | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _-> e
     | _ -> failwith("meta_transform_spl_on_spl, not handled: "^(string_of_spl e))         
   in
-  recursion_transform recursion_direction f z
+  recursion_transform recursion_direction z
 ;;
 
 (* FIXME *)
@@ -107,7 +107,7 @@ let my_in = RS(RS(T(IConstant 1, IConstant 3))) in
 
 
 (*FIXME ugly*)
-let meta_transform_spl_on_spl_gt_limit (recursion_direction: recursion_direction) (f : spl -> spl) : (spl -> spl) =
+let meta_transform_spl_on_spl_gt_limit (recursion_direction: recursion_direction) :  (spl -> spl) -> (spl -> spl) =
   let z (g : spl -> spl) (e : spl) : spl = 
     match e with
     | Compose (l) -> Compose (List.map g l)
@@ -119,7 +119,7 @@ let meta_transform_spl_on_spl_gt_limit (recursion_direction: recursion_direction
     | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _-> e
     | _ -> failwith("meta_transform_spl_on_spl, not handled: "^(string_of_spl e))         
   in
-  recursion_transform recursion_direction f z
+  recursion_transform recursion_direction z
 ;;
 
 let meta_transform_idxfunc_on_spl (recursion_direction: recursion_direction) (f : idxfunc -> idxfunc) : (spl -> spl) =
@@ -453,7 +453,7 @@ let rule_compose_scatter_BB : (spl -> spl) =
 
 let spl_rulemap =
   List.fold_left (fun (map) (name, rule) -> StringMap.add name rule map ) StringMap.empty ([
-  (* ("Tensor to ISum", rule_tensor_to_isum); *)
+  ("Tensor to ISum", rule_tensor_to_isum);
   ("Remove unary tensor", rule_remove_unary_tensor);
   ("Remove unary compose", rule_remove_unary_compose); 
   ("Transform T into diag", rule_transorm_T_into_diag);
@@ -472,7 +472,7 @@ let spl_rulemap =
      Should introduce GT downrank to verify that RS4 and RS 5 (page 88) are properly generated and that the all code runs
      Then introduce DFT within GT to breakdown the rest
    *)
-  ("Tensor to GT", rule_tensor_to_GT);
+  (* ("Tensor to GT", rule_tensor_to_GT); *)
   ("rule_suck_inside_GT", rule_suck_inside_GT);
   ("rule_warp_GT_RS", rule_warp_GT_RS);
 ]

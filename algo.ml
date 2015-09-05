@@ -37,11 +37,10 @@ let algo_cooley_tukey : spl -> boolexpr * (intexpr*intexpr) list * spl =
 (* this is for debug only *)
 let algo_dft_itself : spl -> boolexpr * (intexpr*intexpr) list * spl =
   function (e:spl) ->
-    let conditions = ref [] in
-    let f = meta_transform_spl_on_spl BottomUp ( function
-      |DFT n -> DFT n
-      | x -> x) in
-    (True, [], f e)
+	   let f = meta_transform_spl_on_spl BottomUp ( function
+							|DFT n -> DFT n
+							| x -> x) in
+	   (True, [], f e)
 ;;
 
 let algo_dft_base : spl -> boolexpr * (intexpr*intexpr) list * spl =
@@ -54,7 +53,7 @@ let algo_dft_base : spl -> boolexpr * (intexpr*intexpr) list * spl =
 	  
       (* GT rank 1 downrank, should later be part of all base cases *)
       | Spl.GT(a, g, s, v::[]) -> let i = Intexpr.gen_loop_counter#get () in 
-				  ISum(i, v, Compose([S(FDown(s, i, 0));a;G(FDown(g, i, 0))]))
+				  ISum(i, v, Compose([S(Idxfunc.FDown(s, i, 0));a;G(Idxfunc.FDown(g, i, 0))]))
 				      
       | x -> x) in
     ((And !conditions), [], f e)

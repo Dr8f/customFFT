@@ -31,7 +31,7 @@ let build_child_var (num:int) : expr =
 
 let expr_of_intexpr (intexpr : Intexpr.intexpr) : expr =
   match intexpr with
-    IConstant x -> IConst x
+    Intexpr.IConstant x -> IConst x
   | x -> Var(Int, Intexpr.string_of_intexpr intexpr)
 ;;
 
@@ -44,21 +44,22 @@ let _input = Var(Ptr(Complex),"X")
 
 let rec expr_of_idxfunc (idxfunc : Idxfunc.idxfunc) : expr =
   match idxfunc with
-  | FArg(n, _) -> Var(Func([Int; Complex]), n)
-  | PreWrap(n, l, funcs, _) -> FunctionCall(n, ((List.map expr_of_intexpr l)@(List.map expr_of_idxfunc funcs)))
+  | Idxfunc.FArg(n, _) -> Var(Func([Int; Complex]), n)
+  | Idxfunc.PreWrap(n, l, funcs, _) -> FunctionCall(n, ((List.map expr_of_intexpr l)@(List.map expr_of_idxfunc funcs)))
+  | _ -> failwith("expr_of_idxfunc, not handled: "^(Idxfunc.string_of_idxfunc idxfunc))        		
 ;;
 
 
 let rec code_of_func (func : Idxfunc.idxfunc) ((input,code):expr * code list) : expr * code list =
   print_string ("Processing "^(Idxfunc.string_of_idxfunc func)^"\n");
   match func with
-  |FH(_,_,b,s) -> let output = gen_var#get Int "t" in
+  |Idxfunc.FH(_,_,b,s) -> let output = gen_var#get Int "t" in
 		      (output,code@[Declare(output);Assign(output, Plus((expr_of_intexpr b), Mul((expr_of_intexpr s),input)))])
-  |FD(n,k) -> let output = gen_var#get Complex "c" in
+  |Idxfunc.FD(n,k) -> let output = gen_var#get Complex "c" in
 		  (output,code@[Declare(output);Assign(output, FunctionCall("omega", [(expr_of_intexpr n);UniMinus(Mul(Mod(input,(expr_of_intexpr k)), Divide(input,(expr_of_intexpr k))))]))])
-  |FArg(_,_) -> let output = gen_var#get Complex "c" in
+  |Idxfunc.FArg(_,_) -> let output = gen_var#get Complex "c" in
 		    (output,code@[Declare(output);Assign(output, MethodCall(expr_of_idxfunc func, _at, [input]))])  
-  |FCompose l -> List.fold_right code_of_func l (input,[])
+  |Idxfunc.FCompose l -> List.fold_right code_of_func l (input,[])
   | _ -> failwith("code_of_func, not handled: "^(Idxfunc.string_of_idxfunc func))        		
 ;;
 
@@ -102,7 +103,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	      (FunctionCall(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
 	  ))
 	])
-      | Spl.Diag Pre(idxfunc) -> let var = gen_var#get Int "t" in
+      | Spl.Diag Idxfunc.Pre(idxfunc) -> let var = gen_var#get Int "t" in
 				     let (precomp, codelines) = code_of_func idxfunc (var,[]) in			    
 				     Chain([
 				       ArrayAllocate(_dat, Complex, expr_of_intexpr(Spl.range(e)));
@@ -119,7 +120,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
       let freedom_assigns = List.map (fun (l,r)->Assign(expr_of_intexpr l, expr_of_intexpr r)) freedoms in
       rulecount := !rulecount + 1;      
       If( Var(Bool, Boolexpr.string_of_boolexpr condition), 
-	 Chain( [Assign(_rule, expr_of_intexpr(IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]),
+	 Chain( [Assign(_rule, expr_of_intexpr(Intexpr.IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]),
 	 stmt)	
     in
     List.fold_left g (Error("no applicable rules")) breakdowns
@@ -170,11 +171,12 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 		      Loop(var, expr_of_intexpr(Spl.range(e)),
 			   Chain([Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ptr(Complex)),var)))]))
       | Spl.BB spl -> Compiler.compile_bloc (prepare_comp output input spl)
+      | _ -> failwith("prepare_comp, not handled: "^(Spl.string_of_spl e))
     in
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,desc,desc_with_calls,desc_cons,desc_comp):breakdown_enhanced) : code  =
       rulecount := !rulecount + 1;
-      If(Equal(_rule, expr_of_intexpr(IConstant !rulecount)),
+      If(Equal(_rule, expr_of_intexpr(Intexpr.IConstant !rulecount)),
 	 prepare_comp output input desc_comp, 
 	 stmt)
 	

@@ -9,9 +9,10 @@ type unparse_type =
 | Implementation
 ;;
 
-let rec ctype_of_expr (expr:expr) : ctype =
-  match expr with
+let rec ctype_of_expr (e:expr) : ctype =
+  match e with
   | Var(ctype, _) -> ctype
+  | _ -> failwith("ctype_of_expr, not handled: "^(string_of_expr e))
 ;;
 
 let rec string_of_ctype (t : ctype) : string =
@@ -23,6 +24,7 @@ let rec string_of_ctype (t : ctype) : string =
   |Char -> "char"
   |Complex -> "complex_t"
   |Void -> "void"
+  | _ -> failwith ("unsupported ctype in string_of_ctype")
 ;;
 
 let rec string_of_expr (expr:expr) : string =

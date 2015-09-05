@@ -36,7 +36,7 @@ let rec string_of_idxfunc (e : idxfunc) : string =
   | FHH(d, r, b, s, vs) -> "FHH("^(string_of_intexpr d)^", "^(string_of_intexpr r)^", "^(string_of_intexpr b)^", "^(string_of_intexpr s)^", ["^(String.concat "; " (List.map string_of_intexpr vs))^"] )"
 ;;
 
-let meta_transform_idxfunc_on_idxfunc (recursion_direction: recursion_direction) (f : idxfunc -> idxfunc) : (idxfunc -> idxfunc) =
+let meta_transform_idxfunc_on_idxfunc (recursion_direction: recursion_direction) : (idxfunc -> idxfunc) -> (idxfunc -> idxfunc) =
   (* print_string "meta_transform_idxfunc_on_idxfunc\n"; *)
   let z (g : idxfunc -> idxfunc) (e : idxfunc) : idxfunc = 
     match e with 
@@ -46,9 +46,9 @@ let meta_transform_idxfunc_on_idxfunc (recursion_direction: recursion_direction)
     | FDown(f, a, b) -> FDown(g f, a, b)
     | PreWrap(a, b, c, d) -> PreWrap(a,b, (List.map g c), d)
     | FHH _ | FD _ | FH _ | FL _ | FArg _ -> e
-    | _ -> failwith("meta_transform_idxfunc_on_idxfunc, not handled: "^(string_of_idxfunc e))         		
+    (* | _ -> failwith("meta_transform_idxfunc_on_idxfunc, not handled: "^(string_of_idxfunc e))         		 *)
   in
-  recursion_transform recursion_direction f z
+  recursion_transform recursion_direction z
 ;;
 
 let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction) (f : intexpr -> intexpr) : (idxfunc -> idxfunc) =
@@ -69,8 +69,9 @@ let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction)
   			     let gb = g b in
   			     let gc = g c in
 			     let gd = g d in			     
-  			     FHH (ga, gb, gc, g d, List.map g vs)
-    | _ as e -> failwith("meta_transform_intexpr_on_idxfunc, not handled: "^(string_of_idxfunc e)))
+  			     FHH (ga, gb, gc, gd, List.map g vs)
+ (* | _ as e -> failwith("meta_transform_intexpr_on_idxfunc, not handled: "^(string_of_idxfunc e)) *)
+							)
 ;;
 
 let meta_collect_idxfunc_on_idxfunc (f : idxfunc -> 'a list) : (idxfunc -> 'a list) =
@@ -228,12 +229,14 @@ let rule_uprank_FHH : (idxfunc -> idxfunc) =
 
 let rule_downrank_FHH : (idxfunc -> idxfunc) =
   let rec extract (l:int) (vs:intexpr list) : intexpr * intexpr list =
-    let (x::xs)=vs in
-    if (l=0) then
-      (x, xs)
-    else
-      let (a,b) = extract (l-1) xs in
-      (a,x::b)
+    match vs with
+    | [] -> failwith ("cannot downrank this FHH, it is of rank 0")
+    | x::xs ->
+       if (l=0) then
+	 (x, xs)
+       else
+	 let (a,b) = extract (l-1) xs in
+	 (a,x::b)
   in
   meta_transform_idxfunc_on_idxfunc TopDown ( function
   | FDown (FHH(d,r,b,s,vs), j , l) ->
