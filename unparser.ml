@@ -7,7 +7,7 @@ open Code
 let rec string_of_ctype (t : Ctype.ctype) : string =
   match t with
   |Ctype.Int -> "int"
-  |Ctype.Func(r) -> "TFunc_T"^(String.concat "_T" (List.map Code.string_of_ctype r))
+  |Ctype.Func(r) -> "TFunc_T"^(String.concat "_T" (List.map Ctype.string_of_ctype r))
   |Ctype.Env(rs) -> rs
   |Ctype.Ptr(ctype)->(string_of_ctype ctype)^" *"
   |Ctype.Char -> "char"

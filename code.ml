@@ -80,18 +80,6 @@ let rec ctype_of_expr (e : expr) : ctype =
 	 PRINTING
 *********************************************)
 
-let rec string_of_ctype (t : ctype) : string =
-  match t with
-  |Int -> "Int"
-  |Func(r) -> "Func("^(String.concat ", " (List.map string_of_ctype r))^")"
-  |Env(rs) -> "Env(\""^rs^"\")"
-  |Ptr(ctype)->"Ptr("^(string_of_ctype ctype)^")"
-  |Char -> "Char"
-  |Complex -> "Complex"
-  |Void -> "Void"
-  |Bool -> "Bool"
-;;
-
 let rec string_of_expr (expr:expr) : string = 
   match expr with
   | Equal(a,b) -> "Equal(" ^ (string_of_expr a) ^ ", " ^ (string_of_expr b) ^ ")"

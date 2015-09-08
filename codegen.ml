@@ -41,8 +41,8 @@ let _input = Var(Ctype.Ptr(Ctype.Complex),"X")
 
 let rec expr_of_idxfunc (idxfunc : Idxfunc.idxfunc) : expr =
   match idxfunc with
-  | Idxfunc.FArg(n, _) -> Var(Ctype.Ptr(Ctype.Func([Ctype.Int; Ctype.Complex])), n)
-  | Idxfunc.PreWrap(n, l, funcs, _) -> FunctionCall(n, ((List.map expr_of_intexpr l)@(List.map expr_of_idxfunc funcs)))
+  | Idxfunc.FArg(n, ct, _) -> Var(Ctype.Ptr(ct), n)
+  | Idxfunc.PreWrap(n, _, l, funcs, _) -> FunctionCall(n, ((List.map expr_of_intexpr l)@(List.map expr_of_idxfunc funcs)))
   | _ -> failwith("expr_of_idxfunc, not handled: "^(Idxfunc.string_of_idxfunc idxfunc))        		
 ;;
 
@@ -54,7 +54,7 @@ let rec code_of_func (func : Idxfunc.idxfunc) ((input,code):expr * code list) : 
 		      (output,code@[Declare(output);Assign(output, Plus((expr_of_intexpr b), Mul((expr_of_intexpr s),input)))])
   |Idxfunc.FD(n,k) -> let output = gen_var#get Ctype.Complex "c" in
 		  (output,code@[Declare(output);Assign(output, FunctionCall("omega", [(expr_of_intexpr n);UniMinus(Mul(Mod(input,(expr_of_intexpr k)), Divide(input,(expr_of_intexpr k))))]))])
-  |Idxfunc.FArg(_,_) -> let output = gen_var#get Ctype.Complex "c" in
+  |Idxfunc.FArg(_,_,_) -> let output = gen_var#get Ctype.Complex "c" in
 		    (output,code@[Declare(output);Assign(output, MethodCall(expr_of_idxfunc func, _at, [input]))])  
   |Idxfunc.FCompose l -> List.fold_right code_of_func l (input,[])
   | _ -> failwith("code_of_func, not handled: "^(Idxfunc.string_of_idxfunc func))        		
@@ -195,8 +195,8 @@ let code_of_envfunc ((name, f, args, fargs) : envfunc) : code =
   print_string ("=== Building "^name^" ===\n");
   print_string ("definition:"^(Idxfunc.string_of_idxfunc f)^"\n");
   print_string ("fargs:"^(String.concat ", " (List.map Idxfunc.string_of_idxfunc fargs))^"\n");
-  let ctype = Idxfunc.func_type f in
-  print_string ("type:"^(string_of_ctype ctype)^"\n");
+  let ctype = Idxfunc.ctype_of_func f in
+  print_string ("type:"^(Ctype.string_of_ctype ctype)^"\n");
   let input = gen_var#get Ctype.Int "t" in
   let(output, code) = (code_of_func f (input,[])) in
   let cons_args = (List.map expr_of_intexpr args)@(List.map expr_of_idxfunc fargs) in

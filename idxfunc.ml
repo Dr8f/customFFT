@@ -16,8 +16,8 @@ type idxfunc =
 (* thus FD(n,k)(i) = w(n, -(i mod k) * (i\k)) *)
 | FCompose of idxfunc list
 | Pre of idxfunc (* Precompute *)
-| PreWrap of string * intexpr list * idxfunc list * intexpr (*domain*)
-| FArg of string * intexpr (*domain*)
+| PreWrap of string * ctype * intexpr list * idxfunc list * intexpr (*domain*)
+| FArg of string * ctype * intexpr (*domain*)
 | FHH of intexpr * intexpr * intexpr * intexpr * intexpr list
 (* FHH(domain, range, base, stride0, vector strides) maps Z**k x I(str) to I(dest) so FHH(d,r,b,s,vs)(j_k .. j_1, i) = b + i*s + Sum j_k * vs_k*)
 | FUp of idxfunc
@@ -34,8 +34,8 @@ let rec string_of_idxfunc (e : idxfunc) : string =
   | Pre(l) -> "Pre("^(string_of_idxfunc l)^")"
   | FUp(l) -> "FUp("^(string_of_idxfunc l)^")"
   | FDown(f,l,d) -> "FDown("^(string_of_idxfunc f)^", "^(string_of_intexpr l)^", "^(string_of_int d)^")"      
-  | PreWrap(n, l, funcs, d) -> "PreWrap(\""^n^"\", ["^(String.concat "; " (List.map string_of_intexpr l))^"], ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"], "^(string_of_intexpr d)^")"
-  | FArg(n, d) -> "FArg(\""^n^"\", "^(string_of_intexpr d)^")"
+  | PreWrap(n, ctype, l, funcs, d) -> "PreWrap(\""^n^"\", "^(string_of_ctype ctype)^", ["^(String.concat "; " (List.map string_of_intexpr l))^"], ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"], "^(string_of_intexpr d)^")"
+  | FArg(n, ctype, d) -> "FArg(\""^n^"\", "^(string_of_ctype ctype)^", "^(string_of_intexpr d)^")"
   | FHH(d, r, b, s, vs) -> "FHH("^(string_of_intexpr d)^", "^(string_of_intexpr r)^", "^(string_of_intexpr b)^", "^(string_of_intexpr s)^", ["^(String.concat "; " (List.map string_of_intexpr vs))^"] )"
 ;;
 
@@ -47,7 +47,7 @@ let meta_transform_idxfunc_on_idxfunc (recursion_direction: recursion_direction)
     | Pre(l) -> Pre(g l)
     | FUp(l) -> FUp(g l)
     | FDown(f, a, b) -> FDown(g f, a, b)
-    | PreWrap(a, b, c, d) -> PreWrap(a,b, (List.map g c), d)
+    | PreWrap(a, ctype, b, c, d) -> PreWrap(a, ctype, b, (List.map g c), d)
     | FHH _ | FD _ | FH _ | FL _ | FArg _ -> e
     (* | _ -> failwith("meta_transform_idxfunc_on_idxfunc, not handled: "^(string_of_idxfunc e))         		 *)
   in
@@ -65,8 +65,8 @@ let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction)
     | FL (a, b) -> let ga = g a in FL (ga, g b)
     | FD (a, b) -> let ga = g a in FD (ga, g b)
     | FCompose _ | Pre _ | FUp _ as e -> e
-    | PreWrap (n,f,funcs,d) -> PreWrap(n, f, funcs, (g d)) (*f is not parameterized because we don't want to parameterize inside the call*)
-    | FArg (i,f) ->  FArg(i, (g f))
+    | PreWrap (n, ctype, f,funcs,d) -> PreWrap(n, ctype, f, funcs, (g d)) (*f is not parameterized because we don't want to parameterize inside the call*)
+    | FArg (i, ct, f) ->  FArg(i, ct, (g f))
     | FDown(f, a, i) -> FDown(f, g a, i)
     | FHH (a, b, c, d, vs) -> let ga = g a in
   			     let gb = g b in
@@ -130,23 +130,23 @@ let rec func_domain (e : idxfunc) : intexpr =
 | Pre(l) -> func_domain l
 | FUp(l) -> func_domain l (*FIXME really correct?*)
 | FHH(d, _,_,_, _)-> d
-| PreWrap(_,_,_,d) -> d
-| FArg (_,d)->d
+| PreWrap(_,_, _,_,d) -> d
+| FArg (_,_,d)->d
 | _ as e -> failwith("func_domain, not handled: "^(string_of_idxfunc e))		
 ;;
 
-let rec func_type (e : idxfunc) : ctype =
+let rec ctype_of_func (e : idxfunc) : ctype =
   match e with
   | FH _ -> Func ([Int; Int])
-  | FUp f -> (match func_type f with
+  | FUp f -> (match ctype_of_func f with
 	     | Func x -> Func (Int::x)
-	     | _ -> failwith("func_type, not handled: "^(string_of_idxfunc e)))
+	     | _ -> failwith("ctype_of_func, not handled: "^(string_of_idxfunc e)))
   | FD _ -> Func ([Int; Complex])
   | FHH (_,_,_,_,n) -> let rec f (l:int) : ctype list = if (l=0) then [] else Int::(f (l-1)) in
 		        Func (f ((List.length n)+2))
-  | FCompose (x::tl) -> func_type x (*FIXME really correct?*)
-  | FArg _ -> Func [Int; Complex] (*FIXME: Not correct! this should act like a deref. We need to record the type info within FArg itself I guess*) 
-  | _ as e -> failwith("func_type, not handled: "^(string_of_idxfunc e))		
+  | FCompose (x::tl) -> ctype_of_func x (*FIXME really correct?*)
+  | FArg (_,ct,_) -> ct
+  | _ as e -> failwith("ctype_of_func, not handled: "^(string_of_idxfunc e))		
 ;;
   
 let meta_compose_idxfunc (recursion_direction : recursion_direction) (f : idxfunc list -> idxfunc list) : (idxfunc -> idxfunc) =
