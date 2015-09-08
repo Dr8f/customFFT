@@ -18,19 +18,37 @@ object
     IFreedom !tbl
 end
 ;;
+
+
+let count_GT (l:spl list) : int =
+  print_string("ctx: "^(String.concat " ||| " (List.map Spl.string_of_spl l))^"\n");
+  let collect_GT: spl -> spl list =
+    meta_collect_spl_on_spl ( function
+			      | GT(_) as x -> [x]
+			      | _ -> []
+			    )
+  in
+  let n = 
+    List.length (List.flatten (List.map collect_GT l)) in
+  print_string ("count:"^(string_of_int n)^"\n\n");
+  n
+;;
   
 let algo_cooley_tukey : spl -> boolexpr * (intexpr*intexpr) list * spl =
   function (e:spl) ->
     let conditions = ref [] in
-    let freedoms = ref [] in 
-    let f = meta_transform_spl_on_spl_gt_limit BottomUp ( function
-      |DFT n -> 	    
+    let freedoms = ref [] in
+    let g (ctx:spl list) (s:spl) : spl =
+      match s with
+      |DFT n when (count_GT ctx) < 1 -> 	    
 	conditions := Not(IsPrime(n)) :: !conditions;
 	let k = gen_freedom_var#get () in
 	freedoms := (k, IDivisor n) :: !freedoms;
 	let m = IDivPerfect(n, k) in
 	Compose([Tensor( [DFT(k); I(m)]); T(n, m); Tensor([I(k); DFT(m)]); L(n,k)])
-      | x -> x) in
+      | x -> x
+    in
+    let f = meta_transform_spl_on_spl_context BottomUp g in
     ((And !conditions), !freedoms, f e)
 ;;  
 

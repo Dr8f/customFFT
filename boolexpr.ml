@@ -28,7 +28,7 @@ let meta_collect_boolexpr_on_boolexpr (f : boolexpr -> 'a list) : (boolexpr -> '
     | Not(b) -> g b
     | _ -> []
   in
-  recursion_collect f z
+  recursion_collect z f
 ;;
 
 let meta_collect_intexpr_on_boolexpr (f : intexpr -> 'a list) : (boolexpr -> 'a list) = 

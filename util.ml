@@ -49,7 +49,7 @@ let recursion_transform_ctx (recursion_direction: recursion_direction) (z : ('a 
 ;;
 
   
-let recursion_collect (f : 'a -> 'b list) (z : ('a -> 'b list) -> 'a -> 'b list) : ('a -> 'b list) =
+let recursion_collect (z : ('a -> 'b list) -> 'a -> 'b list) (f : 'a -> 'b list) : ('a -> 'b list) =
   let rec g (e : 'a) : 'b list =
     f e @ (z g e)
   in

@@ -63,9 +63,7 @@ let rec string_of_spl (e : spl) : string =
 	 METARULES                 
 *********************************************)
 
-let meta_transform_spl_on_spl (recursion_direction: recursion_direction) : (spl -> spl) -> (spl -> spl) =
-  (* print_string "meta_transform_spl_on_spl\n"; *)
-  let z (g : spl -> spl) (e : spl) : spl = 
+let meta_transform_spl_on_spl_inner_z (g : spl -> spl) (e : spl) : spl = 
     match e with
     | Compose (l) -> Compose (List.map g l)
     | Tensor (l) -> Tensor (List.map g l)
@@ -74,52 +72,18 @@ let meta_transform_spl_on_spl (recursion_direction: recursion_direction) : (spl 
     | BB (l) -> BB(g l)
     | GT (a, c, s, l) -> GT(g a, c, s, l)
     | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _-> e
-    | _ -> failwith("meta_transform_spl_on_spl, not handled: "^(string_of_spl e))         
-  in
-  recursion_transform recursion_direction z
+    | _ -> failwith("meta_transform_spl_on_spl, not handled: "^(string_of_spl e))
 ;;
-
-(* FIXME developping ctx*)
+  
+let meta_transform_spl_on_spl (recursion_direction: recursion_direction) : (spl -> spl) -> (spl -> spl) =
+  recursion_transform recursion_direction meta_transform_spl_on_spl_inner_z
+;;
 
 let meta_transform_spl_on_spl_context (recursion_direction: recursion_direction) : (spl list -> spl -> spl) -> spl -> spl =
   let z (g : spl -> spl) (_:spl list) (e : spl) : spl =
-    match e with
-    | RS (l) -> RS(g(l))
-    | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _-> e
-    | _ -> failwith("meta_transform_spl_on_spl_context, not handled: "^(string_of_spl e))
+    meta_transform_spl_on_spl_inner_z g e
   in
   recursion_transform_ctx recursion_direction z
-;;
-
-let myrule : spl -> spl = 
-  let f (_:spl list) (s:spl) : spl =
-    match s with 
-    | T(n,k) -> Diag(Pre(FD(n,k)))
-    | x -> x
-  in
-  meta_transform_spl_on_spl_context TopDown f
-;;
-
-let my_in = RS(RS(T(IConstant 1, IConstant 3))) in
-    let z = myrule (my_in) in
-    z
-;;
-
-
-(*FIXME ugly*)
-let meta_transform_spl_on_spl_gt_limit (recursion_direction: recursion_direction) :  (spl -> spl) -> (spl -> spl) =
-  let z (g : spl -> spl) (e : spl) : spl = 
-    match e with
-    | Compose (l) -> Compose (List.map g l)
-    | Tensor (l) -> Tensor (List.map g l)
-    | ISum(v,c,a) -> ISum(v,c, (g a))
-    | RS (l) -> RS(g l)
-    | BB (l) -> BB(g l)
-    | GT (a, c, s, l) -> GT(a, c, s, l)
-    | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _-> e
-    | _ -> failwith("meta_transform_spl_on_spl, not handled: "^(string_of_spl e))         
-  in
-  recursion_transform recursion_direction z
 ;;
 
 let meta_transform_idxfunc_on_spl (recursion_direction: recursion_direction) (f : idxfunc -> idxfunc) : (spl -> spl) =
@@ -162,11 +126,11 @@ let meta_collect_spl_on_spl (f : spl -> 'a list) : (spl -> 'a list) =
   let z (g : spl -> 'a list) (e : spl) : 'a list =
     match e with
       Compose l | Tensor l -> List.flatten (List.map g l)
-    | ISum(_,_,a) -> g a
+    | ISum(_,_,a) | GT(a,_,_,_) -> g a
     | RS a -> g a
     | _ -> []
   in
-  recursion_collect f z
+  recursion_collect z f
 ;;
 
 let meta_collect_idxfunc_on_spl (f : idxfunc -> 'a list) : (spl -> 'a list) =
@@ -432,7 +396,7 @@ let rule_compose_scatter_BB : (spl -> spl) =
 
 let spl_rulemap =
   List.fold_left (fun (map) (name, rule) -> StringMap.add name rule map ) StringMap.empty ([
-  ("Tensor to ISum", rule_tensor_to_isum);
+  (* ("Tensor to ISum", rule_tensor_to_isum); *)
   ("Remove unary tensor", rule_remove_unary_tensor);
   ("Remove unary compose", rule_remove_unary_compose); 
   ("Transform T into diag", rule_transorm_T_into_diag);
@@ -451,7 +415,7 @@ let spl_rulemap =
      Should introduce GT downrank to verify that RS4 and RS 5 (page 88) are properly generated and that the all code runs
      Then introduce DFT within GT to breakdown the rest
    *)
-  (* ("Tensor to GT", rule_tensor_to_GT); *)
+  ("Tensor to GT", rule_tensor_to_GT);
   ("rule_suck_inside_GT", rule_suck_inside_GT);
   ("rule_warp_GT_RS", rule_warp_GT_RS);
 ]

@@ -123,10 +123,7 @@ let collect_RS: spl -> spl list =
 let rec extract_constraints_func (e : idxfunc) : (intexpr * intexpr) list =
   let rec extract_constraints_within_fcompose (e : idxfunc list) (res : (intexpr * intexpr) list) : (intexpr * intexpr) list = 
     match e with
-      x :: (y :: _ as tl) -> let dmn = func_domain x in
-			       let rng = func_range y in
-			       (* print_string ("!!!!"^(string_of_intexpr dmn)^"="^(string_of_intexpr rng)^"\n") ;   *)
-			       extract_constraints_within_fcompose tl ((dmn, rng) :: res)
+    | x :: (y :: _ as tl) -> extract_constraints_within_fcompose tl (((func_domain x), (func_range y)) :: res)
     | [_] -> res;
     | [] -> res
   in
@@ -136,23 +133,22 @@ let rec extract_constraints_func (e : idxfunc) : (intexpr * intexpr) list =
   | _ -> []
 ;;
 
-
-let rec extract_constraints_spl (e : spl) : (intexpr * intexpr) list =
-  let rec extract_constraints_within_compose (e : spl list) ( res : (intexpr * intexpr) list) : (intexpr * intexpr) list = 
-    match e with
-      x :: (y :: _ as tl) -> let dmn = apply_rewriting_rules intexpr_rulemap (spl_domain x) in
-		             let rng = apply_rewriting_rules intexpr_rulemap (spl_range y) in
-			       (* print_string ((string_of_intexpr dmn)^"="^(string_of_intexpr rng)^"\n") ;  *)
-			       extract_constraints_within_compose tl ((dmn, rng) :: res)
-    | [_] -> res;
-    | [] -> res
+let extract_constraints_spl (e : spl) : (intexpr * intexpr) list =
+  let rec inner_extract_constraints_spl (e : spl) : (intexpr * intexpr) list =
+    let rec extract_constraints_within_compose (e : spl list) ( res : (intexpr * intexpr) list) : (intexpr * intexpr) list = 
+      match e with
+      | x :: (y :: _ as tl) -> extract_constraints_within_compose tl ((spl_domain x, spl_range y) :: res)
+      | [_] -> res;
+      | [] -> res
+    in
+    match e with 
+      Compose l -> extract_constraints_within_compose l (List.flatten (List.map inner_extract_constraints_spl l))
+    | Diag x -> extract_constraints_func x
+    | BB x -> inner_extract_constraints_spl x
+    | GT(a,g,s,_) -> (spl_domain a,func_domain g)::(spl_range a, func_domain s)::(inner_extract_constraints_spl a)
+    | _ -> []    
   in
-  match e with 
-    Compose l -> extract_constraints_within_compose l (List.flatten (List.map extract_constraints_spl l))
-  | Diag x -> extract_constraints_func x
-  | BB x -> extract_constraints_spl x
-  | GT(a,g,s,_) -> (spl_domain a,func_domain g)::(spl_range a, func_domain s)::(extract_constraints_spl a)
-  | _ -> []    
+  List.map (fun(x,y)->(apply_rewriting_rules intexpr_rulemap x, apply_rewriting_rules intexpr_rulemap y)) (inner_extract_constraints_spl e)
 ;;
 
 let rec reconcile_constraints_on_spl ((constraints,spl) : (((intexpr * intexpr) list) * spl)) : spl =
@@ -308,16 +304,17 @@ let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (
   let (condition, freedoms, naive_desc) = algo rstep in
 
   let desc = apply_rewriting_rules spl_rulemap (mark_RS(naive_desc)) in
-  (* print_string ("Desc:\t\t"^(string_of_spl desc)^"\n"); *)
+  print_string ("Desc:\t\t"^(string_of_spl desc)^"\n");
 
   let simplification_constraints = extract_constraints_spl desc in
-  (* print_string ("Simplifying constraints\t\n"); *)
+  print_string ("Simplifying constraints\t\n");
 
   let simplified =  reconcile_constraints_on_spl (simplification_constraints, desc) in
-  (* print_string ("Simplified desc:\t\t"^(string_of_spl simplified)^"\n"); *)
+  print_string ("Simplified desc:\t\t"^(string_of_spl simplified)^"\n");
 
 
   let rses = collect_RS simplified in
+  print_string ("***rses***:\n"^(String.concat ",\n" (List.map string_of_spl rses))^"\n\n");
   
   let wrap_precomputations (e:spl) : spl =
     let transf (i : idxfunc) : idxfunc = 

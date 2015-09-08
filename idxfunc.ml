@@ -85,7 +85,7 @@ let meta_collect_idxfunc_on_idxfunc (f : idxfunc -> 'a list) : (idxfunc -> 'a li
     | FUp x -> g x
     | _ -> failwith("meta_collect_idxfunc_on_idxfunc, not handled: "^(string_of_idxfunc e))
   in
-  recursion_collect f z
+  recursion_collect z f
 ;;
 
 let meta_collect_intexpr_on_idxfunc (f : intexpr -> 'a list) : (idxfunc -> 'a list) = 

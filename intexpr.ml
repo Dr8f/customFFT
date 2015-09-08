@@ -57,7 +57,7 @@ let meta_collect_intexpr_on_intexpr (f : intexpr -> 'a list) : (intexpr -> 'a li
     | IDivisor (b) | ICountWrap(_,b) -> g b
     | IFreedom _ | IArg _ | IConstant _ | ILoopCounter _ -> []
   in
-  recursion_collect f z
+  recursion_collect z f
 ;;
 
 let meta_iter_intexpr_on_intexpr (f : intexpr -> unit) : (intexpr -> unit) =

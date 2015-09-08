@@ -158,10 +158,10 @@ let meta_collect_code_on_code (f : code -> 'a list) : (code -> 'a list) =
     | If(_, true_branch, false_branch) ->(g true_branch)@(g false_branch) 
     | _ -> []
   in
-  recursion_collect f z
+  recursion_collect z f
 ;;
 
-let meta_collect_expr_on_expr (f : expr -> 'a list) : (expr -> 'a list) =
+let meta_collect_expr_on_expr (f: expr -> 'a list) : (expr -> 'a list) =
   let z (g : expr -> 'a list) (e : expr) : 'a list =
     match e with
       Nth(a,b) | Equal(a,b) | Mul(a,b) | Plus(a,b) | Minus(a,b) | Mod(a,b) | Divide(a,b) -> (g a)@(g b)
@@ -170,7 +170,7 @@ let meta_collect_expr_on_expr (f : expr -> 'a list) : (expr -> 'a list) =
     | MethodCall(a, _, l) -> (g a)@(List.flatten (List.map g l))
     | _ -> []
   in
-  recursion_collect f z
+  recursion_collect z f
 ;;
 
 let meta_collect_expr_on_code (f : expr -> 'a list) : (code -> 'a list) =
