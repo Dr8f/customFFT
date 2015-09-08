@@ -1,20 +1,12 @@
 open Util
 ;;
 
+open Ctype
+;;
+  
 (*********************************************
 	 TYPES
 *********************************************)
-
-type ctype = 
-  Int
-| Env of string
-| Func of ctype list
-| Ptr of ctype
-| Char
-| Complex
-| Void
-| Bool
-;;
 
 type expr = 
 | Var of ctype * string
@@ -39,7 +31,7 @@ type cmethod =
 | Method of ctype (*return type*) * string (* functionname *) * expr list(* args*)  * code
 and
 code =
-  Class of string(*class name*) * string (*class template from which it is derived*) * expr list (*member variables*) * cmethod list (*methods*)
+  Class of string(*class name*) * ctype (*class template from which it is derived*) * expr list (*member variables*) * cmethod list (*methods*)
 | Chain of code list
 | Noop
 | Error of string

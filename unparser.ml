@@ -4,27 +4,27 @@ open Util
 open Code
 ;;
 
+let rec string_of_ctype (t : Ctype.ctype) : string =
+  match t with
+  |Ctype.Int -> "int"
+  |Ctype.Func(r) -> "TFunc_T"^(String.concat "_T" (List.map Code.string_of_ctype r))
+  |Ctype.Env(rs) -> rs
+  |Ctype.Ptr(ctype)->(string_of_ctype ctype)^" *"
+  |Ctype.Char -> "char"
+  |Ctype.Complex -> "complex_t"
+  |Ctype.Void -> "void"
+  | _ -> failwith ("unsupported ctype in string_of_ctype")
+;;
+
 type unparse_type =
   Prototype
 | Implementation
 ;;
 
-let ctype_of_expr (e:expr) : ctype =
+let ctype_of_expr (e:expr) : Ctype.ctype =
   match e with
   | Var(ctype, _) -> ctype
   | _ -> failwith("ctype_of_expr, not handled: "^(string_of_expr e))
-;;
-
-let rec string_of_ctype (t : ctype) : string =
-  match t with
-  |Int -> "int"
-  |Func(r) -> "TFunc_T"^(String.concat "_T" (List.map Code.string_of_ctype r))^"*"
-  |Env(rs) -> rs
-  |Ptr(ctype)->(string_of_ctype ctype)^" *"
-  |Char -> "char"
-  |Complex -> "complex_t"
-  |Void -> "void"
-  | _ -> failwith ("unsupported ctype in string_of_ctype")
 ;;
 
 let rec string_of_expr (expr:expr) : string =
@@ -55,7 +55,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | Class(name,super,privates,methods) ->  
     (match unparse_type with
       Prototype -> 
-	(white n) ^ "struct "^name^" : public "^super^" {\n" 
+	(white n) ^ "struct "^name^" : public "^(string_of_ctype super)^" {\n" 
 	^ (String.concat "" (List.map (fun x -> (white (n+4))^x^";\n") (make_signatures privates)))
 	^ (white (n+4))
     | Implementation -> 
@@ -77,7 +77,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | Error str -> (white n)^"error(\""^str^"\");\n"
   | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_expr cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
   | Loop(var, expr, code) -> (white n)^"for(int "^(string_of_expr var)^" = 0; "^(string_of_expr var)^" < "^(string_of_expr expr)^"; "^(string_of_expr var)^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
-  | ArrayAllocate(expr,elttype,int) -> (white n)^(string_of_expr expr)^" = ("^(string_of_ctype(Ptr(elttype)))^") malloc (sizeof("^(string_of_ctype(elttype))^") * "^(string_of_expr int)^");\n"
+  | ArrayAllocate(expr,elttype,int) -> (white n)^(string_of_expr expr)^" = ("^(string_of_ctype(Ctype.Ptr(elttype)))^") malloc (sizeof("^(string_of_ctype(elttype))^") * "^(string_of_expr int)^");\n"
   | ArrayDeallocate(buf, _) -> (white n)^"free("^(string_of_expr buf)^");\n"
   | Return(expr) -> (white n)^"return "^(string_of_expr expr)^";\n"
   | Declare(expr) -> (white n)^(string_of_ctype(ctype_of_expr expr))^" "^(string_of_expr expr)^";\n"

@@ -1,5 +1,9 @@
 open Util
 ;;
+
+open Ctype
+;;
+
 open Code
 ;;
 

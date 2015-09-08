@@ -1,6 +1,9 @@
 open Util
 ;;
 
+open Ctype
+;;
+
 open Intexpr
 ;;
 
@@ -132,6 +135,20 @@ let rec func_domain (e : idxfunc) : intexpr =
 | _ as e -> failwith("func_domain, not handled: "^(string_of_idxfunc e))		
 ;;
 
+let rec func_type (e : idxfunc) : ctype =
+  match e with
+  | FH _ -> Func ([Int; Int])
+  | FUp f -> (match func_type f with
+	     | Func x -> Func (Int::x)
+	     | _ -> failwith("func_type, not handled: "^(string_of_idxfunc e)))
+  | FD _ -> Func ([Int; Complex])
+  | FHH (_,_,_,_,n) -> let rec f (l:int) : ctype list = if (l=0) then [] else Int::(f (l-1)) in
+		        Func (f ((List.length n)+2))
+  | FCompose (x::tl) -> func_type x (*FIXME really correct?*)
+  | FArg _ -> Func [Int; Complex] (*FIXME: Not correct! this should act like a deref. We need to record the type info within FArg itself I guess*) 
+  | _ as e -> failwith("func_type, not handled: "^(string_of_idxfunc e))		
+;;
+  
 let meta_compose_idxfunc (recursion_direction : recursion_direction) (f : idxfunc list -> idxfunc list) : (idxfunc -> idxfunc) =
   meta_transform_idxfunc_on_idxfunc recursion_direction ( function 
   | FCompose (l) -> FCompose (f l) 
