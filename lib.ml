@@ -192,7 +192,7 @@ let unwrap_idxfunc (e:idxfunc) : idxfunc =
       PreWrap(_,ct, _,_,d)->
       (print_string ("now unwrapping "^(string_of_idxfunc e)^"\n");
        count := !count + 1;
-       Pre(FArg(("lambda"^(string_of_int !count)), ct, d)))
+       Pre(FArg(("lambda"^(string_of_int !count)), ct, [d])))
     | x -> x
   in
   (meta_transform_idxfunc_on_idxfunc TopDown h) e

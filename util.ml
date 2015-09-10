@@ -21,6 +21,16 @@ let rec white (n:int) : string =
 let rec range i j = if i > j then [] else i :: (range (i+1) j)
 ;;
 
+let rec last = function
+  | [] -> None
+  | [x] -> Some x
+  | _ :: t -> last t;;
+
+let drop_last (l:'a list) =
+  match List.rev l with
+  | [] -> failwith("could not be inverted, was empty")
+  | x ::t -> List.rev t
+  
 (*********************************************
 	 RECURSION SUPPORT
 *********************************************)

@@ -28,6 +28,7 @@ DFT of intexpr
 | F of int
 | BB of spl
 | GT of spl * idxfunc * idxfunc * intexpr list
+| Down of spl * intexpr * int
 ;;
 
 let rec string_of_spl (e : spl) : string =
@@ -54,6 +55,7 @@ let rec string_of_spl (e : spl) : string =
   | F(i) -> "F("^(string_of_int i)^")"
   | BB(x) ->"BB("^(string_of_spl x)^")"
   | GT(a, g, s, l) -> "GT("^(string_of_spl a)^", "^(string_of_idxfunc g)^", "^(string_of_idxfunc s)^", ["^(String.concat ";" (List.map string_of_intexpr l))^"])"
+  | Down(s,l,d) -> "Down("^(string_of_spl s)^", "^(string_of_intexpr l)^", "^(string_of_int d)^")"  
 ;;
 
 
@@ -71,8 +73,8 @@ let meta_transform_spl_on_spl_inner_z (g : spl -> spl) (e : spl) : spl =
     | RS (l) -> RS(g l)
     | BB (l) -> BB(g l)
     | GT (a, c, s, l) -> GT(g a, c, s, l)
-    | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _-> e
-    | _ -> failwith("meta_transform_spl_on_spl, not handled: "^(string_of_spl e))
+    | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _ | PartitionnedCall _ -> e
+    |Down(s,a,b) -> Down(g s, a, b)
 ;;
   
 let meta_transform_spl_on_spl (recursion_direction: recursion_direction) : (spl -> spl) -> (spl -> spl) =
@@ -94,8 +96,8 @@ let meta_transform_idxfunc_on_spl (recursion_direction: recursion_direction) (f 
   | S(l) -> S(g l) 
   | Diag(l) -> Diag( g l)
   | GT(a,c,s,l)->GT(a, g c, g s, l)
-  | DFT _  | RS _ | I _ | Tensor _ | T _ | L _ | Compose _ | ISum _ | F _ | BB _ as e -> e
-  | e -> failwith("meta_transform_idxfunc_on_spl, not handled: "^(string_of_spl e))         		
+  | DFT _  | RS _ | I _ | Tensor _ | T _ | L _ | Compose _ | ISum _ | F _ | BB _ | Down _ as e -> e
+   | e -> failwith("meta_transform_idxfunc_on_spl, not handled: "^(string_of_spl e))         		
   )
 ;;
 
@@ -116,6 +118,7 @@ let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f 
     | PartitionnedCall _ -> e
     | F _ -> e
     | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ | Construct _ -> assert false
+    | Down(s,l,d) -> Down(s, g l, d)			       
     (* | _ -> failwith("meta_transform_intexpr_on_spl, not handled: "^(string_of_spl e))         		 *)
   in
   fun (e : spl) ->
@@ -201,6 +204,7 @@ let rec spl_range (e :spl) : intexpr =
   | F(n) -> IConstant n
   | ISumReinitCompute (_, _, _, _, _, r, _)  | Compute (_,_,_,r,_) -> r
   | ISumReinitConstruct _ | Construct _ | UnpartitionnedCall _ | PartitionnedCall _ -> assert false
+  | Down(a,s,l) -> spl_range a
 ;;    
 
 let rec spl_domain (e :spl) : intexpr = 
@@ -216,6 +220,7 @@ let rec spl_domain (e :spl) : intexpr =
   | ISum (_, _, s) | RS (s) | BB(s)-> spl_domain s
   | UnpartitionnedCall _ | PartitionnedCall _ | ISumReinitConstruct _ | Construct _ -> assert false
   | ISumReinitCompute (_, _, _, _, _, _, d)   | Compute (_,_,_,_,d) -> d
+  | Down(a,s,l) -> spl_domain a
 
 ;;    
 
@@ -324,6 +329,16 @@ let rule_remove_unary_tensor : (spl -> spl) =
   | x -> x)
 ;;
 
+let rule_distribute_downrank_spl : (spl -> spl) =
+  meta_transform_spl_on_spl TopDown ( function
+  | Down (Compose list, j, l) -> Compose( List.map (fun x-> Down(x, j, l)) list)
+  | Down (BB(x),j,l) -> BB(Down(x,j,l))
+  | Down (F(i),j,l) ->F(i)
+  | Down (Diag(f),j,l) ->Diag(FDown(f,j,l))
+  | x -> x)
+;;
+
+  
 let rule_flatten_compose : (spl -> spl) =
   let rec f (l : spl list) : spl list = 
   match l with
@@ -396,7 +411,7 @@ let rule_compose_scatter_BB : (spl -> spl) =
 
 let spl_rulemap =
   List.fold_left (fun (map) (name, rule) -> StringMap.add name rule map ) StringMap.empty ([
-  ("Tensor to ISum", rule_tensor_to_isum);
+  (* ("Tensor to ISum", rule_tensor_to_isum); *)
   ("Remove unary tensor", rule_remove_unary_tensor);
   ("Remove unary compose", rule_remove_unary_compose); 
   ("Transform T into diag", rule_transorm_T_into_diag);
@@ -409,13 +424,14 @@ let spl_rulemap =
   ("Compose BB Diag", rule_compose_BB_diag);
   ("Compose BB Gather", rule_compose_BB_gather);
   ("Compose Scatter BB", rule_compose_scatter_BB);
+  ("Distribute FDown", rule_distribute_downrank_spl);
 
   (* TODO 
      Currently breaks because DFT is applied within GT
      Should introduce GT downrank to verify that RS4 and RS 5 (page 88) are properly generated and that the all code runs
      Then introduce DFT within GT to breakdown the rest
    *)
-  (* ("Tensor to GT", rule_tensor_to_GT); *)
+  ("Tensor to GT", rule_tensor_to_GT);
   ("rule_suck_inside_GT", rule_suck_inside_GT);
   ("rule_warp_GT_RS", rule_warp_GT_RS);
 ]

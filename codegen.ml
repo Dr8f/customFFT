@@ -54,8 +54,14 @@ let rec code_of_func (func : Idxfunc.idxfunc) ((input,code):expr * code list) : 
 		      (output,code@[Declare(output);Assign(output, Plus((expr_of_intexpr b), Mul((expr_of_intexpr s),input)))])
   |Idxfunc.FD(n,k) -> let output = gen_var#get Ctype.Complex "c" in
 		  (output,code@[Declare(output);Assign(output, FunctionCall("omega", [(expr_of_intexpr n);UniMinus(Mul(Mod(input,(expr_of_intexpr k)), Divide(input,(expr_of_intexpr k))))]))])
-  |Idxfunc.FArg(_,_,_) -> let output = gen_var#get Ctype.Complex "c" in
-		    (output,code@[Declare(output);Assign(output, MethodCall(expr_of_idxfunc func, _at, [input]))])  
+  |Idxfunc.FArg(_,Ctype.Func ctypes,mylist) ->
+    (
+      match last ctypes with
+      |None -> failwith("empty type list")
+      |Some x -> 
+	let output = gen_var#get x "c" in
+	(output,code@[Declare(output);Assign(output, MethodCall(expr_of_idxfunc func, _at, (List.map expr_of_intexpr (drop_last mylist))@[input]))])
+    )
   |Idxfunc.FCompose l -> List.fold_right code_of_func l (input,[])
   | _ -> failwith("code_of_func, not handled: "^(Idxfunc.string_of_idxfunc func))        		
 ;;
@@ -109,7 +115,10 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 					      Assign((Nth(Cast(_dat,Ctype.Ptr(Ctype.Complex)),var)),precomp)]))
 				     ])
       | Spl.S _ | Spl.G _ | Spl.F _ -> Chain([])
-      | Spl.BB spl | Spl.ISum(_, _, spl) -> prepare_cons spl
+      | Spl.BB spl -> prepare_cons spl
+      | Spl.ISum(_, _, spl) -> prepare_cons spl (*FIXME, cannot be right*)
+      (* | Spl.ISum(i, count, content) -> Loop(expr_of_intexpr i, expr_of_intexpr count, (prepare_cons content)) *)
+
       | _ -> failwith("prepare_cons, not handled: "^(Spl.string_of_spl e))
     in
     let rulecount = ref 0 in
@@ -197,12 +206,12 @@ let code_of_envfunc ((name, f, args, fargs) : envfunc) : code =
   print_string ("fargs:"^(String.concat ", " (List.map Idxfunc.string_of_idxfunc fargs))^"\n");
   let ctype = Idxfunc.ctype_of_func f in
   print_string ("type:"^(Ctype.string_of_ctype ctype)^"\n");
-  let input = gen_var#get Ctype.Int "t" in
-  let(output, code) = (code_of_func f (input,[])) in
+  (* let input = gen_var#get Ctype.Int "t" in *)
+  (* let(output, code) = (code_of_func f (input,[])) in *)
   let cons_args = (List.map expr_of_intexpr args)@(List.map expr_of_idxfunc fargs) in
   Class(name, ctype, cons_args, [
-    Constructor(cons_args, Noop);
-    Method(Ctype.Complex, _at, [input], Chain(code@[Return(output)]))])
+    Constructor(cons_args, Noop);])
+    (* Method(Ctype.Complex, _at, [input], Chain(code@[Return(output)]))]) *)
 ;;
 
 let code_of_lib ((funcs,rsteps) : lib) : code list =

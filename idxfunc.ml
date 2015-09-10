@@ -17,7 +17,7 @@ type idxfunc =
 | FCompose of idxfunc list
 | Pre of idxfunc (* Precompute *)
 | PreWrap of string * ctype * intexpr list * idxfunc list * intexpr (*domain*)
-| FArg of string * ctype * intexpr (*domain*)
+| FArg of string * ctype * intexpr list (*domain*)
 | FHH of intexpr * intexpr * intexpr * intexpr * intexpr list
 (* FHH(domain, range, base, stride0, vector strides) maps Z**k x I(str) to I(dest) so FHH(d,r,b,s,vs)(j_k .. j_1, i) = b + i*s + Sum j_k * vs_k*)
 | FUp of idxfunc
@@ -35,7 +35,7 @@ let rec string_of_idxfunc (e : idxfunc) : string =
   | FUp(l) -> "FUp("^(string_of_idxfunc l)^")"
   | FDown(f,l,d) -> "FDown("^(string_of_idxfunc f)^", "^(string_of_intexpr l)^", "^(string_of_int d)^")"      
   | PreWrap(n, ctype, l, funcs, d) -> "PreWrap(\""^n^"\", "^(string_of_ctype ctype)^", ["^(String.concat "; " (List.map string_of_intexpr l))^"], ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"], "^(string_of_intexpr d)^")"
-  | FArg(n, ctype, d) -> "FArg(\""^n^"\", "^(string_of_ctype ctype)^", "^(string_of_intexpr d)^")"
+  | FArg(n, ctype, d) -> "FArg(\""^n^"\", "^(string_of_ctype ctype)^", ["^(String.concat "; " (List.map string_of_intexpr d))^"])"
   | FHH(d, r, b, s, vs) -> "FHH("^(string_of_intexpr d)^", "^(string_of_intexpr r)^", "^(string_of_intexpr b)^", "^(string_of_intexpr s)^", ["^(String.concat "; " (List.map string_of_intexpr vs))^"] )"
 ;;
 
@@ -66,7 +66,7 @@ let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction)
     | FD (a, b) -> let ga = g a in FD (ga, g b)
     | FCompose _ | Pre _ | FUp _ as e -> e
     | PreWrap (n, ctype, f,funcs,d) -> PreWrap(n, ctype, f, funcs, (g d)) (*f is not parameterized because we don't want to parameterize inside the call*)
-    | FArg (i, ct, f) ->  FArg(i, ct, (g f))
+    | FArg (i, ct, f) ->  FArg(i, ct, List.map g f)
     | FDown(f, a, i) -> FDown(f, g a, i)
     | FHH (a, b, c, d, vs) -> let ga = g a in
   			     let gb = g b in
@@ -131,8 +131,9 @@ let rec func_domain (e : idxfunc) : intexpr =
 | FUp(l) -> func_domain l (*FIXME really correct?*)
 | FHH(d, _,_,_, _)-> d
 | PreWrap(_,_, _,_,d) -> d
-| FArg (_,_,d)->d
-| _ as e -> failwith("func_domain, not handled: "^(string_of_idxfunc e))		
+| FArg (_,_,d)->(match last d with |None -> failwith("not a valid FArg") |Some x -> x)
+| FDown(f,a,b)->func_domain f
+(* | _ as e -> failwith("func_domain, not handled: "^(string_of_idxfunc e))		 *)
 ;;
 
 let rec ctype_of_func (e : idxfunc) : ctype =
@@ -234,6 +235,8 @@ let rule_distribute_uprank : (idxfunc -> idxfunc) =
 let rule_distribute_downrank : (idxfunc -> idxfunc) =
   meta_transform_idxfunc_on_idxfunc TopDown ( function
   | FDown (FCompose list, j, l) -> FCompose( List.map (fun x-> FDown(x, j, l)) list)
+  | FDown (Pre f, j, l) -> Pre (FDown(f, j,l))
+  | FDown (FArg(s,ct,l), j ,_) -> FArg(s, ct, j::l)
   | x -> x)
 ;;
 
