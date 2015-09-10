@@ -29,7 +29,7 @@ let rec last = function
 let drop_last (l:'a list) =
   match List.rev l with
   | [] -> failwith("could not be inverted, was empty")
-  | x ::t -> List.rev t
+  | _ ::t -> List.rev t
   
 (*********************************************
 	 RECURSION SUPPORT

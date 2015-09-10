@@ -204,7 +204,7 @@ let rec spl_range (e :spl) : intexpr =
   | F(n) -> IConstant n
   | ISumReinitCompute (_, _, _, _, _, r, _)  | Compute (_,_,_,r,_) -> r
   | ISumReinitConstruct _ | Construct _ | UnpartitionnedCall _ | PartitionnedCall _ -> assert false
-  | Down(a,s,l) -> spl_range a
+  | Down(a,_,_) -> spl_range a
 ;;    
 
 let rec spl_domain (e :spl) : intexpr = 
@@ -220,7 +220,7 @@ let rec spl_domain (e :spl) : intexpr =
   | ISum (_, _, s) | RS (s) | BB(s)-> spl_domain s
   | UnpartitionnedCall _ | PartitionnedCall _ | ISumReinitConstruct _ | Construct _ -> assert false
   | ISumReinitCompute (_, _, _, _, _, _, d)   | Compute (_,_,_,_,d) -> d
-  | Down(a,s,l) -> spl_domain a
+  | Down(a,_,_) -> spl_domain a
 
 ;;    
 
@@ -333,7 +333,7 @@ let rule_distribute_downrank_spl : (spl -> spl) =
   meta_transform_spl_on_spl TopDown ( function
   | Down (Compose list, j, l) -> Compose( List.map (fun x-> Down(x, j, l)) list)
   | Down (BB(x),j,l) -> BB(Down(x,j,l))
-  | Down (F(i),j,l) ->F(i)
+  | Down (F(i),_,_) ->F(i)
   | Down (Diag(f),j,l) ->Diag(FDown(f,j,l))
   | x -> x)
 ;;

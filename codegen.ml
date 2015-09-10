@@ -106,18 +106,19 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	      (FunctionCall(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
 	  ))
 	])
-      | Spl.Diag Idxfunc.Pre(idxfunc) -> let var = gen_var#get Ctype.Int "t" in
-				     let (precomp, codelines) = code_of_func idxfunc (var,[]) in			    
-				     Chain([
-				       ArrayAllocate(_dat, Ctype.Complex, expr_of_intexpr(Spl.spl_range(e)));
-				       Loop(var, expr_of_intexpr(Spl.spl_range(e)),
-					    Chain(codelines@[
-					      Assign((Nth(Cast(_dat,Ctype.Ptr(Ctype.Complex)),var)),precomp)]))
+      | Spl.Diag Idxfunc.Pre(idxfunc) -> 
+	(*FIXME code is magically false here, we have to do that out of the loops somehow*)
+	let var = gen_var#get Ctype.Int "t" in
+	let (precomp, codelines) = code_of_func idxfunc (var,[]) in			    
+	Chain([
+	  ArrayAllocate(_dat, Ctype.Complex, expr_of_intexpr(Spl.spl_range(e)));
+	  Loop(var, expr_of_intexpr(Spl.spl_range(e)),
+	       Chain(codelines@[
+		 Assign((Nth(Cast(_dat,Ctype.Ptr(Ctype.Complex)),var)),precomp)]))
 				     ])
       | Spl.S _ | Spl.G _ | Spl.F _ -> Chain([])
       | Spl.BB spl -> prepare_cons spl
-      | Spl.ISum(_, _, spl) -> prepare_cons spl (*FIXME, cannot be right*)
-      (* | Spl.ISum(i, count, content) -> Loop(expr_of_intexpr i, expr_of_intexpr count, (prepare_cons content)) *)
+      | Spl.ISum(i, count, content) -> (*FIXME this might be wrong, it's not obvious[6~*)Loop(expr_of_intexpr i, expr_of_intexpr count, (prepare_cons content))
 
       | _ -> failwith("prepare_cons, not handled: "^(Spl.string_of_spl e))
     in
@@ -206,12 +207,13 @@ let code_of_envfunc ((name, f, args, fargs) : envfunc) : code =
   print_string ("fargs:"^(String.concat ", " (List.map Idxfunc.string_of_idxfunc fargs))^"\n");
   let ctype = Idxfunc.ctype_of_func f in
   print_string ("type:"^(Ctype.string_of_ctype ctype)^"\n");
-  (* let input = gen_var#get Ctype.Int "t" in *)
-  (* let(output, code) = (code_of_func f (input,[])) in *)
+  (*FIXME: We want to FDown it here I guess*)
+  let input = gen_var#get Ctype.Int "t" in
+  let(output, code) = (code_of_func f (input,[])) in
   let cons_args = (List.map expr_of_intexpr args)@(List.map expr_of_idxfunc fargs) in
   Class(name, ctype, cons_args, [
-    Constructor(cons_args, Noop);])
-    (* Method(Ctype.Complex, _at, [input], Chain(code@[Return(output)]))]) *)
+    Constructor(cons_args, Noop);
+    Method(Ctype.Complex, _at, [input], Chain(code@[Return(output)]))])
 ;;
 
 let code_of_lib ((funcs,rsteps) : lib) : code list =

@@ -132,7 +132,7 @@ let rec func_domain (e : idxfunc) : intexpr =
 | FHH(d, _,_,_, _)-> d
 | PreWrap(_,_, _,_,d) -> d
 | FArg (_,_,d)->(match last d with |None -> failwith("not a valid FArg") |Some x -> x)
-| FDown(f,a,b)->func_domain f
+| FDown(f,_,_)->func_domain f
 (* | _ as e -> failwith("func_domain, not handled: "^(string_of_idxfunc e))		 *)
 ;;
 
@@ -145,9 +145,15 @@ let rec ctype_of_func (e : idxfunc) : ctype =
   | FD _ -> Func ([Int; Complex])
   | FHH (_,_,_,_,n) -> let rec f (l:int) : ctype list = if (l=0) then [] else Int::(f (l-1)) in
 		        Func (f ((List.length n)+2))
-  | FCompose (x::tl) -> ctype_of_func x (*FIXME really correct?*)
+  | FCompose (x::_) -> ctype_of_func x (*FIXME really correct?*)
   | FArg (_,ct,_) -> ct
   | _ as e -> failwith("ctype_of_func, not handled: "^(string_of_idxfunc e))		
+;;
+
+let rank_of_func (e : idxfunc) : int = 
+  match (ctype_of_func e) with
+  | Func l -> List.length - 2
+  |
 ;;
   
 let meta_compose_idxfunc (recursion_direction : recursion_direction) (f : idxfunc list -> idxfunc list) : (idxfunc -> idxfunc) =
