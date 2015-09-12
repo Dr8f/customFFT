@@ -20,3 +20,20 @@ let rec string_of_ctype (t : ctype) : string =
   |Void -> "Void"
   |Bool -> "Bool"
 ;;
+
+type cvar = string * ctype
+;;
+
+let string_of_cvar ((s, ct) : cvar) : string =
+  "("^s^", "^(string_of_ctype ct)^")"
+;;
+
+let ctype_of_cvar ((_,ct):cvar) : ctype =
+  ct
+;;
+
+let name_of_cvar ((s,_):cvar) : string =
+  s
+;;
+
+

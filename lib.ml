@@ -189,10 +189,10 @@ let unwrap_idxfunc (e:idxfunc) : idxfunc =
   let count = ref 0 in
   let h (e:idxfunc) : idxfunc = 
     match e with
-      PreWrap(_,ct, _,_,d)->
+      PreWrap((_,ct), _,_,d)->
       (print_string ("now unwrapping "^(string_of_idxfunc e)^"\n");
        count := !count + 1;
-       Pre(FArg(("lambda"^(string_of_int !count)), ct, [d])))
+       Pre(FArg((("lambda"^(string_of_int !count)), ct), [d])))
     | x -> x
   in
   (meta_transform_idxfunc_on_idxfunc TopDown h) e
@@ -247,7 +247,7 @@ let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:envfunc IdxFuncMap.t ref):
   let args = List.map snd (IntMap.bindings map) in
   let fargs = ((meta_collect_idxfunc_on_idxfunc collect_farg) f) in 
   let name = ensure_name newdef new_args fargs in
-  let res =  PreWrap(name, (ctype_of_func f), args, fargs, domain) in 
+  let res =  PreWrap((name, (ctype_of_func f)), args, fargs, domain) in 
   let printer (args:intexpr IntMap.t) : string =
     String.concat ", " (List.map (fun ((i,e):int*intexpr) -> "( "^(string_of_int i)^ " = " ^(string_of_intexpr e)^")") (IntMap.bindings args));
   in

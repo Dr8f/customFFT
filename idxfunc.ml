@@ -16,8 +16,8 @@ type idxfunc =
 (* thus FD(n,k)(i) = w(n, -(i mod k) * (i\k)) *)
 | FCompose of idxfunc list
 | Pre of idxfunc (* Precompute *)
-| PreWrap of string * ctype * intexpr list * idxfunc list * intexpr (*domain*)
-| FArg of string * ctype * intexpr list (*domain*)
+| PreWrap of cvar * intexpr list * idxfunc list * intexpr (*domain*)
+| FArg of cvar * intexpr list (*domain*)
 | FHH of intexpr * intexpr * intexpr * intexpr * intexpr list
 (* FHH(domain, range, base, stride0, vector strides) maps Z**k x I(str) to I(dest) so FHH(d,r,b,s,vs)(j_k .. j_1, i) = b + i*s + Sum j_k * vs_k*)
 | FUp of idxfunc
@@ -34,8 +34,8 @@ let rec string_of_idxfunc (e : idxfunc) : string =
   | Pre(l) -> "Pre("^(string_of_idxfunc l)^")"
   | FUp(l) -> "FUp("^(string_of_idxfunc l)^")"
   | FDown(f,l,d) -> "FDown("^(string_of_idxfunc f)^", "^(string_of_intexpr l)^", "^(string_of_int d)^")"      
-  | PreWrap(n, ctype, l, funcs, d) -> "PreWrap(\""^n^"\", "^(string_of_ctype ctype)^", ["^(String.concat "; " (List.map string_of_intexpr l))^"], ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"], "^(string_of_intexpr d)^")"
-  | FArg(n, ctype, d) -> "FArg(\""^n^"\", "^(string_of_ctype ctype)^", ["^(String.concat "; " (List.map string_of_intexpr d))^"])"
+  | PreWrap(cvar, l, funcs, d) -> "PreWrap("^(string_of_cvar cvar)^", ["^(String.concat "; " (List.map string_of_intexpr l))^"], ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"], "^(string_of_intexpr d)^")"
+  | FArg(cvar, d) -> "FArg("^(string_of_cvar cvar)^", ["^(String.concat "; " (List.map string_of_intexpr d))^"])"
   | FHH(d, r, b, s, vs) -> "FHH("^(string_of_intexpr d)^", "^(string_of_intexpr r)^", "^(string_of_intexpr b)^", "^(string_of_intexpr s)^", ["^(String.concat "; " (List.map string_of_intexpr vs))^"] )"
 ;;
 
@@ -47,7 +47,7 @@ let meta_transform_idxfunc_on_idxfunc (recursion_direction: recursion_direction)
     | Pre(l) -> Pre(g l)
     | FUp(l) -> FUp(g l)
     | FDown(f, a, b) -> FDown(g f, a, b)
-    | PreWrap(a, ctype, b, c, d) -> PreWrap(a, ctype, b, (List.map g c), d)
+    | PreWrap(cvar, b, c, d) -> PreWrap(cvar, b, (List.map g c), d)
     | FHH _ | FD _ | FH _ | FL _ | FArg _ -> e
     (* | _ -> failwith("meta_transform_idxfunc_on_idxfunc, not handled: "^(string_of_idxfunc e))         		 *)
   in
@@ -65,8 +65,8 @@ let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction)
     | FL (a, b) -> let ga = g a in FL (ga, g b)
     | FD (a, b) -> let ga = g a in FD (ga, g b)
     | FCompose _ | Pre _ | FUp _ as e -> e
-    | PreWrap (n, ctype, f,funcs,d) -> PreWrap(n, ctype, f, funcs, (g d)) (*f is not parameterized because we don't want to parameterize inside the call*)
-    | FArg (i, ct, f) ->  FArg(i, ct, List.map g f)
+    | PreWrap (cvar, f,funcs,d) -> PreWrap(cvar, f, funcs, (g d)) (*FIXME: f is not parameterized because we don't want to parameterize inside the call, should be done with context maybe?*)
+    | FArg (cvar, f) ->  FArg(cvar, List.map g f)
     | FDown(f, a, i) -> FDown(f, g a, i)
     | FHH (a, b, c, d, vs) -> let ga = g a in
   			     let gb = g b in
@@ -130,8 +130,8 @@ let rec func_domain (e : idxfunc) : intexpr =
 | Pre(l) -> func_domain l
 | FUp(l) -> func_domain l (*FIXME really correct?*)
 | FHH(d, _,_,_, _)-> d
-| PreWrap(_,_, _,_,d) -> d
-| FArg (_,_,d)->(match last d with |None -> failwith("not a valid FArg") |Some x -> x)
+| PreWrap(_, _,_,d) -> d
+| FArg (_,d)->(match last d with |None -> failwith("not a valid FArg") |Some x -> x)
 | FDown(f,_,_)->func_domain f
 (* | _ as e -> failwith("func_domain, not handled: "^(string_of_idxfunc e))		 *)
 ;;
@@ -146,14 +146,24 @@ let rec ctype_of_func (e : idxfunc) : ctype =
   | FHH (_,_,_,_,n) -> let rec f (l:int) : ctype list = if (l=0) then [] else Int::(f (l-1)) in
 		        Func (f ((List.length n)+2))
   | FCompose (x::_) -> ctype_of_func x (*FIXME really correct?*)
-  | FArg (_,ct,_) -> ct
+  | FArg (cvar, l) -> 
+    let rec derank ctype count =
+      if (count = 0) then
+	ctype
+      else (
+	match ctype with
+	| Func (_::tl) -> derank (Func tl) (count-1)
+	| _ -> failwith("not derankable")
+      )
+    in
+    derank (ctype_of_cvar cvar) ((List.length l) - 1) 
   | _ as e -> failwith("ctype_of_func, not handled: "^(string_of_idxfunc e))		
 ;;
 
 let rank_of_func (e : idxfunc) : int = 
   match (ctype_of_func e) with
-  | Func l -> List.length - 2
-  |
+  | Func l -> (List.length l) - 2
+  | _ -> failwith("rank_of_func, not handled: "^(string_of_idxfunc e))		
 ;;
   
 let meta_compose_idxfunc (recursion_direction : recursion_direction) (f : idxfunc list -> idxfunc list) : (idxfunc -> idxfunc) =
@@ -242,7 +252,8 @@ let rule_distribute_downrank : (idxfunc -> idxfunc) =
   meta_transform_idxfunc_on_idxfunc TopDown ( function
   | FDown (FCompose list, j, l) -> FCompose( List.map (fun x-> FDown(x, j, l)) list)
   | FDown (Pre f, j, l) -> Pre (FDown(f, j,l))
-  | FDown (FArg(s,ct,l), j ,_) -> FArg(s, ct, j::l)
+  | FDown (FArg(cvar,l), j ,_) -> FArg(cvar, j::l)
+  | FDown (FUp(f), _, _) -> f
   | x -> x)
 ;;
 

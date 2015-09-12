@@ -41,8 +41,8 @@ let _input = Var(Ctype.Ptr(Ctype.Complex),"X")
 
 let rec expr_of_idxfunc (idxfunc : Idxfunc.idxfunc) : expr =
   match idxfunc with
-  | Idxfunc.FArg(n, ct, _) -> Var(Ctype.Ptr(ct), n)
-  | Idxfunc.PreWrap(n, _, l, funcs, _) -> FunctionCall(n, ((List.map expr_of_intexpr l)@(List.map expr_of_idxfunc funcs)))
+  | Idxfunc.FArg(cvar, _) -> Var(Ctype.Ptr(Ctype.ctype_of_cvar cvar), Ctype.name_of_cvar cvar)
+  | Idxfunc.PreWrap(cvar, l, funcs, _) -> FunctionCall(Ctype.name_of_cvar cvar, ((List.map expr_of_intexpr l)@(List.map expr_of_idxfunc funcs)))
   | _ -> failwith("expr_of_idxfunc, not handled: "^(Idxfunc.string_of_idxfunc idxfunc))        		
 ;;
 
@@ -54,7 +54,7 @@ let rec code_of_func (func : Idxfunc.idxfunc) ((input,code):expr * code list) : 
 		      (output,code@[Declare(output);Assign(output, Plus((expr_of_intexpr b), Mul((expr_of_intexpr s),input)))])
   |Idxfunc.FD(n,k) -> let output = gen_var#get Ctype.Complex "c" in
 		  (output,code@[Declare(output);Assign(output, FunctionCall("omega", [(expr_of_intexpr n);UniMinus(Mul(Mod(input,(expr_of_intexpr k)), Divide(input,(expr_of_intexpr k))))]))])
-  |Idxfunc.FArg(_,Ctype.Func ctypes,mylist) ->
+  |Idxfunc.FArg((_,Ctype.Func ctypes),mylist) ->
     (
       match last ctypes with
       |None -> failwith("empty type list")
@@ -204,16 +204,24 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 let code_of_envfunc ((name, f, args, fargs) : envfunc) : code =
   print_string ("=== Building "^name^" ===\n");
   print_string ("definition:"^(Idxfunc.string_of_idxfunc f)^"\n");
+  print_string ("args:"^(String.concat ", " (List.map Intexpr.string_of_intexpr args))^"\n");
   print_string ("fargs:"^(String.concat ", " (List.map Idxfunc.string_of_idxfunc fargs))^"\n");
-  let ctype = Idxfunc.ctype_of_func f in
-  print_string ("type:"^(Ctype.string_of_ctype ctype)^"\n");
-  (*FIXME: We want to FDown it here I guess*)
+  (* FIXME args are just false *)
+
+  let g = ref f in 
+  let rankvars = ref [] in
+  while (Idxfunc.rank_of_func !g > 0) do
+    print_string ("processing:"^(Idxfunc.string_of_idxfunc !g)^"\n");    
+    let i = Intexpr.gen_loop_counter#get () in 
+    g := apply_rewriting_rules Idxfunc.idxfunc_rulemap (Idxfunc.FDown(!g, i, 0));
+    rankvars := (expr_of_intexpr i)::!rankvars;
+  done;
   let input = gen_var#get Ctype.Int "t" in
-  let(output, code) = (code_of_func f (input,[])) in
+  let(output, code) = (code_of_func !g (input,[])) in
   let cons_args = (List.map expr_of_intexpr args)@(List.map expr_of_idxfunc fargs) in
-  Class(name, ctype, cons_args, [
+  Class(name, (Idxfunc.ctype_of_func f), cons_args, [
     Constructor(cons_args, Noop);
-    Method(Ctype.Complex, _at, [input], Chain(code@[Return(output)]))])
+    Method(Ctype.Complex, _at, !rankvars @ [input], Chain(code@[Return(output)]))])
 ;;
 
 let code_of_lib ((funcs,rsteps) : lib) : code list =
