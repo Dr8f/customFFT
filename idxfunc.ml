@@ -96,6 +96,7 @@ let meta_collect_intexpr_on_idxfunc (f : intexpr -> 'a list) : (idxfunc -> 'a li
   | FH (a, b, c, d) -> (f a) @ (f b) @ (f c) @ (f d)
   | FL(n, m) | FD(n,m) -> (f n) @ (f m)
   | FHH (a, b, c, d, l) -> (f a) @ (f b) @ (f c) @ (f d) @ (List.flatten (List.map f l) )
+  | FArg (_, l) -> List.flatten (List.map f l)
   | _ -> []
   )
 ;;

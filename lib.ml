@@ -389,9 +389,17 @@ let compute_the_closure (stems : spl list) (algos : (spl -> boolexpr * (intexpr*
     (* print_string ("WIP RSTEP:\t\t"^(string_of_spl rstep)^"\n"); (\* WIP *\) *)
     let name = ensure_name rstep in
     let args = collect_args rstep in
-    let breakdowns = List.map (function algo->create_breakdown rstep idxfuncmap algo ensure_name) algos in
 
-    rsteps := !rsteps @ [(name, rstep, args, breakdowns)];
+    let breakdowns = ref [] in
+    let f algo =
+      (
+	try
+	  breakdowns := (create_breakdown rstep idxfuncmap algo ensure_name)::!breakdowns;
+	with
+	  Algo.AlgoNotApplicable s -> print_string ("Cannot apply algo: "^s^"\n");
+      ) in
+    List.iter f algos;
+    rsteps := !rsteps @ [(name, rstep, args, !breakdowns)];
   done;
 
   (List.map snd (IdxFuncMap.bindings !idxfuncmap), !rsteps)
@@ -459,6 +467,7 @@ let initial_colds_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t =
 
   let init_rstep ((name, rstep, _, breakdowns) : rstep_unpartitioned) : _=
     let add_args_to_cold (e:intexpr) : _ =
+      print_string ("\n__________\n"^(string_of_intexpr e)^"\n________________\n");
       match e with
 	IArg i -> 
 	  cold_set := SpecArgSet.add (name,i) !cold_set
@@ -468,6 +477,7 @@ let initial_colds_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t =
     let add_all_pre_to_cold (e:idxfunc) : _ =
       match e with 
       | Pre x -> 
+	print_string ("\n//////////\n"^(string_of_idxfunc e)^"\n/////////\n");
 	meta_iter_intexpr_on_idxfunc add_args_to_cold x
       | _ -> ()
     in

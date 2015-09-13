@@ -1,3 +1,6 @@
+exception AlgoNotApplicable of string
+;;
+
 open Util
 ;;
 
@@ -46,7 +49,10 @@ let algo_cooley_tukey : spl -> boolexpr * (intexpr*intexpr) list * spl =
 	freedoms := (k, IDivisor n) :: !freedoms;
 	let m = IDivPerfect(n, k) in
 	Compose([Tensor( [DFT(k); I(m)]); T(n, m); Tensor([I(k); DFT(m)]); L(n,k)])
-      | x -> x
+      | DFT _ ->
+	raise (AlgoNotApplicable "Cooley Tukey not applicable within GT")
+      | x -> 
+	x
     in
     let f = meta_transform_spl_on_spl_context BottomUp g in
     ((And !conditions), !freedoms, f e)
@@ -70,8 +76,9 @@ let algo_dft_base : spl -> boolexpr * (intexpr*intexpr) list * spl =
 	BB(F(2))
 	  
       (* GT rank 1 downrank, should later be part of all base cases *)
-      | Spl.GT(a, g, s, v::[]) -> let i = Intexpr.gen_loop_counter#get () in 
-				  ISum(i, v, Compose([S(Idxfunc.FDown(s, i, 0));Spl.Down(a, i, 0);G(Idxfunc.FDown(g, i, 0))]))
+      | Spl.GT(a, g, s, v::[]) -> 
+	let i = Intexpr.gen_loop_counter#get () in 
+	ISum(i, v, Compose([S(Idxfunc.FDown(s, i, 0));Spl.Down(a, i, 0);G(Idxfunc.FDown(g, i, 0))]))
 				      
       | x -> x) in
     ((And !conditions), [], f e)

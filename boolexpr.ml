@@ -9,6 +9,7 @@ type boolexpr =
 | And of boolexpr list
 | Equal of intexpr * intexpr
 | True
+| False
 | Not of boolexpr
 ;;
 
@@ -19,6 +20,7 @@ let rec string_of_boolexpr (e : boolexpr) : string =
   | Equal(a,b)->optional_short_print ("("^string_of_intexpr a^" == "^string_of_intexpr b^")") ("Equal("^string_of_intexpr a^", "^string_of_intexpr b^")")
   | Not(b) -> optional_short_print ("!"^(string_of_boolexpr b)) ("Not("^(string_of_boolexpr b)^")")
   | True->"True"
+  | False->"False"
 ;;
 
 let meta_collect_boolexpr_on_boolexpr (f : boolexpr -> 'a list) : (boolexpr -> 'a list) =
