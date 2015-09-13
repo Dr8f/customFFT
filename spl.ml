@@ -141,6 +141,7 @@ let meta_collect_idxfunc_on_spl (f : idxfunc -> 'a list) : (spl -> 'a list) =
   | G(l) -> f l
   | S(l) -> f l
   | Diag(l) -> f l
+  | GT(_,a,b,_)->(f a)@(f b)
   | _ -> []
   )
 ;;
