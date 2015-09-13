@@ -75,10 +75,10 @@ let algo_dft_base : spl -> boolexpr * (intexpr*intexpr) list * spl =
 	conditions := Equal(n,IConstant(2)) :: !conditions;
 	BB(F(2))
 	  
-      (* GT rank 1 downrank, should later be part of all base cases *)
-      | Spl.GT(a, g, s, v::[]) -> 
-	let i = Intexpr.gen_loop_counter#get () in 
-	ISum(i, v, Compose([S(Idxfunc.FDown(s, i, 0));Spl.Down(a, i, 0);G(Idxfunc.FDown(g, i, 0))]))
+      (* (\* GT rank 1 downrank, should later be part of all base cases *\) *)
+      (* | Spl.GT(a, g, s, v::[]) ->  *)
+      (* 	let i = Intexpr.gen_loop_counter#get () in  *)
+      (* 	ISum(i, v, Compose([S(Idxfunc.FDown(s, i, 0));Spl.Down(a, i, 0);G(Idxfunc.FDown(g, i, 0))])) *)
 				      
       | x -> x) in
     ((And !conditions), [], f e)

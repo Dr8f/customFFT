@@ -92,7 +92,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 
   let cons_code_of_rstep ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) : code =
     let rec prepare_cons (e:Spl.spl) : code =
-      (* print_string ("cons code:"^(Spl.string_of_spl e)^"\n"); *)
+      print_string ("cons code:"^(Spl.string_of_spl e)^"\n"); 
       match e with
       | Spl.Compose l -> simplify_code (Chain (List.map prepare_cons (List.rev l)))
       | Spl.Construct(numchild, rs, args, funcs) -> Assign(build_child_var(numchild), New(FunctionCall(rs, (List.map expr_of_intexpr (args))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
@@ -176,10 +176,20 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 			 let (index, codelines) = code_of_func idxfunc (var,[]) in			    
 			     Loop(var, expr_of_intexpr(Spl.spl_range(e)),
 				  Chain(codelines@[Assign((Nth(output,var)), (Nth(input,index)))])) 
-      | Spl.Diag _ -> let var = gen_var#get Ctype.Int "t" in
-		      Loop(var, expr_of_intexpr(Spl.spl_range(e)),
-			   Chain([Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ctype.Ptr(Ctype.Complex)),var)))]))
-      | Spl.BB spl -> Compiler.compile_bloc (prepare_comp output input spl)
+      | Spl.Diag Idxfunc.Pre Idxfunc.FArg (_, l) -> 
+	let var = gen_var#get Ctype.Int "t" in
+	let rec f = function
+	  | _::[] -> var
+	  | a::b::[] -> Plus(Mul(expr_of_intexpr a,expr_of_intexpr b), var)
+	  | _ -> failwith("FArg not handled")
+	in
+	Loop(var, expr_of_intexpr(Spl.spl_range(e)),
+	     Chain([Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ctype.Ptr(Ctype.Complex)), (f l))))]))
+      | Spl.GT(a, g, s, v::[]) ->  
+      	let i = Intexpr.gen_loop_counter#get () in
+	let spl = Spl.ISum(i, v, Spl.Compose([Spl.S(Idxfunc.FDown(s, i, 0));Spl.Down(a, i, 0);Spl.G(Idxfunc.FDown(g, i, 0))])) in
+	(prepare_comp output input (Spl.simplify_spl spl))
+      | Spl.BB spl -> (* Compiler.compile_bloc *) (prepare_comp output input spl) (*FIXME re-enable compile*)
       | _ -> failwith("prepare_comp, not handled: "^(Spl.string_of_spl e))
     in
     let rulecount = ref 0 in
