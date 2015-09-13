@@ -475,6 +475,7 @@ let initial_colds_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t =
     in
     (* all arguments in the pre() marker must be cold *)
     let add_all_pre_to_cold (e:idxfunc) : _ =
+      (* FIXME GT arguments wrapping Pre must be in it as well*)
       match e with 
       | Pre x -> 
 	print_string ("\n//////////\n"^(string_of_idxfunc e)^"\n/////////\n");
@@ -485,6 +486,7 @@ let initial_colds_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t =
     
     let init_rule ((condition,freedoms,_,_):breakdown) : _ = 
       (* all arguments in condition (intexpr list) *)
+      (* print_string ("AND the magic condition is:"^(string_of_boolexpr condition)^"\n"); *)
       meta_iter_intexpr_on_boolexpr add_args_to_cold condition;
       
       (* all arguments in freedoms ((intexpr*intexpr) list) must be cold *)

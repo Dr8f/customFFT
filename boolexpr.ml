@@ -36,6 +36,7 @@ let meta_collect_boolexpr_on_boolexpr (f : boolexpr -> 'a list) : (boolexpr -> '
 let meta_collect_intexpr_on_boolexpr (f : intexpr -> 'a list) : (boolexpr -> 'a list) = 
   meta_collect_boolexpr_on_boolexpr ( function
   | IsPrime x -> f x
+  | Equal(a,b) -> (f a)@(f b)
   | _ -> []
   )
 ;;
