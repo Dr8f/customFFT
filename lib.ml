@@ -251,7 +251,17 @@ let replace_by_a_call_idxfunc (f:idxfunc) (idxfuncmap:envfunc IdxFuncMap.t ref):
   let printer (args:intexpr IntMap.t) : string =
     String.concat ", " (List.map (fun ((i,e):int*intexpr) -> "( "^(string_of_int i)^ " = " ^(string_of_intexpr e)^")") (IntMap.bindings args));
   in
-  print_string ("WIP ok, so what do we have here?\nfunction: "^(string_of_idxfunc f)^"\nwrap_naive: "^(string_of_idxfunc wrap_naive)^"\nconstraints:"^(String.concat ", " (List.map (fun ((g,d):intexpr*intexpr) -> "( "^(string_of_intexpr g)^ " = " ^(string_of_intexpr d)^")") func_constraints))^"\nwrapped: "^(string_of_idxfunc wrapped)^"\nname: "^(name)^"\nmap: "^(printer map)^"\nargs: "^(String.concat ", " (List.map string_of_intexpr args))^"\nfargs: "^(String.concat ", " (List.map string_of_idxfunc fargs))^"\nnewdef: "^(string_of_idxfunc newdef)^"\nres: "^(string_of_idxfunc res)^"\n\n\n");
+  print_string ("function:\t\t"^(string_of_idxfunc f)
+		^"\nwrap_naive:\t\t"^(string_of_idxfunc wrap_naive)
+		^"\nconstraints:\t\t"^(String.concat ", " (List.map (fun ((g,d):intexpr*intexpr) -> "( "^(string_of_intexpr g)^ " = " ^(string_of_intexpr d)^")") func_constraints))
+		^"\nwrapped:\t\t"^(string_of_idxfunc wrapped)
+		^"\nname:\t\t\t"^(name)
+		^"\nmap:\t\t\t"^(printer map)
+		^"\nargs:\t\t\t"^(String.concat ", " (List.map string_of_intexpr args))
+		^"\nnew args:\t\t"^(String.concat ", " (List.map string_of_intexpr new_args))
+		^"\nfargs:\t\t\t"^(String.concat ", " (List.map string_of_idxfunc fargs))
+		^"\nnewdef:\t\t\t"^(string_of_idxfunc newdef)
+		^"\nres:\t\t\t"^(string_of_idxfunc res)^"\n\n\n");
   res
 ;;
 
