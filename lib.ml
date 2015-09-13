@@ -467,22 +467,26 @@ let initial_colds_of_rsteps (rsteps: rstep_unpartitioned list) : SpecArgSet.t =
 
   let init_rstep ((name, rstep, _, breakdowns) : rstep_unpartitioned) : _=
     let add_args_to_cold (e:intexpr) : _ =
-      print_string ("\n__________\n"^(string_of_intexpr e)^"\n________________\n");
       match e with
 	IArg i -> 
 	  cold_set := SpecArgSet.add (name,i) !cold_set
       | _ -> ()
     in
     (* all arguments in the pre() marker must be cold *)
-    let add_all_pre_to_cold (e:idxfunc) : _ =
-      (* FIXME GT arguments wrapping Pre must be in it as well*)
+    let add_all_pre_to_cold (ctx:spl list) (e:idxfunc) : _ =      
       match e with 
       | Pre x -> 
-	print_string ("\n//////////\n"^(string_of_idxfunc e)^"\n/////////\n");
-	meta_iter_intexpr_on_idxfunc add_args_to_cold x
+	(* all args in Pre should be cold*)
+	meta_iter_intexpr_on_idxfunc add_args_to_cold x;
+	(* and all the loop bounds of wrapping GTs *)
+	let f = function
+	  | GT(_,_,_,l) -> List.iter add_args_to_cold l
+	  | _ -> ()
+	in
+	List.iter (meta_iter_spl_on_spl f) ctx
       | _ -> ()
     in
-    meta_iter_idxfunc_on_spl add_all_pre_to_cold rstep;
+    meta_iter_ctx_idxfunc_on_spl add_all_pre_to_cold rstep;
     
     let init_rule ((condition,freedoms,_,_):breakdown) : _ = 
       (* all arguments in condition (intexpr list) *)

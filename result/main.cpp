@@ -1,5 +1,6 @@
 #include "result.cpp"
 #include <iostream>
+#include <iomanip>
 #include <malloc.h>
 #include <cstring>
 
@@ -87,8 +88,9 @@ int compare_vecs(char *id1, float *v1, char *id2, float *v2, int n, double thres
         diff = (diff < 0) ? (-diff) : diff;
         if((double)diff > threshold) {
             if(printed++ < max_printed)
-				std::cout << "#  (" << id1 << "[" << i << "] - " << id2 << "[" << i << "]) = " << diff
-						  << "  me/them  " << v1[i] << "  " << v2[i] << std::endl;
+	      std::cout << std::fixed << std::setprecision(2) 
+			<< "#  (" << id1 << "[" << i << "] - " << id2 << "[" << i << "]) = " << diff
+			<< "  me/them  " << v1[i] << "  " << v2[i] << std::endl;
             pass=0;
         }
     }

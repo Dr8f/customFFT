@@ -54,7 +54,7 @@ let algo_cooley_tukey : spl -> boolexpr * (intexpr*intexpr) list * spl =
       | x -> 
 	x
     in
-    let f = meta_transform_spl_on_spl_context BottomUp g in
+    let f = meta_transform_ctx_spl_on_spl BottomUp g in
     ((And !conditions), !freedoms, f e)
 ;;  
 

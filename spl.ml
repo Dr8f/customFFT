@@ -65,7 +65,8 @@ let rec string_of_spl (e : spl) : string =
 	 METARULES                 
 *********************************************)
 
-let meta_transform_spl_on_spl_inner_z (g : spl -> spl) (e : spl) : spl = 
+let meta_transform_ctx_spl_on_spl (recursion_direction: recursion_direction) : (spl list -> spl -> spl) -> spl -> spl =
+  let z (g : spl -> spl) (_:spl list) (e : spl) : spl =
     match e with
     | Compose (l) -> Compose (List.map g l)
     | Tensor (l) -> Tensor (List.map g l)
@@ -75,36 +76,38 @@ let meta_transform_spl_on_spl_inner_z (g : spl -> spl) (e : spl) : spl =
     | GT (a, c, s, l) -> GT(g a, c, s, l)
     | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _ | PartitionnedCall _ -> e
     |Down(s,a,b) -> Down(g s, a, b)
-;;
-  
-let meta_transform_spl_on_spl (recursion_direction: recursion_direction) : (spl -> spl) -> (spl -> spl) =
-  recursion_transform recursion_direction meta_transform_spl_on_spl_inner_z
-;;
-
-let meta_transform_spl_on_spl_context (recursion_direction: recursion_direction) : (spl list -> spl -> spl) -> spl -> spl =
-  let z (g : spl -> spl) (_:spl list) (e : spl) : spl =
-    meta_transform_spl_on_spl_inner_z g e
   in
   recursion_transform_ctx recursion_direction z
 ;;
 
-let meta_transform_idxfunc_on_spl (recursion_direction: recursion_direction) (f : idxfunc -> idxfunc) : (spl -> spl) =
-  (* print_string "meta_transform_idxfunc_on_spl\n"; *)
-  let g = meta_transform_idxfunc_on_idxfunc recursion_direction f in
-  meta_transform_spl_on_spl recursion_direction ( function
-  | G(l) -> G(g l) 
-  | S(l) -> S(g l) 
-  | Diag(l) -> Diag( g l)
-  | GT(a,c,s,l)->GT(a, g c, g s, l)
-  | DFT _  | RS _ | I _ | Tensor _ | T _ | L _ | Compose _ | ISum _ | F _ | BB _ | Down _ as e -> e
-   | e -> failwith("meta_transform_idxfunc_on_spl, not handled: "^(string_of_spl e))         		
-  )
+let meta_transform_spl_on_spl (recursion_direction: recursion_direction) (z: spl -> spl) : spl -> spl =
+  meta_transform_ctx_spl_on_spl recursion_direction (fun _ -> z) 
 ;;
 
-let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f : intexpr -> intexpr) : (spl -> spl) =
-  (* print_string "meta_transform_intexpr_on_spl\n"; *)
-  let g = meta_transform_intexpr_on_intexpr recursion_direction f in
-  let z (e : spl) : spl = 
+
+let meta_transform_ctx_idxfunc_on_spl (recursion_direction: recursion_direction) (f : spl list -> idxfunc list -> idxfunc -> idxfunc) : (spl -> spl) =
+  (* print_string "meta_transform_ctx_idxfunc_on_spl\n"; *)
+  let h (ctx:spl list) (e:spl) : spl = 
+    let g = meta_transform_ctx_idxfunc_on_idxfunc recursion_direction (f ctx) in
+    match e with
+    | G(l) -> G(g l) 
+    | S(l) -> S(g l) 
+    | Diag(l) -> Diag( g l)
+    | GT(a,c,s,l)->GT(a, g c, g s, l)
+    | DFT _  | RS _ | I _ | Tensor _ | T _ | L _ | Compose _ | ISum _ | F _ | BB _ | Down _ as e -> e
+    | e -> failwith("meta_transform_idxfunc_on_spl, not handled: "^(string_of_spl e))         	
+  in
+  meta_transform_ctx_spl_on_spl recursion_direction h
+;;
+
+let meta_transform_idxfunc_on_spl (recursion_direction: recursion_direction) (z : idxfunc -> idxfunc) : (spl -> spl) =
+  meta_transform_ctx_idxfunc_on_spl recursion_direction (fun _ _ -> z)
+;;
+
+let meta_transform_ctx_intexpr_on_spl (recursion_direction: recursion_direction) (f : spl list -> idxfunc list -> intexpr list -> intexpr -> intexpr) : (spl -> spl) =
+  (* print_string "meta_transform_ctx intexpr_on_spl\n"; *)
+  let h (ctx:spl list) (e : spl) : spl = 
+    let g = meta_transform_ctx_intexpr_on_intexpr recursion_direction (f ctx []) in
     match e with
     | Compose _ | Tensor _ | RS _ | Diag _ | G _| S _ -> e
     | ISum(v,c,a) -> ISum(g v,g c,a)
@@ -122,28 +125,48 @@ let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (f 
     (* | _ -> failwith("meta_transform_intexpr_on_spl, not handled: "^(string_of_spl e))         		 *)
   in
   fun (e : spl) ->
-  (meta_transform_spl_on_spl recursion_direction z) ((meta_transform_idxfunc_on_spl recursion_direction (meta_transform_intexpr_on_idxfunc recursion_direction g)) e)
+    let z (splctx: spl list) (idxfuncctx:idxfunc list) : idxfunc -> idxfunc =
+      let zz (hh:idxfunc list) : intexpr list -> intexpr -> intexpr =
+	f splctx (idxfuncctx@hh) in
+      (meta_transform_ctx_intexpr_on_idxfunc recursion_direction zz)      
+    in
+    let res = (meta_transform_ctx_idxfunc_on_spl recursion_direction z e) in
+  (meta_transform_ctx_spl_on_spl recursion_direction h) res
 ;;
 
-let meta_collect_spl_on_spl (f : spl -> 'a list) : (spl -> 'a list) =
-  let z (g : spl -> 'a list) (e : spl) : 'a list =
+let meta_transform_intexpr_on_spl (recursion_direction: recursion_direction) (z : intexpr -> intexpr) : (spl -> spl) =
+  meta_transform_ctx_intexpr_on_spl recursion_direction (fun _ _ _ -> z)
+;;
+
+let meta_collect_ctx_spl_on_spl (f : spl list -> spl -> 'a list) : (spl -> 'a list) =
+  let z (g : spl -> 'a list) (_:spl list) (e : spl) : 'a list =
     match e with
       Compose l | Tensor l -> List.flatten (List.map g l)
     | ISum(_,_,a) | GT(a,_,_,_) -> g a
     | RS a -> g a
     | _ -> []
   in
-  recursion_collect z f
+  recursion_collect_ctx z f
 ;;
 
-let meta_collect_idxfunc_on_spl (f : idxfunc -> 'a list) : (spl -> 'a list) =
-  meta_collect_spl_on_spl ( function
-  | G(l) -> f l
-  | S(l) -> f l
-  | Diag(l) -> f l
-  | GT(_,a,b,_)->(f a)@(f b)
-  | _ -> []
-  )
+let meta_collect_spl_on_spl (z : spl -> 'a list) : (spl -> 'a list) =
+  meta_collect_ctx_spl_on_spl (fun _ -> z)
+;;
+
+let meta_collect_ctx_idxfunc_on_spl (f : spl list -> idxfunc -> 'a list) : (spl -> 'a list) =
+  let z (ctx:spl list) (e:spl) : 'a list = 
+    match e with
+    | G(l) -> f ctx l
+    | S(l) -> f ctx l
+    | Diag(l) -> f ctx l
+    | GT(_,a,b,_)->(f ctx a)@(f ctx b)
+    | _ -> []
+  in
+  meta_collect_ctx_spl_on_spl z
+;;
+
+let meta_collect_idxfunc_on_spl (z : idxfunc -> 'a list) : (spl -> 'a list) =
+  meta_collect_ctx_idxfunc_on_spl (fun _ -> z)
 ;;
 
 let meta_collect_intexpr_on_spl (f : intexpr -> 'a list) : (spl -> 'a list) =
@@ -162,15 +185,22 @@ let meta_collect_intexpr_on_spl (f : intexpr -> 'a list) : (spl -> 'a list) =
     @ ((meta_collect_idxfunc_on_spl (meta_collect_intexpr_on_idxfunc ff)) e)
 ;;
 
-let meta_iter_spl_on_spl (f : spl -> unit) : (spl -> unit) =
+let meta_iter_ctx_spl_on_spl (f : spl list -> spl -> unit) : (spl -> unit) =
   fun (e : spl) ->
-    ignore((meta_collect_spl_on_spl (fun (e:spl) -> f e;[])) e)
+    ignore((meta_collect_ctx_spl_on_spl (fun (ctx:spl list) (e:spl) -> f ctx e;[])) e)
 ;;
 
+let meta_iter_spl_on_spl (z : spl -> unit) : (spl -> unit) =
+  meta_iter_ctx_spl_on_spl (fun _ -> z)
+;;
+
+let meta_iter_ctx_idxfunc_on_spl (f :spl list -> idxfunc -> unit) : (spl -> unit) =
+  fun (e : spl) ->
+    ignore((meta_collect_ctx_idxfunc_on_spl (fun (ctx:spl list) (e:idxfunc) -> f ctx e;[])) e)
+;;
 
 let meta_iter_idxfunc_on_spl (f : idxfunc -> unit) : (spl -> unit) =
-  fun (e : spl) ->
-    ignore((meta_collect_idxfunc_on_spl (fun (e:idxfunc) -> f e;[])) e)
+  meta_iter_ctx_idxfunc_on_spl (fun _ -> f)
 ;;
 
 let meta_iter_intexpr_on_spl(f : intexpr -> unit) : (spl -> unit) =
@@ -179,14 +209,14 @@ let meta_iter_intexpr_on_spl(f : intexpr -> unit) : (spl -> unit) =
 ;;
 
 let meta_compose_spl (recursion_direction: recursion_direction) (f : spl list -> spl list) : (spl -> spl) =
-  meta_transform_spl_on_spl recursion_direction ( function 
-  | Compose (l) -> Compose (f l) 
+  meta_transform_spl_on_spl recursion_direction ( function
+  | Compose (l) -> Compose (f l)
   | x -> x)
 ;;
 
 let meta_tensorize_spl (recursion_direction: recursion_direction) (f : spl list -> spl list) : (spl -> spl) =
-  meta_transform_spl_on_spl recursion_direction ( function 
-  | Tensor (l) -> Tensor (f l) 
+  meta_transform_spl_on_spl recursion_direction ( function
+  | Tensor (l) -> Tensor (f l)
   | x -> x)
 ;;
 
@@ -291,7 +321,7 @@ let rule_suck_inside_isum : (spl -> spl) =
 
 
 let rule_transorm_T_into_diag : (spl -> spl) =
-  meta_transform_spl_on_spl BottomUp (function 
+  meta_transform_spl_on_spl BottomUp (function
   | T(n,k) -> Diag(Pre(FD(n,k)))
   | x -> x
   )

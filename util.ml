@@ -66,6 +66,14 @@ let recursion_collect (z : ('a -> 'b list) -> 'a -> 'b list) (f : 'a -> 'b list)
   g
 ;;
 
+let recursion_collect_ctx (z : ('a -> 'b list) -> 'a list -> 'a -> 'b list) (f : 'a list -> 'a -> 'b list) : ('a -> 'b list) =
+  let rec g (ctx:'a list) (e : 'a) : 'b list =
+    let s = z (fun a -> g (e::ctx) a) ctx in
+    f ctx e @ (s e)
+  in
+  g []
+;;
+
 (*********************************************
 	 PRINTING
 *********************************************)

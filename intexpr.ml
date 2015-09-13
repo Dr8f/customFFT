@@ -34,9 +34,8 @@ let string_of_intexpr_intmap (map: intexpr IntMap.t) : string =
   "IntexprIntMap("^(String.concat "; " (List.map (function (e,f)-> "("^(string_of_int e)^", "^(string_of_intexpr f)^")") (IntMap.bindings map)))^")"
 ;;
 
-let meta_transform_intexpr_on_intexpr (recursion_direction: recursion_direction) : (intexpr -> intexpr) -> (intexpr -> intexpr) = 
-  (* print_string "meta_transform_intexpr_on_intexpr\n"; *)
-  let z (g : intexpr -> intexpr) (e : intexpr) : intexpr = 
+let meta_transform_ctx_intexpr_on_intexpr (recursion_direction: recursion_direction) : (intexpr list -> intexpr -> intexpr) -> intexpr -> intexpr =
+  let z (g : intexpr -> intexpr) (_:intexpr list) (e : intexpr) : intexpr =
     match e with
     | IMul (l) -> IMul(List.map g l)
     | IPlus (l) -> IPlus(List.map g l)
@@ -45,8 +44,13 @@ let meta_transform_intexpr_on_intexpr (recursion_direction: recursion_direction)
     | IDivisor(l) -> IDivisor(g l)
     | IFreedom _ | IArg _ | IConstant _ | ILoopCounter _ -> e
   in
-  recursion_transform recursion_direction z
+  recursion_transform_ctx recursion_direction z
 ;;
+
+let meta_transform_intexpr_on_intexpr (recursion_direction: recursion_direction) (z: intexpr -> intexpr) : intexpr -> intexpr =
+  meta_transform_ctx_intexpr_on_intexpr recursion_direction (fun _ -> z)
+;;
+
 
 let meta_collect_intexpr_on_intexpr (f : intexpr -> 'a list) : (intexpr -> 'a list) =
   let z (g : intexpr -> 'a list) (e : intexpr) : 'a list =

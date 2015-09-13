@@ -39,10 +39,9 @@ let rec string_of_idxfunc (e : idxfunc) : string =
   | FHH(d, r, b, s, vs) -> "FHH("^(string_of_intexpr d)^", "^(string_of_intexpr r)^", "^(string_of_intexpr b)^", "^(string_of_intexpr s)^", ["^(String.concat "; " (List.map string_of_intexpr vs))^"] )"
 ;;
 
-let meta_transform_idxfunc_on_idxfunc (recursion_direction: recursion_direction) : (idxfunc -> idxfunc) -> (idxfunc -> idxfunc) =
-  (* print_string "meta_transform_idxfunc_on_idxfunc\n"; *)
-  let z (g : idxfunc -> idxfunc) (e : idxfunc) : idxfunc = 
-    match e with 
+let meta_transform_ctx_idxfunc_on_idxfunc (recursion_direction: recursion_direction) : (idxfunc list -> idxfunc -> idxfunc) -> idxfunc -> idxfunc =
+  let z (g : idxfunc -> idxfunc) (_:idxfunc list) (e : idxfunc) : idxfunc =
+    match e with
     | FCompose (l) -> FCompose (List.map g l)
     | Pre(l) -> Pre(g l)
     | FUp(l) -> FUp(g l)
@@ -51,13 +50,18 @@ let meta_transform_idxfunc_on_idxfunc (recursion_direction: recursion_direction)
     | FHH _ | FD _ | FH _ | FL _ | FArg _ -> e
     (* | _ -> failwith("meta_transform_idxfunc_on_idxfunc, not handled: "^(string_of_idxfunc e))         		 *)
   in
-  recursion_transform recursion_direction z
+  recursion_transform_ctx recursion_direction z
 ;;
 
-let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction) (f : intexpr -> intexpr) : (idxfunc -> idxfunc) =
-  (* print_string "meta_transform_intexpr_on_idxfunc\n"; *)
-  let g = meta_transform_intexpr_on_intexpr recursion_direction f in
-  meta_transform_idxfunc_on_idxfunc recursion_direction ( function
+let meta_transform_idxfunc_on_idxfunc (recursion_direction: recursion_direction) (z: idxfunc -> idxfunc) : idxfunc -> idxfunc =
+  meta_transform_ctx_idxfunc_on_idxfunc recursion_direction (fun _ -> z)
+;;
+
+let meta_transform_ctx_intexpr_on_idxfunc (recursion_direction: recursion_direction) (f : idxfunc list -> intexpr list -> intexpr -> intexpr) : (idxfunc -> idxfunc) =
+  (* print_string "meta_transform_ctx_intexpr_on_idxfunc\n"; *)
+  let h (ctx:idxfunc list) (e:idxfunc) : idxfunc = 
+    let g = meta_transform_ctx_intexpr_on_intexpr recursion_direction (f ctx) in
+    match e with
     | FH (a, b, c, d) -> let ga = g a in
   			 let gb = g b in
   			 let gc = g c in
@@ -74,8 +78,16 @@ let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction)
 			     let gd = g d in			     
   			     FHH (ga, gb, gc, gd, List.map g vs)
  (* | _ as e -> failwith("meta_transform_intexpr_on_idxfunc, not handled: "^(string_of_idxfunc e)) *)
-							)
+  in
+  meta_transform_ctx_idxfunc_on_idxfunc recursion_direction h
 ;;
+
+let meta_transform_intexpr_on_idxfunc (recursion_direction: recursion_direction) (z : intexpr -> intexpr) : (idxfunc -> idxfunc) =
+  meta_transform_ctx_intexpr_on_idxfunc recursion_direction (fun _ _ -> z)
+;;
+
+
+
 
 let meta_collect_idxfunc_on_idxfunc (f : idxfunc -> 'a list) : (idxfunc -> 'a list) =
   let z (g : idxfunc -> 'a list) (e : idxfunc) : 'a list =
