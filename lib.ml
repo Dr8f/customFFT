@@ -148,7 +148,7 @@ let extract_constraints_spl (e : spl) : (intexpr * intexpr) list =
     | GT(a,g,s,_) -> (spl_domain a,func_domain g)::(spl_range a, func_domain s)::(inner_extract_constraints_spl a)
     | _ -> []    
   in
-  List.map (fun(x,y)->(apply_rewriting_rules intexpr_rulemap x, apply_rewriting_rules intexpr_rulemap y)) (inner_extract_constraints_spl e)
+  List.map (fun(x,y)->(simplify_intexpr x, simplify_intexpr y)) (inner_extract_constraints_spl e)
 ;;
 
 let rec reconcile_constraints_on_spl ((constraints,spl) : (((intexpr * intexpr) list) * spl)) : spl =
@@ -313,7 +313,7 @@ let collect_args (rstep : spl) : IntExprSet.t =
 let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (spl -> boolexpr * (intexpr*intexpr) list * spl)) (ensure_name: spl-> string) : (boolexpr * (intexpr*intexpr) list * spl * spl) =
   let (condition, freedoms, naive_desc) = algo rstep in
 
-  let desc = apply_rewriting_rules spl_rulemap (mark_RS(naive_desc)) in
+  let desc = simplify_spl (mark_RS(naive_desc)) in
   print_string ("Desc:\t\t"^(string_of_spl desc)^"\n");
 
   let simplification_constraints = extract_constraints_spl desc in

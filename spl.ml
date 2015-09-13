@@ -471,3 +471,6 @@ let spl_rulemap =
 )
 ;;
    
+let simplify_spl (f:spl) : spl = 
+  apply_rewriting_rules spl_rulemap f
+;;

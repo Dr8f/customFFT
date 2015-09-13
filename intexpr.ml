@@ -141,3 +141,7 @@ let intexpr_rulemap =
   ("Addition zero", rule_addition_zero_on_intexpr);
   ("Multiply and divide by the same", rule_multiply_and_divide_by_the_same_on_intexpr) ])
 ;;
+
+let simplify_intexpr (f:intexpr) : intexpr = 
+  apply_rewriting_rules intexpr_rulemap f
+;;

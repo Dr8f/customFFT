@@ -223,11 +223,44 @@ object
 end
 ;;
     
-
-
 module StringMap = Map.Make(String)
 ;;
 
 module IntMap = Map.Make(struct type t = int let compare = compare end)
 ;;
 
+let meta_chain_code (recursion_direction: recursion_direction) (f : code list -> code list) : (code -> code) =
+  meta_transform_code_on_code recursion_direction ( function 
+  | Chain (l) -> Chain (f l) 
+  | x -> x)
+;;
+
+let flatten_chain : (code -> code) =
+  let rec f (l : code list) : code list = 
+  match l with
+  | Chain(a)::tl -> f (a @ tl)
+  | Noop::tl -> f(tl)
+  | a::tl -> a :: (f tl)
+  | [] -> []
+  in
+  meta_chain_code BottomUp f
+;;  
+
+let empty_chain : (code -> code) =
+  meta_transform_code_on_code BottomUp ( function
+  | Chain [] -> Noop
+  | x -> x
+  )
+;;
+
+let code_rulemap =
+  List.fold_left (fun (map) (name, rule) -> StringMap.add name rule map ) StringMap.empty ([
+  ("Flatten chain", flatten_chain);
+  ("Empty chain", empty_chain);
+  ]
+  )
+;;
+   
+let simplify_code (f:code) : code = 
+  apply_rewriting_rules code_rulemap f
+;;

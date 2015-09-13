@@ -7,23 +7,6 @@ open Ctype
 open Code
 ;;
 
-let meta_chain_code (recursion_direction: recursion_direction) (f : code list -> code list) : (code -> code) =
-  meta_transform_code_on_code recursion_direction ( function 
-  | Chain (l) -> Chain (f l) 
-  | x -> x)
-;;
-
-let flatten_chain : (code -> code) =
-  let rec f (l : code list) : code list = 
-  match l with
-  | Chain(a)::tl -> f (a @ tl)
-  | Noop::tl -> f(tl)
-  | a::tl -> a :: (f tl)
-  | [] -> []
-  in
-  meta_chain_code BottomUp f
-;;  
-
 let remove_decls : (code -> code) =
   meta_transform_code_on_code BottomUp ( function
   | Declare _ -> Noop

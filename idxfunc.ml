@@ -319,3 +319,7 @@ let idxfunc_rulemap =
 		   @(List.map (fun (name,rule) -> ("Lifted "^name, meta_transform_intexpr_on_idxfunc BottomUp rule)) (StringMap.bindings intexpr_rulemap))
 )
 ;;
+
+let simplify_idxfunc (f:idxfunc) : idxfunc = 
+  apply_rewriting_rules idxfunc_rulemap f
+;;

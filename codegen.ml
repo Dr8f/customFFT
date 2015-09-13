@@ -94,7 +94,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     let rec prepare_cons (e:Spl.spl) : code =
       (* print_string ("cons code:"^(Spl.string_of_spl e)^"\n"); *)
       match e with
-      | Spl.Compose l -> Chain (List.map prepare_cons (List.rev l)) 
+      | Spl.Compose l -> simplify_code (Chain (List.map prepare_cons (List.rev l)))
       | Spl.Construct(numchild, rs, args, funcs) -> Assign(build_child_var(numchild), New(FunctionCall(rs, (List.map expr_of_intexpr (args))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
       | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) ->
 	let child = build_child_var(numchild) in
@@ -107,7 +107,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	  ))
 	])
       | Spl.Diag Idxfunc.Pre(idxfunc) -> 
-	(*FIXME code is magically false here, we have to do that out of the loops somehow*)
+	(*FIXME this is wrong, we have to manage freaking GT loops, and that changes the size of the _dat.*)
 	let var = gen_var#get Ctype.Int "t" in
 	let (precomp, codelines) = code_of_func idxfunc (var,[]) in			    
 	Chain([
@@ -116,10 +116,12 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	       Chain(codelines@[
 		 Assign((Nth(Cast(_dat,Ctype.Ptr(Ctype.Complex)),var)),precomp)]))
 				     ])
-      | Spl.S _ | Spl.G _ | Spl.F _ -> Chain([])
+      | Spl.S _ | Spl.G _ | Spl.F _ -> Noop
       | Spl.BB spl -> prepare_cons spl
-      | Spl.ISum(i, count, content) -> (*FIXME this might be wrong, it's not obvious[6~*)Loop(expr_of_intexpr i, expr_of_intexpr count, (prepare_cons content))
-
+      | Spl.ISum(i, count, content) -> 
+	(match (prepare_cons content) with 
+	| Noop -> Noop (*we do not want to produce empty isums, they may not be correct since the loop variable might be not cold*)
+	| (_ as c) -> Loop(expr_of_intexpr i, expr_of_intexpr count, c))
       | _ -> failwith("prepare_cons, not handled: "^(Spl.string_of_spl e))
     in
     let rulecount = ref 0 in
@@ -206,14 +208,13 @@ let code_of_envfunc ((name, f, args, fargs) : envfunc) : code =
   print_string ("definition:"^(Idxfunc.string_of_idxfunc f)^"\n");
   print_string ("args:"^(String.concat ", " (List.map Intexpr.string_of_intexpr args))^"\n");
   print_string ("fargs:"^(String.concat ", " (List.map Idxfunc.string_of_idxfunc fargs))^"\n");
-  (* FIXME args are just false *)
 
   let g = ref f in 
   let rankvars = ref [] in
   while (Idxfunc.rank_of_func !g > 0) do
     print_string ("processing:"^(Idxfunc.string_of_idxfunc !g)^"\n");    
     let i = Intexpr.gen_loop_counter#get () in 
-    g := apply_rewriting_rules Idxfunc.idxfunc_rulemap (Idxfunc.FDown(!g, i, 0));
+    g := Idxfunc.simplify_idxfunc (Idxfunc.FDown(!g, i, 0));
     rankvars := (expr_of_intexpr i)::!rankvars;
   done;
   let input = gen_var#get Ctype.Int "t" in
