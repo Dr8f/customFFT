@@ -90,10 +90,21 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     !res  
   in
 
+
+  let introduce_precomp : (Spl.spl -> Spl.spl) =
+    Spl.meta_transform_spl_on_spl BottomUp (function
+    | Spl.Diag(Idxfunc.Pre(f)) -> Spl.PreComp(Spl.Diag(Idxfunc.Pre(f)))
+    | x -> x
+    )
+  in
+
   let cons_code_of_rstep ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) : code =
     let rec prepare_cons (e:Spl.spl) : code =
-      print_string ("cons code:"^(Spl.string_of_spl e)^"\n"); 
-      match e with
+      let ne = Spl.simplify_spl(introduce_precomp (e)) in
+      print_string ("cons code:"^(Spl.string_of_spl ne)^"\n"); 
+
+
+      match ne with
       | Spl.Compose l -> simplify_code (Chain (List.map prepare_cons (List.rev l)))
       | Spl.Construct(numchild, rs, args, funcs) -> Assign(build_child_var(numchild), New(FunctionCall(rs, (List.map expr_of_intexpr (args))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
       | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) ->
@@ -118,11 +129,16 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 				     ])
       | Spl.S _ | Spl.G _ | Spl.F _ -> Noop
       | Spl.BB spl -> prepare_cons spl
-      | Spl.ISum(i, count, content) -> 
-	(match (prepare_cons content) with 
-	| Noop -> Noop (*we do not want to produce empty isums, they may not be correct since the loop variable might be not cold*)
-	| (_ as c) -> Loop(expr_of_intexpr i, expr_of_intexpr count, c))
-      | _ -> failwith("prepare_cons, not handled: "^(Spl.string_of_spl e))
+      (* | Spl.ISum(i, count, content) ->  *)
+      (* 	(match (prepare_cons content) with  *)
+      (* 	| Noop -> Noop (\*we do not want to produce empty isums, they may not be correct since the loop variable might be not cold*\) *)
+      (* 	| (_ as c) -> Loop(expr_of_intexpr i, expr_of_intexpr count, c)) *)
+      | Spl.GT(content,_,_,i)->
+	failwith("FIXME : code me "^(Spl.string_of_spl ne))
+      	(* (match (prepare_cons content) with *)
+      	(* | Noop -> Noop (\*we do not want to produce empty isums, they may not be correct since the loop variable might be not cold*\) *)
+      	(* | (_ as c) -> Loop(expr_of_intexpr i, expr_of_intexpr count, c)) *)
+      | _ -> failwith("prepare_cons, not handled: "^(Spl.string_of_spl ne))
     in
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,_,_,desc_cons,_):breakdown_enhanced) : code  =

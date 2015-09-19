@@ -29,6 +29,7 @@ DFT of intexpr
 | BB of spl
 | GT of spl * idxfunc * idxfunc * intexpr list
 | Down of spl * intexpr * int
+| PreComp of spl
 ;;
 
 let rec string_of_spl (e : spl) : string =
@@ -56,6 +57,7 @@ let rec string_of_spl (e : spl) : string =
   | BB(x) ->"BB("^(string_of_spl x)^")"
   | GT(a, g, s, l) -> "GT("^(string_of_spl a)^", "^(string_of_idxfunc g)^", "^(string_of_idxfunc s)^", ["^(String.concat ";" (List.map string_of_intexpr l))^"])"
   | Down(s,l,d) -> "Down("^(string_of_spl s)^", "^(string_of_intexpr l)^", "^(string_of_int d)^")"  
+  | PreComp(s) -> "PreComp("^(string_of_spl s)^")"
 ;;
 
 
@@ -75,7 +77,8 @@ let meta_transform_ctx_spl_on_spl (recursion_direction: recursion_direction) : (
     | BB (l) -> BB(g l)
     | GT (a, c, s, l) -> GT(g a, c, s, l)
     | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _ | PartitionnedCall _ -> e
-    |Down(s,a,b) -> Down(g s, a, b)
+    | Down(s,a,b) -> Down(g s, a, b)
+    | PreComp(s) -> PreComp(g s)
   in
   recursion_transform_ctx recursion_direction z
 ;;
@@ -94,7 +97,8 @@ let meta_transform_ctx_idxfunc_on_spl (recursion_direction: recursion_direction)
     | S(l) -> S(g l) 
     | Diag(l) -> Diag( g l)
     | GT(a,c,s,l)->GT(a, g c, g s, l)
-    | DFT _  | RS _ | I _ | Tensor _ | T _ | L _ | Compose _ | ISum _ | F _ | BB _ | Down _ as e -> e
+    | DFT _  | RS _ | I _ | Tensor _ | T _ | L _ | Compose _ | ISum _ | F _ | BB _ | Down _ | PreComp _ as e -> e
+    | Construct(a,b,c,d) -> Construct(a,b,c,(List.map g d))
     | e -> failwith("meta_transform_idxfunc_on_spl, not handled: "^(string_of_spl e))         	
   in
   meta_transform_ctx_spl_on_spl recursion_direction h
@@ -120,8 +124,10 @@ let meta_transform_ctx_intexpr_on_spl (recursion_direction: recursion_direction)
     | UnpartitionnedCall _ -> e
     | PartitionnedCall _ -> e
     | F _ -> e
-    | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ | Construct _ -> assert false
-    | Down(s,l,d) -> Down(s, g l, d)			       
+    | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ -> assert false
+    | Construct(a,b,c,d) -> Construct(a,b,(List.map g c),d)
+    | Down(s,l,d) -> Down(s, g l, d)
+    | PreComp(s) -> PreComp(s)
     (* | _ -> failwith("meta_transform_intexpr_on_spl, not handled: "^(string_of_spl e))         		 *)
   in
   fun (e : spl) ->
@@ -236,6 +242,7 @@ let rec spl_range (e :spl) : intexpr =
   | ISumReinitCompute (_, _, _, _, _, r, _)  | Compute (_,_,_,r,_) -> r
   | ISumReinitConstruct _ | Construct _ | UnpartitionnedCall _ | PartitionnedCall _ -> assert false
   | Down(a,_,_) -> spl_range a
+  | PreComp(a) -> spl_range a
 ;;    
 
 let rec spl_domain (e :spl) : intexpr = 
@@ -252,6 +259,7 @@ let rec spl_domain (e :spl) : intexpr =
   | UnpartitionnedCall _ | PartitionnedCall _ | ISumReinitConstruct _ | Construct _ -> assert false
   | ISumReinitCompute (_, _, _, _, _, _, d)   | Compute (_,_,_,_,d) -> d
   | Down(a,_,_) -> spl_domain a
+  | PreComp(a) -> spl_domain a
 
 ;;    
 
@@ -334,6 +342,14 @@ let rule_warp_GT_RS : (spl -> spl) =
 )
 ;;
 
+let rule_pull_precompute : (spl -> spl) =
+  meta_transform_spl_on_spl BottomUp (function 
+  | BB(PreComp(a)) -> PreComp(a)
+  (* | GT(PreComp(a),g,s,l) -> PreComp(GT(a,FHH(spl_domain a, spl_domain a, 0, 1, ),s,l)) *)
+  | x -> x
+  )
+;;
+
 
 let rule_suck_inside_RS : (spl -> spl) =
   let rec f (l : spl list) : spl list = 
@@ -376,6 +392,15 @@ let rule_flatten_compose : (spl -> spl) =
   | Compose(a)::tl -> f (a @ tl)
   | a::tl -> a :: (f tl)
   | [] -> []
+  in
+  meta_compose_spl BottomUp f
+;;  
+
+let rule_precompute_compose : (spl -> spl) =
+  let rec f (l : spl list) : spl list = 
+    match l with
+    | F _ :: PreComp(a)::tl -> f (PreComp(a)::tl)
+    | x -> x
   in
   meta_compose_spl BottomUp f
 ;;  
@@ -456,6 +481,8 @@ let spl_rulemap =
   ("Compose BB Gather", rule_compose_BB_gather);
   ("Compose Scatter BB", rule_compose_scatter_BB);
   ("Distribute FDown", rule_distribute_downrank_spl);
+  ("Rule Precompute Compose", rule_precompute_compose);
+  ("Rule Pull Precompute", rule_pull_precompute);
 
   (* TODO 
      Currently breaks because DFT is applied within GT
