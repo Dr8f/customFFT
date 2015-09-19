@@ -97,8 +97,9 @@ let meta_transform_ctx_idxfunc_on_spl (recursion_direction: recursion_direction)
     | S(l) -> S(g l) 
     | Diag(l) -> Diag( g l)
     | GT(a,c,s,l)->GT(a, g c, g s, l)
-    | DFT _  | RS _ | I _ | Tensor _ | T _ | L _ | Compose _ | ISum _ | F _ | BB _ | Down _ | PreComp _ as e -> e
+    | DFT _  | RS _ | I _ | Tensor _ | T _ | L _ | Compose _ | ISum _ | F _ | BB _ | Down _ | PreComp _ | Compute _ | ISumReinitCompute _ as e -> e
     | Construct(a,b,c,d) -> Construct(a,b,c,(List.map g d))
+    | ISumReinitConstruct(a, b, c ,d , ee, f, gg) -> ISumReinitConstruct(a, b, c, d, ee, f, List.map g gg)
     | e -> failwith("meta_transform_idxfunc_on_spl, not handled: "^(string_of_spl e))         	
   in
   meta_transform_ctx_spl_on_spl recursion_direction h
@@ -124,8 +125,10 @@ let meta_transform_ctx_intexpr_on_spl (recursion_direction: recursion_direction)
     | UnpartitionnedCall _ -> e
     | PartitionnedCall _ -> e
     | F _ -> e
-    | ISumReinitCompute _| Compute _ | ISumReinitConstruct _ -> assert false
+    | ISumReinitConstruct(a, b, c ,d , ee, f, gg) -> ISumReinitConstruct(a, g b, g c, d, List.map g ee, List.map g f, gg)
+    | ISumReinitCompute(a,b,c,d,ee,f,gg) -> ISumReinitCompute(a, g b, g c, d, List.map g ee, g f, g gg)
     | Construct(a,b,c,d) -> Construct(a,b,(List.map g c),d)
+    | Compute(a,b,c,d,e) -> Compute(a,b,(List.map g c),g d,g e)
     | Down(s,l,d) -> Down(s, g l, d)
     | PreComp(s) -> PreComp(s)
     (* | _ -> failwith("meta_transform_intexpr_on_spl, not handled: "^(string_of_spl e))         		 *)
@@ -345,7 +348,11 @@ let rule_warp_GT_RS : (spl -> spl) =
 let rule_pull_precompute : (spl -> spl) =
   meta_transform_spl_on_spl BottomUp (function 
   | BB(PreComp(a)) -> PreComp(a)
-  (* | GT(PreComp(a),g,s,l) -> PreComp(GT(a,FHH(spl_domain a, spl_domain a, 0, 1, ),s,l)) *)
+  | GT(PreComp(a),g,s,l) -> 
+    if (List.length l == 1) then 
+      PreComp(GT(a,FNil, FHH(spl_domain a, spl_domain a, IConstant 0, IConstant 1, [spl_domain a]),l))
+    else
+      failwith("not implemented yet")
   | x -> x
   )
 ;;
@@ -400,6 +407,20 @@ let rule_precompute_compose : (spl -> spl) =
   let rec f (l : spl list) : spl list = 
     match l with
     | F _ :: PreComp(a)::tl -> f (PreComp(a)::tl)
+    | PreComp a :: G _ :: tl -> f (PreComp a :: tl)
+    | S _ :: PreComp a :: tl -> f (PreComp( Compose( [S(FH(spl_domain a, spl_range a, IConstant 0, IConstant 1)) ; a] )) :: tl)   
+
+    | a :: b ::tl -> a :: f(b :: tl)
+    | x -> x
+  in
+  meta_compose_spl BottomUp f
+;;  
+
+let rule_gath_fnil : (spl -> spl) =
+  let rec f (l : spl list) : spl list = 
+    match l with
+    | a :: G(FNil) :: tl -> f (a::tl)
+    | a :: b :: tl -> a:: f (b::tl)
     | x -> x
   in
   meta_compose_spl BottomUp f
@@ -482,6 +503,7 @@ let spl_rulemap =
   ("Compose Scatter BB", rule_compose_scatter_BB);
   ("Distribute FDown", rule_distribute_downrank_spl);
   ("Rule Precompute Compose", rule_precompute_compose);
+  ("Rule Gath FNil", rule_gath_fnil);
   ("Rule Pull Precompute", rule_pull_precompute);
 
   (* TODO 

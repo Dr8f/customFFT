@@ -22,6 +22,9 @@ let _rule = Var(Ctype.Int, "_rule")
 let _dat = Var(Ctype.Ptr(Ctype.Complex), "_dat")
 ;;
 
+let _internal_error = Var(Ctype.Ptr(Ctype.Complex), "_internal_error")
+;;
+
 let build_child_var (num:int) : expr =
   Var(Ctype.Ptr(_rs),"child"^(string_of_int num))
 ;;
@@ -66,6 +69,70 @@ let rec code_of_func (func : Idxfunc.idxfunc) ((input,code):expr * code list) : 
   | _ -> failwith("code_of_func, not handled: "^(Idxfunc.string_of_idxfunc func))        		
 ;;
 
+let rec code_of_spl (output:expr) (input:expr) (e:Spl.spl): code =
+  match e with
+  | Spl.Compose l -> 
+    let ctype = Ctype.Complex in
+    let buffernames = 
+      let count = ref 0 in
+      let g (res:expr list) (_:Spl.spl) : expr list = 
+	count := !count + 1; 
+	(Var(Ctype.Ptr(ctype), "T"^(string_of_int !count))) :: res 
+      in
+      List.fold_left g [] (List.tl l) in
+    let out_in_spl = (List.combine (List.combine (buffernames @ [ output ]) (input :: buffernames)) (List.rev l)) in
+    let buffers = (List.combine (buffernames) (List.map Spl.spl_range (List.rev (List.tl l)))) in
+    Chain (
+      (List.map (fun (output,_)->(Declare output)) buffers)
+      @ (List.map (fun (output,size)->(ArrayAllocate(output,ctype,expr_of_intexpr(size)))) buffers)
+      @ (List.map (fun ((output,input),spl)->(code_of_spl output input spl)) out_in_spl)
+      @ (List.map (fun (output,size)->(ArrayDeallocate(output,expr_of_intexpr(size)))) buffers)
+    )
+  | Spl.ISum(i, count, content) -> Loop(expr_of_intexpr i, expr_of_intexpr count, (code_of_spl output input content))
+  | Spl.Compute(numchild, rs, hot,_,_) -> Ignore(MethodCall (Cast((build_child_var(numchild)),Ctype.Ptr(Ctype.Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot)))
+  | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
+    Loop(expr_of_intexpr i, expr_of_intexpr count, Ignore(MethodCall(
+      (AddressOf(Nth(Cast(build_child_var(numchild), Ctype.Ptr(Ctype.Env(rs))), expr_of_intexpr i)))
+	, _compute, output::input::(List.map expr_of_intexpr hot))))
+  | Spl.F 2 -> Chain([
+    Assign ((Nth(output,(IConst 0))), (Plus (Nth(input, (IConst 0)), (Nth(input, (IConst 1))))));
+    Assign ((Nth(output,(IConst 1))), (Minus (Nth(input, (IConst 0)), (Nth(input, (IConst 1))))))])
+  | Spl.S idxfunc -> let var = gen_var#get Ctype.Int "t" in
+		     let (index, codelines) = code_of_func idxfunc (var,[]) in			    
+		     Loop(var, expr_of_intexpr(Spl.spl_domain(e)),
+			  Chain(codelines@[Assign((Nth(output,index)), (Nth(input,var)))])) 
+  | Spl.G idxfunc -> let var = gen_var#get Ctype.Int "t" in
+		     let (index, codelines) = code_of_func idxfunc (var,[]) in			    
+		     Loop(var, expr_of_intexpr(Spl.spl_range(e)),
+			  Chain(codelines@[Assign((Nth(output,var)), (Nth(input,index)))])) 
+		       
+  | Spl.Diag Idxfunc.Pre(idxfunc) ->     (* actually computing the functions*)
+    let var = gen_var#get Ctype.Int "t" in
+    let (precomp, codelines) = code_of_func idxfunc (var,[]) in
+    Chain([
+      Loop(var, expr_of_intexpr(Spl.spl_range(e)),
+    	   Chain(codelines@[
+    	     Assign((Nth(output, var)),precomp)]))
+    ])
+      
+  | Spl.Diag Idxfunc.PreLoad Idxfunc.FArg (_, l) ->     (* just loading the the stored data*)
+    let var = gen_var#get Ctype.Int "t" in
+    let rec f = function
+      | _::[] -> var
+      | a::b::[] -> Plus(Mul(expr_of_intexpr a,expr_of_intexpr b), var)
+      | _ -> failwith("FArg not handled")
+    in
+    Loop(var, expr_of_intexpr(Spl.spl_range(e)),
+      	 Chain([
+      	   Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ctype.Ptr(Ctype.Complex)), (f l))))]))
+      
+  | Spl.GT(a, g, s, v::[]) ->  
+    let i = Intexpr.gen_loop_counter#get () in
+    let spl = Spl.ISum(i, v, Spl.Compose([Spl.S(Idxfunc.FDown(s, i, 0));Spl.Down(a, i, 0);Spl.G(Idxfunc.FDown(g, i, 0))])) in
+    (code_of_spl output input (Spl.simplify_spl spl))
+  | Spl.BB spl -> (* Compiler.compile_bloc *) (code_of_spl output input spl) (*FIXME re-enable compile*)
+  | _ -> failwith("code_of_spl, not handled: "^(Spl.string_of_spl e))
+;;
 
 let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   let collect_children ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) : expr list =
@@ -90,62 +157,54 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     !res  
   in
 
-
-  let introduce_precomp : (Spl.spl -> Spl.spl) =
-    Spl.meta_transform_spl_on_spl BottomUp (function
-    | Spl.Diag(Idxfunc.Pre(f)) -> Spl.PreComp(Spl.Diag(Idxfunc.Pre(f)))
-    | x -> x
-    )
-  in
-
   let cons_code_of_rstep ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) : code =
-    let rec prepare_cons (e:Spl.spl) : code =
-      let ne = Spl.simplify_spl(introduce_precomp (e)) in
-      print_string ("cons code:"^(Spl.string_of_spl ne)^"\n"); 
-
-
-      match ne with
-      | Spl.Compose l -> simplify_code (Chain (List.map prepare_cons (List.rev l)))
-      | Spl.Construct(numchild, rs, args, funcs) -> Assign(build_child_var(numchild), New(FunctionCall(rs, (List.map expr_of_intexpr (args))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
-      | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) ->
-	let child = build_child_var(numchild) in
+    let prepare_constructs (s:Spl.spl) : code =
+      let collect_constructs: Spl.spl -> Spl.spl list =
+	Spl.meta_collect_spl_on_spl ( function
+	| Spl.Construct _ as x -> [x]
+	| Spl.ISumReinitConstruct _ as x -> [x]
+	| _ -> []
+	)
+      in
+      let f e =
+	match e with
+	| Spl.Construct(numchild, rs, args, funcs) -> Assign(build_child_var(numchild), New(FunctionCall(rs, (List.map expr_of_intexpr (args))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
+	| Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) ->
+    	  let child = build_child_var(numchild) in
+    	  Chain([
+    	    ArrayAllocate(child, Ctype.Env(rs), (expr_of_intexpr count));
+    	    Loop(expr_of_intexpr i, expr_of_intexpr count, (
+    	      PlacementNew(
+    		(AddressOf(Nth(Cast(child, Ctype.Ptr(Ctype.Env(rs))), expr_of_intexpr i))),
+    		(FunctionCall(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
+    	    ))
+    	  ])
+	| _ -> failwith("this is not a construct!")
+      in
+      Chain(List.map f (collect_constructs s))
+    in
+    let prepare_precomputations (s:Spl.spl) : code =
+      let introduce_precomp : (Spl.spl -> Spl.spl) =
+	Spl.meta_transform_spl_on_spl BottomUp (function
+	| Spl.Diag(Idxfunc.Pre(f)) -> Spl.PreComp(Spl.Diag(Idxfunc.Pre(f)))
+	| x -> x
+	)
+      in
+      let e = Spl.simplify_spl(introduce_precomp s) in
+      print_string ("Building a constructor: "^(Spl.string_of_spl e)^"\n"); 
+      match e with
+      | Spl.PreComp x -> 
 	Chain([
-	  ArrayAllocate(child, Ctype.Env(rs), (expr_of_intexpr count));
-	  Loop(expr_of_intexpr i, expr_of_intexpr count, (
-	    PlacementNew( 
-	      (AddressOf(Nth(Cast(child, Ctype.Ptr(Ctype.Env(rs))), expr_of_intexpr i))),
-	      (FunctionCall(rs, (List.map expr_of_intexpr (cold@reinit))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
-	  ))
-	])
-      | Spl.Diag Idxfunc.Pre(idxfunc) -> 
-	(*FIXME this is wrong, we have to manage freaking GT loops, and that changes the size of the _dat.*)
-	let var = gen_var#get Ctype.Int "t" in
-	let (precomp, codelines) = code_of_func idxfunc (var,[]) in			    
-	Chain([
-	  ArrayAllocate(_dat, Ctype.Complex, expr_of_intexpr(Spl.spl_range(e)));
-	  Loop(var, expr_of_intexpr(Spl.spl_range(e)),
-	       Chain(codelines@[
-		 Assign((Nth(Cast(_dat,Ctype.Ptr(Ctype.Complex)),var)),precomp)]))
-				     ])
-      | Spl.S _ | Spl.G _ | Spl.F _ -> Noop
-      | Spl.BB spl -> prepare_cons spl
-      (* | Spl.ISum(i, count, content) ->  *)
-      (* 	(match (prepare_cons content) with  *)
-      (* 	| Noop -> Noop (\*we do not want to produce empty isums, they may not be correct since the loop variable might be not cold*\) *)
-      (* 	| (_ as c) -> Loop(expr_of_intexpr i, expr_of_intexpr count, c)) *)
-      | Spl.GT(content,_,_,i)->
-	failwith("FIXME : code me "^(Spl.string_of_spl ne))
-      	(* (match (prepare_cons content) with *)
-      	(* | Noop -> Noop (\*we do not want to produce empty isums, they may not be correct since the loop variable might be not cold*\) *)
-      	(* | (_ as c) -> Loop(expr_of_intexpr i, expr_of_intexpr count, c)) *)
-      | _ -> failwith("prepare_cons, not handled: "^(Spl.string_of_spl ne))
+	  ArrayAllocate(_dat, Ctype.Complex, expr_of_intexpr(Spl.spl_range(x)));
+	  code_of_spl _dat _internal_error x ])
+      | x -> Noop
     in
     let rulecount = ref 0 in
     let g (stmt:code) ((condition,freedoms,_,_,desc_cons,_):breakdown_enhanced) : code  =
       let freedom_assigns = List.map (fun (l,r)->Assign(expr_of_intexpr l, expr_of_intexpr r)) freedoms in
       rulecount := !rulecount + 1;      
       If( Var(Ctype.Bool, Boolexpr.string_of_boolexpr condition), 
-	 Chain( [Assign(_rule, expr_of_intexpr(Intexpr.IConstant !rulecount))] @ freedom_assigns @ [prepare_cons desc_cons]),
+	 Chain( [Assign(_rule, expr_of_intexpr(Intexpr.IConstant !rulecount))] @ freedom_assigns @ [Chain([prepare_precomputations desc_cons; prepare_constructs desc_cons])]),
 	 stmt)	
     in
     List.fold_left g (Error("no applicable rules")) breakdowns
@@ -156,58 +215,17 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   let comp_args = _output::_input::List.map expr_of_intexpr (IntExprSet.elements hot) in
   
   let comp_code_of_rstep ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) (output:expr) (input:expr): code =
-    let rec prepare_comp (output:expr) (input:expr) (e:Spl.spl): code =
-      (* print_string ("comp code:"^(Spl.string_of_spl e)^"\n"); *)
-      match e with
-      | Spl.Compose l -> let ctype = Ctype.Complex in
-			 let buffernames = 
-			   let count = ref 0 in
-			   let g (res:expr list) (_:Spl.spl) : expr list = 
-			     count := !count + 1; 
-			     (Var(Ctype.Ptr(ctype), "T"^(string_of_int !count))) :: res 
-			   in
-			   List.fold_left g [] (List.tl l) in
-			 let out_in_spl = (List.combine (List.combine (buffernames @ [ output ]) (input :: buffernames)) (List.rev l)) in
-			 let buffers = (List.combine (buffernames) (List.map Spl.spl_range (List.rev (List.tl l)))) in
-			 Chain (
-			   (List.map (fun (output,_)->(Declare output)) buffers)
-			   @ (List.map (fun (output,size)->(ArrayAllocate(output,ctype,expr_of_intexpr(size)))) buffers)
-			   @ (List.map (fun ((output,input),spl)->(prepare_comp output input spl)) out_in_spl)
-			   @ (List.map (fun (output,size)->(ArrayDeallocate(output,expr_of_intexpr(size)))) buffers)
-			 )
-      | Spl.ISum(i, count, content) -> Loop(expr_of_intexpr i, expr_of_intexpr count, (prepare_comp output input content))
-      | Spl.Compute(numchild, rs, hot,_,_) -> Ignore(MethodCall (Cast((build_child_var(numchild)),Ctype.Ptr(Ctype.Env(rs))), _compute, output::input::(List.map expr_of_intexpr hot)))
-      | Spl.ISumReinitCompute(numchild, i, count, rs, hot,_,_) -> 
-	Loop(expr_of_intexpr i, expr_of_intexpr count, Ignore(MethodCall(
-	  (AddressOf(Nth(Cast(build_child_var(numchild), Ctype.Ptr(Ctype.Env(rs))), expr_of_intexpr i)))
-	  , _compute, output::input::(List.map expr_of_intexpr hot))))
-      | Spl.F 2 -> Chain([
-	Assign ((Nth(output,(IConst 0))), (Plus (Nth(input, (IConst 0)), (Nth(input, (IConst 1))))));
-	Assign ((Nth(output,(IConst 1))), (Minus (Nth(input, (IConst 0)), (Nth(input, (IConst 1))))))])
-      | Spl.S idxfunc -> let var = gen_var#get Ctype.Int "t" in
-			 let (index, codelines) = code_of_func idxfunc (var,[]) in			    
-			     Loop(var, expr_of_intexpr(Spl.spl_domain(e)),
-				  Chain(codelines@[Assign((Nth(output,index)), (Nth(input,var)))])) 
-      | Spl.G idxfunc -> let var = gen_var#get Ctype.Int "t" in
-			 let (index, codelines) = code_of_func idxfunc (var,[]) in			    
-			     Loop(var, expr_of_intexpr(Spl.spl_range(e)),
-				  Chain(codelines@[Assign((Nth(output,var)), (Nth(input,index)))])) 
-      | Spl.Diag Idxfunc.Pre Idxfunc.FArg (_, l) -> 
-	let var = gen_var#get Ctype.Int "t" in
-	let rec f = function
-	  | _::[] -> var
-	  | a::b::[] -> Plus(Mul(expr_of_intexpr a,expr_of_intexpr b), var)
-	  | _ -> failwith("FArg not handled")
-	in
-	Loop(var, expr_of_intexpr(Spl.spl_range(e)),
-	     Chain([Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ctype.Ptr(Ctype.Complex)), (f l))))]))
-      | Spl.GT(a, g, s, v::[]) ->  
-      	let i = Intexpr.gen_loop_counter#get () in
-	let spl = Spl.ISum(i, v, Spl.Compose([Spl.S(Idxfunc.FDown(s, i, 0));Spl.Down(a, i, 0);Spl.G(Idxfunc.FDown(g, i, 0))])) in
-	(prepare_comp output input (Spl.simplify_spl spl))
-      | Spl.BB spl -> (* Compiler.compile_bloc *) (prepare_comp output input spl) (*FIXME re-enable compile*)
-      | _ -> failwith("prepare_comp, not handled: "^(Spl.string_of_spl e))
+    let prepare_comp (output:expr) (input:expr) (s:Spl.spl) : code =
+      let replace_pre_by_a_load : (Spl.spl -> Spl.spl) =
+	Spl.meta_transform_spl_on_spl BottomUp (function
+	| Spl.Diag(Idxfunc.Pre(f)) -> Spl.Diag(Idxfunc.PreLoad(f))
+	| x -> x
+	)
+      in
+     let e = Spl.simplify_spl(replace_pre_by_a_load s) in
+      code_of_spl output input e
     in
+
     let rulecount = ref 0 in
     let g (stmt:code) ((_,_,_,_,_,desc_comp):breakdown_enhanced) : code  =
       rulecount := !rulecount + 1;
