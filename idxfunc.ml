@@ -16,9 +16,8 @@ type idxfunc =
 (* thus FD(n,k)(i) = w(n, -(i mod k) * (i\k)) *)
 | FCompose of idxfunc list
 | Pre of idxfunc (* Precompute *)
-| PreLoad of idxfunc (* Precompute Load *)
 | PreWrap of cvar * intexpr list * idxfunc list * intexpr (*domain*)
-| FArg of cvar * intexpr list (*domain*)
+| FArg of cvar * intexpr list (*domain*) (*FIXME: Do we still need FArg to have a intexpr *list* ?*)
 | FHH of intexpr * intexpr * intexpr * intexpr * intexpr list
 (* FHH(domain, range, base, stride0, vector strides) maps Z**k x I(str) to I(dest) so FHH(d,r,b,s,vs)(j_k .. j_1, i) = b + i*s + Sum j_k * vs_k*)
 | FUp of idxfunc
@@ -34,7 +33,6 @@ let rec string_of_idxfunc (e : idxfunc) : string =
   | FCompose(l) -> optional_short_infix_list_print "FCompose" " . " l string_of_idxfunc
 
   | Pre(l) -> "Pre("^(string_of_idxfunc l)^")"
-  | PreLoad(l) -> "PreLoad("^(string_of_idxfunc l)^")"
   | FUp(l) -> "FUp("^(string_of_idxfunc l)^")"
   | FDown(f,l,d) -> "FDown("^(string_of_idxfunc f)^", "^(string_of_intexpr l)^", "^(string_of_int d)^")"      
   | PreWrap(cvar, l, funcs, d) -> "PreWrap("^(string_of_cvar cvar)^", ["^(String.concat "; " (List.map string_of_intexpr l))^"], ["^(String.concat "; " (List.map string_of_idxfunc funcs))^"], "^(string_of_intexpr d)^")"
@@ -48,7 +46,6 @@ let meta_transform_ctx_idxfunc_on_idxfunc (recursion_direction: recursion_direct
     match e with
     | FCompose (l) -> FCompose (List.map g l)
     | Pre(l) -> Pre(g l)
-    | PreLoad(l) -> PreLoad(g l)
     | FUp(l) -> FUp(g l)
     | FDown(f, a, b) -> FDown(g f, a, b)
     | PreWrap(cvar, b, c, d) -> PreWrap(cvar, b, (List.map g c), d)
@@ -73,7 +70,7 @@ let meta_transform_ctx_intexpr_on_idxfunc (recursion_direction: recursion_direct
   			 FH (ga, gb, gc, g d)
     | FL (a, b) -> let ga = g a in FL (ga, g b)
     | FD (a, b) -> let ga = g a in FD (ga, g b)
-    | FCompose _ | PreLoad _ | Pre _ | FUp _ | FNil as e -> e
+    | FCompose _ | Pre _ | FUp _ | FNil as e -> e
     | PreWrap (cvar, f,funcs,d) -> PreWrap(cvar, f, funcs, (g d)) (*FIXME: f is not parameterized because we don't want to parameterize inside the call, should be done with context maybe?*)
     | FArg (cvar, f) ->  FArg(cvar, List.map g f)
     | FDown(f, a, i) -> FDown(f, g a, i)
@@ -147,7 +144,6 @@ let rec func_domain (e : idxfunc) : intexpr =
 | FD (n, _) -> n
 | FCompose (l) -> func_domain (List.hd (List.rev l))
 | Pre(l) -> func_domain l
-| PreLoad(l) -> func_domain l
 | FUp(l) -> func_domain l (*FIXME really correct?*)
 | FHH(d, _,_,_, _)-> d
 | PreWrap(_, _,_,d) -> d
@@ -275,7 +271,6 @@ let rule_distribute_downrank : (idxfunc -> idxfunc) =
   | FDown (Pre f, j, l) -> Pre (FDown(f, j,l))
   | FDown (FArg(cvar,l), j ,_) -> FArg(cvar, j::l)
   | FDown (FUp(f), _, _) -> f
-  | FDown (PreLoad(f), j, l) -> PreLoad(FDown(f, j ,l))
   | FDown (FNil, _, _) -> FNil
   | x -> x)
 ;;

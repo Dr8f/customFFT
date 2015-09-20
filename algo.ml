@@ -25,12 +25,6 @@ end
 
 let count_GT (l:spl list) : int =
   print_string("ctx: "^(String.concat " ||| " (List.map Spl.string_of_spl l))^"\n");
-  let collect_GT: spl -> spl list =
-    meta_collect_spl_on_spl ( function
-			      | GT(_) as x -> [x]
-			      | _ -> []
-			    )
-  in
   let n = 
     List.length (List.flatten (List.map collect_GT l)) in
   print_string ("count:"^(string_of_int n)^"\n\n");

@@ -17,7 +17,8 @@ DFT of intexpr
 | Compose of spl list
 | S of idxfunc
 | G of idxfunc
-| Diag of idxfunc
+| Diag of idxfunc (*multiply diagonal by the content of idxfunc *)
+| DiagData of idxfunc (*load idxfunc and multiply diagonal with it *)
 | ISum of intexpr * intexpr * spl
 | UnpartitionnedCall of string * intexpr IntMap.t * idxfunc list * intexpr * intexpr
 | PartitionnedCall of int * string * intexpr list * intexpr list * intexpr list * idxfunc list * intexpr * intexpr
@@ -28,8 +29,8 @@ DFT of intexpr
 | F of int
 | BB of spl
 | GT of spl * idxfunc * idxfunc * intexpr list
-| Down of spl * intexpr * int
-| PreComp of spl
+| Down of spl * intexpr * int (*the reason we have a Down in spl is that there are objects such as DiagData that have their own FHH on the side*)
+| PreComp of spl (*this is a marker that travels bottom up to see which part of the expression actually need to be PreComputed*)
 ;;
 
 let rec string_of_spl (e : spl) : string =
@@ -43,6 +44,7 @@ let rec string_of_spl (e : spl) : string =
   | S (f) -> "S("^(string_of_idxfunc f)^")"
   | G (f) -> "G("^(string_of_idxfunc f)^")"
   | Diag (f) -> "Diag("^(string_of_idxfunc f)^")"
+  | DiagData (f) -> "DiagData("^(string_of_idxfunc f)^")"
   | ISum (i, high, spl) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^","^(string_of_spl spl)^")"
   | RS(spl) -> "RS("^(string_of_spl spl)^")"
   | UnpartitionnedCall(f, map, funcs, r, d) -> 
@@ -76,7 +78,7 @@ let meta_transform_ctx_spl_on_spl (recursion_direction: recursion_direction) : (
     | RS (l) -> RS(g l)
     | BB (l) -> BB(g l)
     | GT (a, c, s, l) -> GT(g a, c, s, l)
-    | DFT _ | I _ | T _ | L _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _ | PartitionnedCall _ -> e
+    | DFT _ | I _ | T _ | L _  | DiagData _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _ | PartitionnedCall _ -> e
     | Down(s,a,b) -> Down(g s, a, b)
     | PreComp(s) -> PreComp(g s)
   in
@@ -96,6 +98,7 @@ let meta_transform_ctx_idxfunc_on_spl (recursion_direction: recursion_direction)
     | G(l) -> G(g l) 
     | S(l) -> S(g l) 
     | Diag(l) -> Diag( g l)
+    | DiagData(l) -> DiagData( g l)
     | GT(a,c,s,l)->GT(a, g c, g s, l)
     | DFT _  | RS _ | I _ | Tensor _ | T _ | L _ | Compose _ | ISum _ | F _ | BB _ | Down _ | PreComp _ | Compute _ | ISumReinitCompute _ as e -> e
     | Construct(a,b,c,d) -> Construct(a,b,c,(List.map g d))
@@ -114,7 +117,7 @@ let meta_transform_ctx_intexpr_on_spl (recursion_direction: recursion_direction)
   let h (ctx:spl list) (e : spl) : spl = 
     let g = meta_transform_ctx_intexpr_on_intexpr recursion_direction (f ctx []) in
     match e with
-    | Compose _ | Tensor _ | RS _ | Diag _ | G _| S _ -> e
+    | Compose _ | Tensor _ | RS _ | Diag _ | DiagData _ | G _| S _ -> e
     | ISum(v,c,a) -> ISum(g v,g c,a)
     | GT(v, c, s, l) -> GT(v, c, s, (List.map g l))
     | L (n, m) -> L(g n, g m)
@@ -168,6 +171,7 @@ let meta_collect_ctx_idxfunc_on_spl (f : spl list -> idxfunc -> 'a list) : (spl 
     | G(l) -> f ctx l
     | S(l) -> f ctx l
     | Diag(l) -> f ctx l
+    | DiagData(l) -> f ctx l
     | GT(_,a,b,_)->(f ctx a)@(f ctx b)
     | _ -> []
   in
@@ -181,7 +185,7 @@ let meta_collect_idxfunc_on_spl (z : idxfunc -> 'a list) : (spl -> 'a list) =
 let meta_collect_intexpr_on_spl (f : intexpr -> 'a list) : (spl -> 'a list) =
   let direct_from_spl (ff : intexpr -> 'a list) (e : spl) : 'a list =
     match e with
-      Compose _ | Tensor _ | RS _ | Diag _ | G _| S _ | UnpartitionnedCall _ | PartitionnedCall _ -> []
+      Compose _ | Tensor _ | RS _ | Diag _  | DiagData _ | G _| S _ | UnpartitionnedCall _ | PartitionnedCall _ -> []
     | ISum(n, m, _) | L (n, m) | T (n, m)-> (ff n) @ (ff m)
     | I n  | DFT n -> ff n
     | GT (_, _, _, l) -> List.flatten(List.map ff l)
@@ -229,6 +233,13 @@ let meta_tensorize_spl (recursion_direction: recursion_direction) (f : spl list 
   | x -> x)
 ;;
 
+let collect_GT: spl -> spl list =
+  meta_collect_spl_on_spl ( function
+  | GT(_) as x -> [x]
+  | _ -> []
+  )
+;;
+
 (*********************************************
 	 RANGE AND DOMAIN                 
 *********************************************)
@@ -239,7 +250,7 @@ let rec spl_range (e :spl) : intexpr =
   | I(n) | T(n, _) | L(n, _) | DFT(n) -> n
   | Compose ( list ) -> spl_range (List.hd list)
   | S (f) -> func_range f
-  | G (f) | Diag (f) -> func_domain f
+  | G (f) | Diag (f) | DiagData (f) -> func_domain f
   | ISum (_, _, s) | RS (s) | BB(s) -> spl_range s
   | F(n) -> IConstant n
   | ISumReinitCompute (_, _, _, _, _, r, _)  | Compute (_,_,_,r,_) -> r
@@ -257,7 +268,7 @@ let rec spl_domain (e :spl) : intexpr =
   | Compose ( list ) -> spl_domain (List.hd (List.rev list))
   | S (f) -> func_domain f
   | G (f) -> func_range f
-  | Diag (f) -> func_domain f (* by definition a diag range is equal to a diag domain. However the range of the function is larger but noone cares since its precomputed*)
+  | Diag (f)  | DiagData (f) -> func_domain f (* by definition a diag range is equal to a diag domain. However the range of the function is larger but noone cares since its precomputed*)
   | ISum (_, _, s) | RS (s) | BB(s)-> spl_domain s
   | UnpartitionnedCall _ | PartitionnedCall _ | ISumReinitConstruct _ | Construct _ -> assert false
   | ISumReinitCompute (_, _, _, _, _, _, d)   | Compute (_,_,_,_,d) -> d
@@ -389,6 +400,7 @@ let rule_distribute_downrank_spl : (spl -> spl) =
   | Down (BB(x),j,l) -> BB(Down(x,j,l))
   | Down (F(i),_,_) ->F(i)
   | Down (Diag(f),j,l) ->Diag(FDown(f,j,l))
+  | Down (DiagData(f),j,l) ->DiagData(FDown(f,j,l))
   | x -> x)
 ;;
 
