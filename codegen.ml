@@ -129,28 +129,6 @@ let rec code_of_spl (output:expr) (input:expr) (e:Spl.spl): code =
   | _ -> failwith("code_of_spl, not handled: "^(Spl.string_of_spl e))
 ;;
 
-let localize_precomputations (e:Spl.spl) : Spl.spl =
-  let g ctx e = 
-    match e with
-    | Spl.Diag(Idxfunc.Pre(f)) -> 
-      let gt_list = List.flatten (List.map Spl.collect_GT ctx) in
-      if (List.length gt_list = 1) then
-	match (List.hd gt_list) with
-	| Spl.GT(_,_,_,l) ->
-	  if (List.length l = 1) then
-	    Spl.DiagData(f, Idxfunc.FHH(Idxfunc.func_domain f, Idxfunc.func_domain f, Intexpr.IConstant 0, Intexpr.IConstant 1, [Idxfunc.func_domain f]))
-	  else
-	    failwith("not implemented yet, there certainly ought to be a match between the GT rank and the FHH below")
-	| _ -> assert false
-      else if (List.length gt_list = 0) then
-	Spl.DiagData(f, Idxfunc.FH(Idxfunc.func_domain f, Idxfunc.func_domain f, Intexpr.IConstant 0, Intexpr.IConstant 1))
-      else
-	failwith("what to do?")
-	| x -> x
-  in
-  Spl.simplify_spl (Spl.meta_transform_ctx_spl_on_spl BottomUp g e)
-;;
-
 let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   let collect_children ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) : expr list =
     let res = ref IntSet.empty in  
@@ -200,16 +178,8 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
       in
       Chain(List.map f (collect_constructs s))
     in
-    let realize_precomputations (s:Spl.spl) : Spl.spl =
-      let e = Spl.meta_transform_spl_on_spl BottomUp (function
-      | Spl.DiagData(f, loc) -> Spl.SideArg(Spl.Diag(f), loc)
-      | x -> x
-      ) s in
-      Spl.simplify_spl e
-    in
-    let prepare_precomputations (s:Spl.spl) : code =
-      let e = localize_precomputations s in
-      let a = realize_precomputations e in 
+
+    let prepare_precomputations (a:Spl.spl) : code =
       print_string ("Preparing precomputations for : "^(Spl.string_of_spl a)^"\n"); 
       match a with
       | Spl.SideArg (x, _) -> 
@@ -234,17 +204,12 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   let comp_args = _output::_input::List.map expr_of_intexpr (IntExprSet.elements hot) in
   
   let comp_code_of_rstep ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) (output:expr) (input:expr): code =
-    let prepare_comp (output:expr) (input:expr) (s:Spl.spl) : code =
-     let e = localize_precomputations s in
-     print_string ("Preparing computations for : "^(Spl.string_of_spl e)^"\n"); 
-     code_of_spl output input e
-    in
-
     let rulecount = ref 0 in
     let g (stmt:code) ((_,_,_,_,_,desc_comp):breakdown_enhanced) : code  =
+      print_string ("Preparing computations for : "^(Spl.string_of_spl desc_comp)^"\n"); 
       rulecount := !rulecount + 1;
       If(Equal(_rule, expr_of_intexpr(Intexpr.IConstant !rulecount)),
-	 prepare_comp output input desc_comp, 
+	 code_of_spl output input desc_comp, 
 	 stmt)
 	
     in

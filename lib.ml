@@ -310,6 +310,28 @@ let collect_args (rstep : spl) : IntExprSet.t =
   !args
 ;;
 
+let localize_precomputations (e:Spl.spl) : Spl.spl =
+  let g ctx e = 
+    match e with
+    | Spl.Diag(Idxfunc.Pre(f)) -> 
+      let gt_list = List.flatten (List.map Spl.collect_GT ctx) in
+      if (List.length gt_list = 1) then
+	match (List.hd gt_list) with
+	| Spl.GT(_,_,_,l) ->
+	  if (List.length l = 1) then
+	    Spl.DiagData(f, Idxfunc.FHH(Idxfunc.func_domain f, Idxfunc.func_domain f, Intexpr.IConstant 0, Intexpr.IConstant 1, [Idxfunc.func_domain f]))
+	  else
+	    failwith("not implemented yet, there certainly ought to be a match between the GT rank and the FHH below")
+	| _ -> assert false
+      else if (List.length gt_list = 0) then
+	Spl.DiagData(f, Idxfunc.FH(Idxfunc.func_domain f, Idxfunc.func_domain f, Intexpr.IConstant 0, Intexpr.IConstant 1))
+      else
+	failwith("what to do?")
+	| x -> x
+  in
+  Spl.simplify_spl (Spl.meta_transform_ctx_spl_on_spl BottomUp g e)
+;;
+
 let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (spl -> boolexpr * (intexpr*intexpr) list * spl)) (ensure_name: spl-> string) : (boolexpr * (intexpr*intexpr) list * spl * spl) =
   let (condition, freedoms, naive_desc) = algo rstep in
 
@@ -358,7 +380,7 @@ let create_breakdown (rstep:spl) (idxfuncmap:envfunc IdxFuncMap.t ref) (algo : (
   let desc_with_calls = drop_RS (reintegrate_RS simplified extracts_with_calls) in
   (* print_string ("WIP DESC with_calls:\n"^(string_of_spl desc_with_calls)^"\n\n"); (\* WIP *\) *)
 
-  (condition, freedoms, simplified, desc_with_calls)
+  (condition, freedoms, simplified, (localize_precomputations desc_with_calls))
 ;;
 
 
@@ -611,7 +633,9 @@ let lib_from_closure ((funcs, rsteps): closure) : lib =
   	  PartitionnedCall(!childcount, callee, (filter_by args (StringMap.find callee cold)), (filter_by args (StringMap.find callee reinit)), (filter_by args (StringMap.find callee hot)), funcs, range, domain)
 	| x -> x
       in
+
       let partitioned = (meta_transform_spl_on_spl BottomUp h) desc_with_calls in
+
       let j (e:spl) : spl =
 	match e with
 	  ISum(_, _, PartitionnedCall(childcount, callee, cold, [], _,[],_,_)) -> Construct(childcount, callee, cold, [])
@@ -625,7 +649,14 @@ let lib_from_closure ((funcs, rsteps): closure) : lib =
 	| PartitionnedCall(childcount, callee, _, _, hot, _, range, domain) -> Compute(childcount, callee, hot, range, domain) (*this is the default, most general case*) (*the combination of the two impose a TopDown approach*)
 	| x -> x
       in
-      (condition, freedoms, desc, partitioned, (meta_transform_spl_on_spl TopDown j) partitioned, (meta_transform_spl_on_spl TopDown k) partitioned) in
+      let realize_precomputations (s:Spl.spl) : Spl.spl =
+	let e = Spl.meta_transform_spl_on_spl BottomUp (function
+	  | Spl.DiagData(f, loc) -> Spl.SideArg(Spl.Diag(f), loc)
+	  | x -> x
+	) s in
+	Spl.simplify_spl e
+      in
+      (condition, freedoms, desc, partitioned, realize_precomputations((meta_transform_spl_on_spl TopDown j) partitioned), (meta_transform_spl_on_spl TopDown k) partitioned) in
 
     let lambda_args = 
       let rec collect_lambdas (i : idxfunc) : idxfunc list =
@@ -635,7 +666,6 @@ let lib_from_closure ((funcs, rsteps): closure) : lib =
 	| _ -> []
       in
       ((meta_collect_idxfunc_on_spl collect_lambdas) rstep) in
-
 
     (name, rstep, (StringMap.find name cold), (StringMap.find name reinit), (StringMap.find name hot), lambda_args, (List.map g breakdowns))
   in

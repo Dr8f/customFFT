@@ -104,6 +104,7 @@ let meta_transform_ctx_idxfunc_on_spl (recursion_direction: recursion_direction)
     | Construct(a,b,c,d) -> Construct(a,b,c,(List.map g d))
     | ISumReinitConstruct(a, b, c ,d , ee, f, gg) -> ISumReinitConstruct(a, b, c, d, ee, f, List.map g gg)
     | SideArg(s, f) -> SideArg(s, g f)
+    | UnpartitionnedCall(a,b,c,d,e) -> UnpartitionnedCall(a,b,List.map g c,d,e) 
     | e -> failwith("meta_transform_idxfunc_on_spl, not handled: "^(string_of_spl e))         	
   in
   meta_transform_ctx_spl_on_spl recursion_direction h
@@ -490,7 +491,7 @@ let rule_compose_scatter_BB : (spl -> spl) =
 
 let spl_rulemap =
   List.fold_left (fun (map) (name, rule) -> StringMap.add name rule map ) StringMap.empty ([
-  (* ("Tensor to ISum", rule_tensor_to_isum); *)
+  ("Tensor to ISum", rule_tensor_to_isum);
   ("Remove unary tensor", rule_remove_unary_tensor);
   ("Remove unary compose", rule_remove_unary_compose); 
   ("Transform T into diag", rule_transorm_T_into_diag);
@@ -512,7 +513,7 @@ let spl_rulemap =
      Should introduce GT downrank to verify that RS4 and RS 5 (page 88) are properly generated and that the all code runs
      Then introduce DFT within GT to breakdown the rest
    *)
-  ("Tensor to GT", rule_tensor_to_GT);
+  (* ("Tensor to GT", rule_tensor_to_GT); *)
   ("rule_suck_inside_GT", rule_suck_inside_GT);
   ("rule_warp_GT_RS", rule_warp_GT_RS);
 ]
