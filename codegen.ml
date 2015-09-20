@@ -105,7 +105,7 @@ let rec code_of_spl (output:expr) (input:expr) (e:Spl.spl): code =
 		     Loop(var, expr_of_intexpr(Spl.spl_range(e)),
 			  Chain(codelines@[Assign((Nth(output,var)), (Nth(input,index)))])) 
 		       
-  | Spl.Diag Idxfunc.Pre(idxfunc) ->     (* actually computing the functions*)
+  | Spl.Diag idxfunc ->     (* actually computing the functions*)
     let var = gen_var#get Ctype.Int "t" in
     let (precomp, codelines) = code_of_func idxfunc (var,[]) in
     Chain([
@@ -114,20 +114,41 @@ let rec code_of_spl (output:expr) (input:expr) (e:Spl.spl): code =
     	     Assign((Nth(output, var)),precomp)]))
     ])
       
-  | Spl.DiagData g ->     (* just loading the the stored data*)
+  | Spl.DiagData(_,g) ->     (* just loading the the stored data*)
     let var = gen_var#get Ctype.Int "t" in
     let (precomp, codelines) = code_of_func g (var,[]) in 
     Loop(var, expr_of_intexpr(Spl.spl_range(e)),
       	 Chain(codelines@[
       	   Assign((Nth(output,var)), Mul(Nth(input,var),Nth(Cast(_dat,Ctype.Ptr(Ctype.Complex)), (precomp))))]))
       
-  | Spl.GT(a, g, s, v::[]) as e ->  
-    print_string("GT-ifying this : "^(Spl.string_of_spl e)^"\n");
+  | Spl.GT(a, g, s, v::[]) ->  
     let i = Intexpr.gen_loop_counter#get () in
-    let spl = Spl.ISum(i, v, Spl.Compose([Spl.S(Idxfunc.FDown(s, i, 0));Spl.Down(a, i, 0);Spl.G(Idxfunc.FDown(g, i, 0))])) in (*FIXME this Down here works but makes very little actual sense, this is linked to FArg being index free*)
+    let spl = Spl.ISum(i, v, Spl.Compose([Spl.S(Idxfunc.FDown(s, i, 0));Spl.Down(a, i, 0);Spl.G(Idxfunc.FDown(g, i, 0))])) in (*the Down here pushes the downrank to the SideArg*)
     (code_of_spl output input (Spl.simplify_spl spl))
   | Spl.BB spl -> (* Compiler.compile_bloc *) (code_of_spl output input spl) (*FIXME re-enable compile*)
   | _ -> failwith("code_of_spl, not handled: "^(Spl.string_of_spl e))
+;;
+
+let localize_precomputations (e:Spl.spl) : Spl.spl =
+  let g ctx e = 
+    match e with
+    | Spl.Diag(Idxfunc.Pre(f)) -> 
+      let gt_list = List.flatten (List.map Spl.collect_GT ctx) in
+      if (List.length gt_list = 1) then
+	match (List.hd gt_list) with
+	| Spl.GT(_,_,_,l) ->
+	  if (List.length l = 1) then
+	    Spl.DiagData(f, Idxfunc.FHH(Idxfunc.func_domain f, Idxfunc.func_domain f, Intexpr.IConstant 0, Intexpr.IConstant 1, [Idxfunc.func_domain f]))
+	  else
+	    failwith("not implemented yet, there certainly ought to be a match between the GT rank and the FHH below")
+	| _ -> assert false
+      else if (List.length gt_list = 0) then
+	Spl.DiagData(f, Idxfunc.FH(Idxfunc.func_domain f, Idxfunc.func_domain f, Intexpr.IConstant 0, Intexpr.IConstant 1))
+      else
+	failwith("what to do?")
+	| x -> x
+  in
+  Spl.simplify_spl (Spl.meta_transform_ctx_spl_on_spl BottomUp g e)
 ;;
 
 let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
@@ -179,17 +200,19 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
       in
       Chain(List.map f (collect_constructs s))
     in
+    let realize_precomputations (s:Spl.spl) : Spl.spl =
+      let e = Spl.meta_transform_spl_on_spl BottomUp (function
+      | Spl.DiagData(f, loc) -> Spl.SideArg(Spl.Diag(f), loc)
+      | x -> x
+      ) s in
+      Spl.simplify_spl e
+    in
     let prepare_precomputations (s:Spl.spl) : code =
-      let introduce_precomp : (Spl.spl -> Spl.spl) =
-	Spl.meta_transform_spl_on_spl BottomUp (function
-	| Spl.Diag(Idxfunc.Pre(f)) -> Spl.PreComp(Spl.Diag(Idxfunc.Pre(f)))
-	| x -> x
-	)
-      in
-      let e = Spl.simplify_spl(introduce_precomp s) in
-      print_string ("Preparing precomputations for : "^(Spl.string_of_spl e)^"\n"); 
-      match e with
-      | Spl.PreComp x -> 
+      let e = localize_precomputations s in
+      let a = realize_precomputations e in 
+      print_string ("Preparing precomputations for : "^(Spl.string_of_spl a)^"\n"); 
+      match a with
+      | Spl.SideArg (x, _) -> 
 	Chain([
 	  ArrayAllocate(_dat, Ctype.Complex, expr_of_intexpr(Spl.spl_range(x)));
 	  code_of_spl _dat _internal_error x ])
@@ -212,25 +235,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   
   let comp_code_of_rstep ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) (output:expr) (input:expr): code =
     let prepare_comp (output:expr) (input:expr) (s:Spl.spl) : code =
-      let replace_pre_by_a_load : (Spl.spl -> Spl.spl) =
-	let g ctx e = 
-	  match e with
-	  | Spl.Diag(Idxfunc.Pre(f)) -> 
-	    let gt_list = List.flatten (List.map Spl.collect_GT ctx) in
-	    if (List.length gt_list = 1) then
-	      match (List.hd gt_list) with
-	      | Spl.GT(_,_,_,_) -> (*FIXME, there certainly ought to be a match between the GT rank and the FHH below*)
-		Spl.DiagData(Idxfunc.FHH(Idxfunc.func_domain f, Idxfunc.func_domain f, Intexpr.IConstant 0, Intexpr.IConstant 1, [Idxfunc.func_domain f]))
-	      | _ -> assert false
-	    else if (List.length gt_list = 0) then
-	      Spl.DiagData(Idxfunc.FH(Idxfunc.func_domain f, Idxfunc.func_domain f, Intexpr.IConstant 0, Intexpr.IConstant 1))
-	    else
-	      failwith("what to do?")
-	  | x -> x
-	in
-	Spl.meta_transform_ctx_spl_on_spl BottomUp g
-      in
-     let e = Spl.simplify_spl(replace_pre_by_a_load s) in
+     let e = localize_precomputations s in
      print_string ("Preparing computations for : "^(Spl.string_of_spl e)^"\n"); 
      code_of_spl output input e
     in

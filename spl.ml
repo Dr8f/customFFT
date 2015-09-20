@@ -18,7 +18,7 @@ DFT of intexpr
 | S of idxfunc
 | G of idxfunc
 | Diag of idxfunc (*multiply diagonal by the content of idxfunc *)
-| DiagData of idxfunc (*load idxfunc and multiply diagonal with it *)
+| DiagData of idxfunc * idxfunc (*first idxfunc is the content of the diag, second idxfunc is the location *)
 | ISum of intexpr * intexpr * spl
 | UnpartitionnedCall of string * intexpr IntMap.t * idxfunc list * intexpr * intexpr
 | PartitionnedCall of int * string * intexpr list * intexpr list * intexpr list * idxfunc list * intexpr * intexpr
@@ -30,7 +30,7 @@ DFT of intexpr
 | BB of spl
 | GT of spl * idxfunc * idxfunc * intexpr list
 | Down of spl * intexpr * int (*the reason we have a Down in spl is that there are objects such as DiagData that have their own FHH on the side*)
-| PreComp of spl (*this is a marker that travels bottom up to see which part of the expression actually need to be PreComputed*)
+| SideArg of spl * idxfunc (*this travels bottom up to see which part of the expression actually need to be PreComputed*)
 ;;
 
 let rec string_of_spl (e : spl) : string =
@@ -44,7 +44,7 @@ let rec string_of_spl (e : spl) : string =
   | S (f) -> "S("^(string_of_idxfunc f)^")"
   | G (f) -> "G("^(string_of_idxfunc f)^")"
   | Diag (f) -> "Diag("^(string_of_idxfunc f)^")"
-  | DiagData (f) -> "DiagData("^(string_of_idxfunc f)^")"
+  | DiagData (f, g) -> "DiagData("^(string_of_idxfunc f)^", "^(string_of_idxfunc g)^")"
   | ISum (i, high, spl) -> "ISum("^(string_of_intexpr i)^","^(string_of_intexpr high)^","^(string_of_spl spl)^")"
   | RS(spl) -> "RS("^(string_of_spl spl)^")"
   | UnpartitionnedCall(f, map, funcs, r, d) -> 
@@ -59,7 +59,7 @@ let rec string_of_spl (e : spl) : string =
   | BB(x) ->"BB("^(string_of_spl x)^")"
   | GT(a, g, s, l) -> "GT("^(string_of_spl a)^", "^(string_of_idxfunc g)^", "^(string_of_idxfunc s)^", ["^(String.concat ";" (List.map string_of_intexpr l))^"])"
   | Down(s,l,d) -> "Down("^(string_of_spl s)^", "^(string_of_intexpr l)^", "^(string_of_int d)^")"  
-  | PreComp(s) -> "PreComp("^(string_of_spl s)^")"
+  | SideArg(s, f) -> "SideArg("^(string_of_spl s)^", "^(string_of_idxfunc f)^")"
 ;;
 
 
@@ -80,7 +80,7 @@ let meta_transform_ctx_spl_on_spl (recursion_direction: recursion_direction) : (
     | GT (a, c, s, l) -> GT(g a, c, s, l)
     | DFT _ | I _ | T _ | L _  | DiagData _ | Diag _ | S _ | G _ | UnpartitionnedCall _  | F _ | ISumReinitCompute _ | Compute _ | ISumReinitConstruct _ | Construct _ | PartitionnedCall _ -> e
     | Down(s,a,b) -> Down(g s, a, b)
-    | PreComp(s) -> PreComp(g s)
+    | SideArg(s, f) -> SideArg(g s, f)
   in
   recursion_transform_ctx recursion_direction z
 ;;
@@ -98,11 +98,12 @@ let meta_transform_ctx_idxfunc_on_spl (recursion_direction: recursion_direction)
     | G(l) -> G(g l) 
     | S(l) -> S(g l) 
     | Diag(l) -> Diag( g l)
-    | DiagData(l) -> DiagData( g l)
+    | DiagData(a, b) -> DiagData(g a, g b)
     | GT(a,c,s,l)->GT(a, g c, g s, l)
-    | DFT _  | RS _ | I _ | Tensor _ | T _ | L _ | Compose _ | ISum _ | F _ | BB _ | Down _ | PreComp _ | Compute _ | ISumReinitCompute _ as e -> e
+    | DFT _  | RS _ | I _ | Tensor _ | T _ | L _ | Compose _ | ISum _ | F _ | BB _ | Down _ | Compute _ | ISumReinitCompute _ as e -> e
     | Construct(a,b,c,d) -> Construct(a,b,c,(List.map g d))
     | ISumReinitConstruct(a, b, c ,d , ee, f, gg) -> ISumReinitConstruct(a, b, c, d, ee, f, List.map g gg)
+    | SideArg(s, f) -> SideArg(s, g f)
     | e -> failwith("meta_transform_idxfunc_on_spl, not handled: "^(string_of_spl e))         	
   in
   meta_transform_ctx_spl_on_spl recursion_direction h
@@ -133,7 +134,7 @@ let meta_transform_ctx_intexpr_on_spl (recursion_direction: recursion_direction)
     | Construct(a,b,c,d) -> Construct(a,b,(List.map g c),d)
     | Compute(a,b,c,d,e) -> Compute(a,b,(List.map g c),g d,g e)
     | Down(s,l,d) -> Down(s, g l, d)
-    | PreComp(s) -> PreComp(s)
+    | SideArg(s, f) -> e
     (* | _ -> failwith("meta_transform_intexpr_on_spl, not handled: "^(string_of_spl e))         		 *)
   in
   fun (e : spl) ->
@@ -171,7 +172,7 @@ let meta_collect_ctx_idxfunc_on_spl (f : spl list -> idxfunc -> 'a list) : (spl 
     | G(l) -> f ctx l
     | S(l) -> f ctx l
     | Diag(l) -> f ctx l
-    | DiagData(l) -> f ctx l
+    | DiagData(a, b) -> (f ctx a)@(f ctx b)
     | GT(_,a,b,_)->(f ctx a)@(f ctx b)
     | _ -> []
   in
@@ -250,13 +251,13 @@ let rec spl_range (e :spl) : intexpr =
   | I(n) | T(n, _) | L(n, _) | DFT(n) -> n
   | Compose ( list ) -> spl_range (List.hd list)
   | S (f) -> func_range f
-  | G (f) | Diag (f) | DiagData (f) -> func_domain f
+  | G (f) | Diag (f) | DiagData (f, _) -> func_domain f
   | ISum (_, _, s) | RS (s) | BB(s) -> spl_range s
   | F(n) -> IConstant n
   | ISumReinitCompute (_, _, _, _, _, r, _)  | Compute (_,_,_,r,_) -> r
   | ISumReinitConstruct _ | Construct _ | UnpartitionnedCall _ | PartitionnedCall _ -> assert false
   | Down(a,_,_) -> spl_range a
-  | PreComp(a) -> spl_range a
+  | SideArg(a, _) -> spl_range a
 ;;    
 
 let rec spl_domain (e :spl) : intexpr = 
@@ -268,12 +269,12 @@ let rec spl_domain (e :spl) : intexpr =
   | Compose ( list ) -> spl_domain (List.hd (List.rev list))
   | S (f) -> func_domain f
   | G (f) -> func_range f
-  | Diag (f)  | DiagData (f) -> func_domain f (* by definition a diag range is equal to a diag domain. However the range of the function is larger but noone cares since its precomputed*)
+  | Diag (f)  | DiagData (f, _) -> func_domain f (* by definition a diag range is equal to a diag domain. However the range of the function is larger but noone cares since its precomputed*)
   | ISum (_, _, s) | RS (s) | BB(s)-> spl_domain s
   | UnpartitionnedCall _ | PartitionnedCall _ | ISumReinitConstruct _ | Construct _ -> assert false
   | ISumReinitCompute (_, _, _, _, _, _, d)   | Compute (_,_,_,_,d) -> d
   | Down(a,_,_) -> spl_domain a
-  | PreComp(a) -> spl_domain a
+  | SideArg(a, _) -> spl_domain a
 
 ;;    
 
@@ -356,18 +357,17 @@ let rule_warp_GT_RS : (spl -> spl) =
 )
 ;;
 
-let rule_pull_precompute : (spl -> spl) =
+let rule_pull_side_argument : (spl -> spl) =
   meta_transform_spl_on_spl BottomUp (function 
-  | BB(PreComp(a)) -> PreComp(a)
-  | GT(PreComp(a),g,s,l) -> 
-    if (List.length l == 1) then 
-      PreComp(GT(a,FNil, FHH(spl_domain a, spl_domain a, IConstant 0, IConstant 1, [spl_domain a]),l))
+  | BB(SideArg(a, f)) -> SideArg(a, f)
+  | GT(SideArg(a, s),_,_,l) -> 
+    if (List.length l == rank_of_func(s)) then 
+      SideArg(GT(a, FNil, s, l), FNil)
     else
       failwith("not implemented yet")
   | x -> x
   )
 ;;
-
 
 let rule_suck_inside_RS : (spl -> spl) =
   let rec f (l : spl list) : spl list = 
@@ -400,7 +400,7 @@ let rule_distribute_downrank_spl : (spl -> spl) =
   | Down (BB(x),j,l) -> BB(Down(x,j,l))
   | Down (F(i),_,_) ->F(i)
   | Down (Diag(f),j,l) ->Diag(FDown(f,j,l))
-  | Down (DiagData(f),j,l) ->DiagData(FDown(f,j,l))
+  | Down (DiagData(f, g),j,l) ->DiagData(FDown(f,j,l), FDown(g,j,l))
   | x -> x)
 ;;
 
@@ -415,24 +415,14 @@ let rule_flatten_compose : (spl -> spl) =
   meta_compose_spl BottomUp f
 ;;  
 
-let rule_precompute_compose : (spl -> spl) =
+let rule_pull_sidearg_thru_compose : (spl -> spl) =
   let rec f (l : spl list) : spl list = 
     match l with
-    | F _ :: PreComp(a)::tl -> f (PreComp(a)::tl)
-    | PreComp a :: G _ :: tl -> f (PreComp a :: tl)
-    | S _ :: PreComp a :: tl -> f (PreComp( Compose( [S(FH(spl_domain a, spl_range a, IConstant 0, IConstant 1)) ; a] )) :: tl)   
-
-    | a :: b ::tl -> a :: f(b :: tl)
-    | x -> x
-  in
-  meta_compose_spl BottomUp f
-;;  
-
-let rule_gath_fnil : (spl -> spl) =
-  let rec f (l : spl list) : spl list = 
-    match l with
+    | F _ :: SideArg(a, b)::tl -> f (SideArg(a, b)::tl)
+    | SideArg(a, b) :: G _ :: tl -> f (SideArg(a, b):: tl)
+    | S _ :: SideArg(a, b) :: tl -> f (SideArg( Compose( [S(b) ; a] ), FNil) :: tl)   
     | a :: G(FNil) :: tl -> f (a::tl)
-    | a :: b :: tl -> a:: f (b::tl)
+    | a :: b ::tl -> a :: f(b :: tl)
     | x -> x
   in
   meta_compose_spl BottomUp f
@@ -514,9 +504,8 @@ let spl_rulemap =
   ("Compose BB Gather", rule_compose_BB_gather);
   ("Compose Scatter BB", rule_compose_scatter_BB);
   ("Distribute FDown", rule_distribute_downrank_spl);
-  ("Rule Precompute Compose", rule_precompute_compose);
-  ("Rule Gath FNil", rule_gath_fnil);
-  ("Rule Pull Precompute", rule_pull_precompute);
+  ("Rule Pull Side Argument", rule_pull_side_argument);
+  ("Rule Pull Side Argument Thru Compose", rule_pull_sidearg_thru_compose);
 
   (* TODO 
      Currently breaks because DFT is applied within GT
