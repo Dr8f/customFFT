@@ -132,11 +132,11 @@ let rec code_of_spl (output:expr) (input:expr) (e:Spl.spl): code =
 let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   let collect_children ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) : expr list =
     let res = ref IntSet.empty in  
-    let g ((_,_,_,_,desc_cons,_):breakdown_enhanced) : _ =
-      Spl.meta_iter_spl_on_spl (function
+    let g ((_,_,_,_,_,constructs,_):breakdown_enhanced) : _ =      
+      List.iter (function
       | Spl.Construct(numchild, _, _, _) | Spl.ISumReinitConstruct(numchild, _, _, _, _, _, _) -> res := IntSet.add numchild !res
       | _ -> ()
-      ) desc_cons;    
+      ) constructs
     in
     List.iter g breakdowns;
     List.map build_child_var (IntSet.elements !res)
@@ -145,7 +145,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 (*we should probably generate content while we are generating it instead of doing another pass*)
   let collect_freedoms ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) : expr list =
     let res = ref [] in  
-    let g ((_,freedoms,_,_,_,_):breakdown_enhanced) : _ =
+    let g ((_,freedoms,_,_,_,_,_):breakdown_enhanced) : _ =
       res := (List.map (fun (l,_)->expr_of_intexpr l) freedoms) @ !res    
     in
     List.iter g breakdowns;
@@ -153,14 +153,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   in
 
   let cons_code_of_rstep ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) : code =
-    let prepare_constructs (s:Spl.spl) : code =
-      let collect_constructs: Spl.spl -> Spl.spl list =
-	Spl.meta_collect_spl_on_spl ( function
-	| Spl.Construct _ as x -> [x]
-	| Spl.ISumReinitConstruct _ as x -> [x]
-	| _ -> []
-	)
-      in
+    let prepare_constructs (l:Spl.spl list) : code =
       let f e =
 	match e with
 	| Spl.Construct(numchild, rs, args, funcs) -> Assign(build_child_var(numchild), New(FunctionCall(rs, (List.map expr_of_intexpr (args))@(List.map (fun(x)->New(expr_of_idxfunc x)) funcs))))
@@ -176,24 +169,24 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
     	  ])
 	| _ -> failwith("this is not a construct!")
       in
-      Chain(List.map f (collect_constructs s))
+      Chain(List.map f l)
     in
 
-    let prepare_precomputations (a:Spl.spl) : code =
-      print_string ("Preparing precomputations for : "^(Spl.string_of_spl a)^"\n"); 
+    let prepare_precomputations (a:Spl.spl option) : code =
       match a with
-      | Spl.SideArg (x, _) -> 
+      | Some x -> 
+	print_string ("Preparing precomputations for : "^(Spl.string_of_spl x)^"\n"); 
 	Chain([
 	  ArrayAllocate(_dat, Ctype.Complex, expr_of_intexpr(Spl.spl_range(x)));
 	  code_of_spl _dat _internal_error x ])
-      | x -> Noop
+      | None -> Noop
     in
     let rulecount = ref 0 in
-    let g (stmt:code) ((condition,freedoms,_,_,desc_cons,_):breakdown_enhanced) : code  =
+    let g (stmt:code) ((condition,freedoms,_,_,desc_cons,desc_constructs,_):breakdown_enhanced) : code  =
       let freedom_assigns = List.map (fun (l,r)->Assign(expr_of_intexpr l, expr_of_intexpr r)) freedoms in
       rulecount := !rulecount + 1;      
       If( Var(Ctype.Bool, Boolexpr.string_of_boolexpr condition), 
-	 Chain( [Assign(_rule, expr_of_intexpr(Intexpr.IConstant !rulecount))] @ freedom_assigns @ [Chain([prepare_precomputations desc_cons; prepare_constructs desc_cons])]),
+	 Chain( [Assign(_rule, expr_of_intexpr(Intexpr.IConstant !rulecount))] @ freedom_assigns @ [Chain([prepare_precomputations desc_cons; prepare_constructs desc_constructs])]),
 	 stmt)	
     in
     List.fold_left g (Error("no applicable rules")) breakdowns
@@ -205,7 +198,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
   
   let comp_code_of_rstep ((_, _, _, _, _, _, breakdowns ) : rstep_partitioned) (output:expr) (input:expr): code =
     let rulecount = ref 0 in
-    let g (stmt:code) ((_,_,_,_,_,desc_comp):breakdown_enhanced) : code  =
+    let g (stmt:code) ((_,_,_,_,_,_,desc_comp):breakdown_enhanced) : code  =
       print_string ("Preparing computations for : "^(Spl.string_of_spl desc_comp)^"\n"); 
       rulecount := !rulecount + 1;
       If(Equal(_rule, expr_of_intexpr(Intexpr.IConstant !rulecount)),

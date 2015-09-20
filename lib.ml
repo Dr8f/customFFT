@@ -42,7 +42,7 @@ type envfunc = (string * idxfunc * intexpr list * idxfunc list)
 type closure = ( envfunc list * rstep_unpartitioned list)
 ;;
 
-type breakdown_enhanced = (boolexpr * (intexpr * intexpr) list * spl * spl * spl * spl)
+type breakdown_enhanced = (boolexpr * (intexpr * intexpr) list * spl * spl * spl option * spl list * spl)
 ;;
 
 type rstep_partitioned = (string * spl * IntExprSet.t * IntExprSet.t * IntExprSet.t * idxfunc list * breakdown_enhanced list)
@@ -69,14 +69,15 @@ end)
 
 (******** PRINTING *******)
 
-let string_of_breakdown_enhanced ((condition, freedoms, desc, desc_with_calls, desc_with_calls_cons, desc_with_calls_comp):breakdown_enhanced) : string =
+let string_of_breakdown_enhanced ((condition, freedoms, desc, desc_with_calls, desc_with_calls_cons, desc_with_calls_to_construct, desc_with_calls_comp):breakdown_enhanced) : string =
   "---breakdown\n"
   ^"   APPLICABILITY\t\t"^(string_of_boolexpr condition)^"\n"
   ^"   FREEDOM\t\t\t"^(String.concat ", " (List.map string_of_intexpr_intexpr freedoms))^"\n"
   ^"   DESCEND\t\t\t"^(string_of_spl desc)^"\n"
   ^"   DESCEND - CALLS\t\t"^(string_of_spl desc_with_calls)^"\n"
-  ^"   DESCEND - CALLS CONS\t"^(string_of_spl desc_with_calls_cons)^"\n"
-  ^"   DESCEND - CALLS COMP\t"^(string_of_spl desc_with_calls_comp)^"\n"
+  ^"   DESCEND - CALLS CONS\t\t"^(match desc_with_calls_cons with None -> "" | Some x -> string_of_spl x)^"\n"
+  ^"   DESCEND - CALLS OBJ\t\t"^(String.concat "\n\t\t\t\t" (List.map string_of_spl desc_with_calls_to_construct))^"\n"
+  ^"   DESCEND - CALLS COMP\t\t"^(string_of_spl desc_with_calls_comp)^"\n"
 ;;
 
 let string_of_rstep_partitioned ((name, rstep, cold, reinit, hot, funcs, breakdowns ): rstep_partitioned) : string =
@@ -649,14 +650,29 @@ let lib_from_closure ((funcs, rsteps): closure) : lib =
 	| PartitionnedCall(childcount, callee, _, _, hot, _, range, domain) -> Compute(childcount, callee, hot, range, domain) (*this is the default, most general case*) (*the combination of the two impose a TopDown approach*)
 	| x -> x
       in
-      let realize_precomputations (s:Spl.spl) : Spl.spl =
-	let e = Spl.meta_transform_spl_on_spl BottomUp (function
-	  | Spl.DiagData(f, loc) -> Spl.SideArg(Spl.Diag(f), loc)
+      let realize_precomputations (s:spl) : spl =
+	let e = meta_transform_spl_on_spl BottomUp (function
+	  | DiagData(f, loc) -> SideArg(Diag(f), loc)
 	  | x -> x
 	) s in
-	Spl.simplify_spl e
+	simplify_spl e
       in
-      (condition, freedoms, desc, partitioned, realize_precomputations((meta_transform_spl_on_spl TopDown j) partitioned), (meta_transform_spl_on_spl TopDown k) partitioned) in
+      let construct = realize_precomputations((meta_transform_spl_on_spl TopDown j) partitioned) in 
+      let collect_constructs: spl -> spl list =
+	meta_collect_spl_on_spl ( function
+	| Construct _ as x -> [x]
+	| ISumReinitConstruct _ as x -> [x]
+	| _ -> []
+	)
+      in
+      let prepare_precomputations (a:spl) : spl option =
+	match a with
+	| Spl.SideArg (x, _) -> Some x
+	| x -> None
+      in
+
+      (condition, freedoms, desc, partitioned, prepare_precomputations construct, collect_constructs construct, (meta_transform_spl_on_spl TopDown k) partitioned) 
+    in
 
     let lambda_args = 
       let rec collect_lambdas (i : idxfunc) : idxfunc list =
