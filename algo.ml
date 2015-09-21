@@ -23,12 +23,21 @@ end
 ;;
 
 
-let count_GT (l:spl list) : int =
+let within_GT_rank_one (l:spl list) : bool =
   print_string("ctx: "^(String.concat " ||| " (List.map Spl.string_of_spl l))^"\n");
-  let n = 
-    List.length (List.flatten (List.map collect_GT l)) in
-  print_string ("count:"^(string_of_int n)^"\n\n");
-  n
+  let mylist = List.flatten (List.map collect_GT l) in
+  let n = List.length (mylist) in
+  if (n=0) then 
+    true
+  else 
+    (
+      if (n=1) then
+	match List.hd mylist with
+	| GT(_,_,_,l) -> List.length(l) <=1
+	| _ -> assert false
+      else
+	false
+    )
 ;;
   
 let algo_cooley_tukey : spl -> boolexpr * (intexpr*intexpr) list * spl =
@@ -37,7 +46,7 @@ let algo_cooley_tukey : spl -> boolexpr * (intexpr*intexpr) list * spl =
     let freedoms = ref [] in
     let g (ctx:spl list) (s:spl) : spl =
       match s with
-      |DFT n when (count_GT ctx) < 1 -> 	    
+      |DFT n when (within_GT_rank_one ctx) -> 	    
 	conditions := Not(IsPrime(n)) :: !conditions;
 	let k = gen_freedom_var#get () in
 	freedoms := (k, IDivisor n) :: !freedoms;
@@ -68,7 +77,13 @@ let algo_dft_base : spl -> boolexpr * (intexpr*intexpr) list * spl =
       |DFT n ->
 	conditions := Equal(n,IConstant(2)) :: !conditions;
 	BB(F(2))
-	  
+
+      | Spl.GT(_,_,_,l) as e ->  
+	if (List.length l >1) then
+	  raise (AlgoNotApplicable "Cannot apply a base case where there is a rank 2 or more GT, all freedoms have not been resolved")
+	else
+	  e
+	
       (* (\* GT rank 1 downrank, should later be part of all base cases *\) *)
       (* | Spl.GT(a, g, s, v::[]) ->  *)
       (* 	let i = Intexpr.gen_loop_counter#get () in  *)

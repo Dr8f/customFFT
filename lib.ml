@@ -312,8 +312,8 @@ let collect_args (rstep : spl) : IntExprSet.t =
 ;;
 
 let localize_precomputations (e:Spl.spl) : Spl.spl =
-  let g ctx e = 
-    match e with
+  let g ctx a = 
+    match a with
     | Spl.Diag(Idxfunc.Pre(f)) -> 
       let gt_list = List.flatten (List.map Spl.collect_GT ctx) in
       if (List.length gt_list = 1) then
@@ -321,6 +321,8 @@ let localize_precomputations (e:Spl.spl) : Spl.spl =
 	| Spl.GT(_,_,_,l) ->
 	  if (List.length l = 1) then
 	    Spl.DiagData(f, Idxfunc.FHH(Idxfunc.func_domain f, Idxfunc.func_domain f, Intexpr.IConstant 0, Intexpr.IConstant 1, [Idxfunc.func_domain f]))
+	  else if (List.length l = 2) then
+	    Spl.DiagData(f, Idxfunc.FHH(Idxfunc.func_domain f, Idxfunc.func_domain f, Intexpr.IConstant 0, Intexpr.IConstant 1, [Idxfunc.func_domain f; Idxfunc.func_domain f])) (*FIXME not quite sure this is correct*)
 	  else
 	    failwith("not implemented yet, there certainly ought to be a match between the GT rank and the FHH below")
 	| _ -> assert false

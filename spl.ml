@@ -354,6 +354,21 @@ let rule_transorm_T_into_diag : (spl -> spl) =
 let rule_warp_GT_RS : (spl -> spl) =
   meta_transform_spl_on_spl BottomUp (function 
   | GT(RS a,g,s,l) -> RS(GT(a,g,s,l))
+  | GT(Compose[RS a; RS b],g,s,l) -> Compose[RS(GT(a,g,s,l));RS(GT(b,g,s,l))] (*interaction between GT and compose, FIXME opportunity to introduce GTI*)
+  | x -> x
+)
+;;
+
+let rule_GT_GT : (spl -> spl) =
+  meta_transform_spl_on_spl BottomUp (function 
+  | GT(GT(a,ga,sa,la),gb,sb,lb) -> 
+    (* print_string("\n\nGT_GT!!\n\n:"^(string_of_spl e)^"\n"); *)
+    let rec f (elt:idxfunc) (count:'a list) : idxfunc = 
+      match count with
+      | _::tl -> FUp(f elt tl)
+      | _ -> elt
+    in
+    GT(a, FCompose([(f gb la);ga]), FCompose([sa;(f sb la)]), la@lb)  (*FIXME check me*)
   | x -> x
 )
 ;;
@@ -365,7 +380,7 @@ let rule_pull_side_argument : (spl -> spl) =
     if (List.length l == rank_of_func(s)) then 
       SideArg(GT(a, FNil, s, l), FNil)
     else
-      failwith("not implemented yet")
+      failwith("not implemented yet here")
   | x -> x
   )
 ;;
@@ -507,6 +522,7 @@ let spl_rulemap =
   ("Distribute FDown", rule_distribute_downrank_spl);
   ("Rule Pull Side Argument", rule_pull_side_argument);
   ("Rule Pull Side Argument Thru Compose", rule_pull_sidearg_thru_compose);
+  ("rule_GT_GT", rule_GT_GT);
 
   (* TODO 
      Currently breaks because DFT is applied within GT

@@ -50,7 +50,7 @@ let rec expr_of_idxfunc (idxfunc : Idxfunc.idxfunc) : expr =
 
 
 let rec code_of_func (func : Idxfunc.idxfunc) ((input,code):expr * code list) : expr * code list =
-  print_string ("Processing "^(Idxfunc.string_of_idxfunc func)^"\n");
+  print_string ("Now building code for "^(Idxfunc.string_of_idxfunc func)^"\n");
   match func with
   |Idxfunc.FH(_,_,b,s) -> let output = gen_var#get Ctype.Int "t" in
 		      (output,code@[Declare(output);Assign(output, Plus((expr_of_intexpr b), Mul((expr_of_intexpr s),input)))])
@@ -227,12 +227,12 @@ let code_of_envfunc ((name, f, args, fargs) : envfunc) : code =
 
   let g = ref f in 
   let rankvars = ref [] in
-  while (Idxfunc.rank_of_func !g > 0) do
-    print_string ("processing:"^(Idxfunc.string_of_idxfunc !g)^"\n");    
+  (* while (Idxfunc.rank_of_func !g > 0) do *) (* FIXME, there is an issue here, how to handle the rank of these guys? *)
+    print_string ("downranking:"^(Idxfunc.string_of_idxfunc !g)^"\n");    
     let i = Intexpr.gen_loop_counter#get () in 
     g := Idxfunc.simplify_idxfunc (Idxfunc.FDown(!g, i, 0));
     rankvars := (expr_of_intexpr i)::!rankvars;
-  done;
+  (* done; *)
   let input = gen_var#get Ctype.Int "t" in
   let(output, code) = (code_of_func !g (input,[])) in
   let cons_args = (List.map expr_of_intexpr args)@(List.map expr_of_idxfunc fargs) in
