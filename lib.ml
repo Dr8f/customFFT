@@ -670,7 +670,7 @@ let lib_from_closure ((funcs, rsteps): closure) : lib =
       let prepare_precomputations (a:spl) : spl option =
 	match a with
 	| Spl.SideArg (x, _) -> Some x
-	| x -> None
+	| _ -> None
       in
 
       (condition, freedoms, desc, partitioned, prepare_precomputations construct, collect_constructs construct, (meta_transform_spl_on_spl TopDown k) partitioned) 

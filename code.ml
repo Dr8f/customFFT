@@ -34,7 +34,7 @@ code =
   Class of string(*class name*) * ctype (*class template from which it is derived*) * expr list (*member variables*) * cmethod list (*methods*)
 | Chain of code list
 | Noop
-| Error of string
+| ErrorMsg of string
 | Assign of expr(*dest*) * expr (*origin*)
 | ArrayAllocate of expr (*pointer*) * ctype (*element type*) * expr (*element count*)
 | PlacementNew of expr (*address*) * expr (*content*)
@@ -163,7 +163,7 @@ let meta_collect_expr_on_code (f : expr -> 'a list) : (code -> 'a list) =
     | Loop(var, expr, _) -> (ff var)@(ff expr)
     | ArrayDeallocate(pointer, elcount) -> (ff pointer)@(ff elcount)
     | Return(expr) | Declare(expr) | Ignore(expr) -> ff expr
-    | Noop | Chain _ | Error _ -> []
+    | Noop | Chain _ | ErrorMsg _ -> []
     | Class (_, _, _, _) -> [] (* not seriously thought after*)
   in
   fun (e : code) ->

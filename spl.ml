@@ -135,7 +135,7 @@ let meta_transform_ctx_intexpr_on_spl (recursion_direction: recursion_direction)
     | Construct(a,b,c,d) -> Construct(a,b,(List.map g c),d)
     | Compute(a,b,c,d,e) -> Compute(a,b,(List.map g c),g d,g e)
     | Down(s,l,d) -> Down(s, g l, d)
-    | SideArg(s, f) -> e
+    | SideArg(_, _) -> e
     (* | _ -> failwith("meta_transform_intexpr_on_spl, not handled: "^(string_of_spl e))         		 *)
   in
   fun (e : spl) ->

@@ -74,7 +74,7 @@ let rec cpp_string_of_code (unparse_type:unparse_type) (n:int) (code : code) : s
   | PlacementNew(l, r) -> (white n)^"new ("^(string_of_expr l)^") "^(string_of_expr r)^";\n" 
   | Assign(l, r) -> (white n) ^ (string_of_expr l) ^ " = "^ (string_of_expr r) ^ ";\n"
   | Noop -> (white n)^"/* noop */\n"
-  | Error str -> (white n)^"error(\""^str^"\");\n"
+  | ErrorMsg str -> (white n)^"error(\""^str^"\");\n"
   | If (cond, path_a, path_b) -> (white n)^"if ("^(string_of_expr cond)^") {\n"^(cpp_string_of_code unparse_type (n+4) path_a)^(white n)^"} else {\n"^(cpp_string_of_code unparse_type (n+4) path_b)^(white n)^"}\n"
   | Loop(var, expr, code) -> (white n)^"for(int "^(string_of_expr var)^" = 0; "^(string_of_expr var)^" < "^(string_of_expr expr)^"; "^(string_of_expr var)^"++){\n"^(cpp_string_of_code unparse_type (n+4) code)^(white n)^"}\n" 
   | ArrayAllocate(expr,elttype,int) -> (white n)^(string_of_expr expr)^" = ("^(string_of_ctype(Ctype.Ptr(elttype)))^") malloc (sizeof("^(string_of_ctype(elttype))^") * "^(string_of_expr int)^");\n"

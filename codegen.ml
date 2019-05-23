@@ -189,7 +189,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	 Chain( [Assign(_rule, expr_of_intexpr(Intexpr.IConstant !rulecount))] @ freedom_assigns @ [Chain([prepare_precomputations desc_cons; prepare_constructs desc_constructs])]),
 	 stmt)	
     in
-    List.fold_left g (Error("no applicable rules")) breakdowns
+    List.fold_left g (ErrorMsg("no applicable rules")) breakdowns
   in
 
   let (name, _, cold, reinit, hot, funcs, _) = rstep_partitioned in 
@@ -206,7 +206,7 @@ let code_of_rstep (rstep_partitioned : rstep_partitioned) : code =
 	 stmt)
 	
     in
-    List.fold_left g (Error("internal error: no valid rule has been selected")) breakdowns
+    List.fold_left g (ErrorMsg("internal error: no valid rule has been selected")) breakdowns
   in
 
   print_string ("=== Building "^name^" ===\n");
