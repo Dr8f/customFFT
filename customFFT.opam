@@ -1,0 +1,19 @@
+opam-version: "2.0"
+name: "customFFT"
+synopsis: "Really fast Fourier transform"
+authors: "Dr8f"
+homepage: "https://github.com/dr8f/customFFT"
+maintainer: "ex@ample.com"
+dev-repo: "git+ssh://git@github.com:dr8f/customFFT.git"
+bug-reports: "https://github.com/dr8f/customFFT/issues"
+version: "0.1"
+build: [
+  [ "dune" "subst" ] {pinned}
+  [ "dune" "build" "-p" name "-j" jobs ]
+]
+depends: [
+  "dune" {build}
+  "merlin" {dev}
+  "ocp-indent" {dev}
+  "utop" {dev}
+]
