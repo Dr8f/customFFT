@@ -8,4 +8,4 @@ Afterwards, just update the switch with:
 `opam install . --deps-only`
 
 Build & execute with:
-`dune exec ./customFFT.exe`
+`dune exec ./src/customFFT.exe`
