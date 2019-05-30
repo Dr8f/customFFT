@@ -9,5 +9,6 @@
 *.cmxa
 *~
 _build
+_opam
 *.byte
 *.native
