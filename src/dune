@@ -1,2 +1,3 @@
 (executable
- (name customFFT))
+ (name customFFT)
+ (modules algo boolexpr code codegen ctype customFFT idxfunc intexpr lib spl unparser util))
