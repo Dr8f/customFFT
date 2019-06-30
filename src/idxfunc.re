@@ -23,7 +23,7 @@ type idxfunc =
 
 let rec string_of_idxfunc = (e: idxfunc): string =>
   switch (e) {
-  | [@implicit_arity] FH(src, dest, j, k) =>
+  | FH(src, dest, j, k) =>
     "FH("
     ++ string_of_intexpr(src)
     ++ ","
@@ -33,16 +33,16 @@ let rec string_of_idxfunc = (e: idxfunc): string =>
     ++ ","
     ++ string_of_intexpr(k)
     ++ ")"
-  | [@implicit_arity] FL(j, k) =>
+  | FL(j, k) =>
     "FL(" ++ string_of_intexpr(j) ++ ", " ++ string_of_intexpr(k) ++ ")"
-  | [@implicit_arity] FD(n, k) =>
+  | FD(n, k) =>
     "FD(" ++ string_of_intexpr(n) ++ ", " ++ string_of_intexpr(k) ++ ")"
   | FCompose(l) =>
     optional_short_infix_list_print("FCompose", " . ", l, string_of_idxfunc)
 
   | Pre(l) => "Pre(" ++ string_of_idxfunc(l) ++ ")"
   | FUp(l) => "FUp(" ++ string_of_idxfunc(l) ++ ")"
-  | [@implicit_arity] FDown(f, l, d) =>
+  | FDown(f, l, d) =>
     "FDown("
     ++ string_of_idxfunc(f)
     ++ ", "
@@ -50,7 +50,7 @@ let rec string_of_idxfunc = (e: idxfunc): string =>
     ++ ", "
     ++ string_of_int(d)
     ++ ")"
-  | [@implicit_arity] PreWrap(cvar, l, funcs, d) =>
+  | PreWrap(cvar, l, funcs, d) =>
     "PreWrap("
     ++ string_of_cvar(cvar)
     ++ ", ["
@@ -60,13 +60,13 @@ let rec string_of_idxfunc = (e: idxfunc): string =>
     ++ "], "
     ++ string_of_intexpr(d)
     ++ ")"
-  | [@implicit_arity] FArg(cvar, d) =>
+  | FArg(cvar, d) =>
     "FArg("
     ++ string_of_cvar(cvar)
     ++ ", ["
     ++ String.concat("; ", List.map(string_of_intexpr, d))
     ++ "])"
-  | [@implicit_arity] FHH(d, r, b, s, vs) =>
+  | FHH(d, r, b, s, vs) =>
     "FHH("
     ++ string_of_intexpr(d)
     ++ ", "
@@ -89,10 +89,10 @@ let meta_transform_ctx_idxfunc_on_idxfunc =
     | FCompose(l) => FCompose(List.map(g, l))
     | Pre(l) => Pre(g(l))
     | FUp(l) => FUp(g(l))
-    | [@implicit_arity] FDown(f, a, b) =>
-      [@implicit_arity] FDown(g(f), a, b)
-    | [@implicit_arity] PreWrap(cvar, b, c, d) =>
-      [@implicit_arity] PreWrap(cvar, b, List.map(g, c), d)
+    | FDown(f, a, b) =>
+      FDown(g(f), a, b)
+    | PreWrap(cvar, b, c, d) =>
+      PreWrap(cvar, b, List.map(g, c), d)
     | FHH(_)
     | FD(_)
     | FH(_)
@@ -121,30 +121,30 @@ let meta_transform_ctx_intexpr_on_idxfunc =
     let g =
       meta_transform_ctx_intexpr_on_intexpr(recursion_direction, f(ctx));
     switch (e) {
-    | [@implicit_arity] FH(a, b, c, d) =>
+    | FH(a, b, c, d) =>
       let ga = g(a);
       let gb = g(b);
       let gc = g(c);
-      [@implicit_arity] FH(ga, gb, gc, g(d));
-    | [@implicit_arity] FL(a, b) =>
+      FH(ga, gb, gc, g(d));
+    | FL(a, b) =>
       let ga = g(a);
-      [@implicit_arity] FL(ga, g(b));
-    | [@implicit_arity] FD(a, b) =>
+      FL(ga, g(b));
+    | FD(a, b) =>
       let ga = g(a);
-      [@implicit_arity] FD(ga, g(b));
+      FD(ga, g(b));
     | (FCompose(_) | Pre(_) | FUp(_) | FNil) as e => e
-    | [@implicit_arity] PreWrap(cvar, f, funcs, d) =>
-      [@implicit_arity] PreWrap(cvar, f, funcs, g(d)) /*FIXME: f is not parameterized because we don't want to parameterize inside the call, should be done with context maybe?*/
-    | [@implicit_arity] FArg(cvar, f) =>
-      [@implicit_arity] FArg(cvar, List.map(g, f))
-    | [@implicit_arity] FDown(f, a, i) =>
-      [@implicit_arity] FDown(f, g(a), i)
-    | [@implicit_arity] FHH(a, b, c, d, vs) =>
+    | PreWrap(cvar, f, funcs, d) =>
+      PreWrap(cvar, f, funcs, g(d)) /*FIXME: f is not parameterized because we don't want to parameterize inside the call, should be done with context maybe?*/
+    | FArg(cvar, f) =>
+      FArg(cvar, List.map(g, f))
+    | FDown(f, a, i) =>
+      FDown(f, g(a), i)
+    | FHH(a, b, c, d, vs) =>
       let ga = g(a);
       let gb = g(b);
       let gc = g(c);
       let gd = g(d);
-      [@implicit_arity] FHH(ga, gb, gc, gd, List.map(g, vs));
+      FHH(ga, gb, gc, gd, List.map(g, vs));
     };
   };
   /* | _ as e -> failwith("meta_transform_intexpr_on_idxfunc, not handled: "^(string_of_idxfunc e)) */
@@ -184,12 +184,12 @@ let meta_collect_intexpr_on_idxfunc =
     (f: intexpr => list('a)): (idxfunc => list('a)) =>
   meta_collect_idxfunc_on_idxfunc(
     fun
-    | [@implicit_arity] FH(a, b, c, d) => f(a) @ f(b) @ f(c) @ f(d)
-    | [@implicit_arity] FL(n, m)
-    | [@implicit_arity] FD(n, m) => f(n) @ f(m)
-    | [@implicit_arity] FHH(a, b, c, d, l) =>
+    | FH(a, b, c, d) => f(a) @ f(b) @ f(c) @ f(d)
+    | FL(n, m)
+    | FD(n, m) => f(n) @ f(m)
+    | FHH(a, b, c, d, l) =>
       f(a) @ f(b) @ f(c) @ f(d) @ List.flatten(List.map(f, l))
-    | [@implicit_arity] FArg(_, l) => List.flatten(List.map(f, l))
+    | FArg(_, l) => List.flatten(List.map(f, l))
     | _ => [],
   );
 
@@ -218,32 +218,32 @@ let meta_iter_intexpr_on_idxfunc = (f: intexpr => unit): (idxfunc => unit) =>
 
 let rec func_range = (e: idxfunc): intexpr =>
   switch (e) {
-  | [@implicit_arity] FH(_, range, _, _) => range
-  | [@implicit_arity] FL(n, _) => n
-  | [@implicit_arity] FD(n, _) => n
+  | FH(_, range, _, _) => range
+  | FL(n, _) => n
+  | FD(n, _) => n
   | FCompose(l) => func_range(List.hd(l))
   | Pre(l) => func_range(l)
-  | [@implicit_arity] FHH(_, r, _, _, _) => r
+  | FHH(_, r, _, _, _) => r
   /* | FUp(l) -> func_range l (\*FIXME really correct?*\) */
   | _ as e => failwith("func_range, not handled: " ++ string_of_idxfunc(e))
   };
 
 let rec func_domain = (e: idxfunc): intexpr =>
   switch (e) {
-  | [@implicit_arity] FH(domain, _, _, _) => domain
-  | [@implicit_arity] FL(n, _) => n
-  | [@implicit_arity] FD(n, _) => n
+  | FH(domain, _, _, _) => domain
+  | FL(n, _) => n
+  | FD(n, _) => n
   | FCompose(l) => func_domain(List.hd(List.rev(l)))
   | Pre(l) => func_domain(l)
   | FUp(l) => func_domain(l) /*FIXME really correct?*/
-  | [@implicit_arity] FHH(d, _, _, _, _) => d
-  | [@implicit_arity] PreWrap(_, _, _, d) => d
-  | [@implicit_arity] FArg(_, d) =>
+  | FHH(d, _, _, _, _) => d
+  | PreWrap(_, _, _, d) => d
+  | FArg(_, d) =>
     switch (last(d)) {
     | None => failwith("not a valid FArg")
     | Some(x) => x
     }
-  | [@implicit_arity] FDown(f, _, _) => func_domain(f)
+  | FDown(f, _, _) => func_domain(f)
   | FNil => IConstant(0)
   };
 /* | _ as e -> failwith("func_domain, not handled: "^(string_of_idxfunc e))		 */
@@ -257,7 +257,7 @@ let rec ctype_of_func = (e: idxfunc): ctype =>
     | _ => failwith("ctype_of_func, not handled: " ++ string_of_idxfunc(e))
     }
   | FD(_) => Func([Int, Complex])
-  | [@implicit_arity] FHH(_, _, _, _, n) =>
+  | FHH(_, _, _, _, n) =>
     let rec f = (l: int): list(ctype) =>
       if (l == 0) {
         [];
@@ -266,7 +266,7 @@ let rec ctype_of_func = (e: idxfunc): ctype =>
       };
     Func(f(List.length(n) + 2));
   | FCompose([x, ..._]) => ctype_of_func(x) /*FIXME really correct?*/
-  | [@implicit_arity] FArg(cvar, l) =>
+  | FArg(cvar, l) =>
     let rec derank = (ctype, count) =>
       if (count == 0) {
         ctype;
@@ -330,19 +330,19 @@ let rule_compose_FL_FH: idxfunc => idxfunc = (
     let rec f = (l: list(idxfunc)): list(idxfunc) =>
       switch (l) {
       | [
-          [@implicit_arity] FL(_ /*n1*/, k),
-          [@implicit_arity] FH(m1, n2, IMul([m2, ...multl]), IConstant(1)),
+          FL(_ /*n1*/, k),
+          FH(m1, n2, IMul([m2, ...multl]), IConstant(1)),
           ...tl,
         ]
           when m1 == m2 =>
-        f([[@implicit_arity] FH(m1, n2, IMul(multl), k), ...tl])
+        f([FH(m1, n2, IMul(multl), k), ...tl])
       | [
-          FUp([@implicit_arity] FL(_, k)),
-          [@implicit_arity] FHH(d, r, b, IConstant(1), [_, ...vstl]),
+          FUp(FL(_, k)),
+          FHH(d, r, b, IConstant(1), [_, ...vstl]),
           ...tl,
         ] =>
         f([
-          [@implicit_arity] FHH(d, r, b, k, [IConstant(1), ...vstl]),
+          FHH(d, r, b, k, [IConstant(1), ...vstl]),
           ...tl,
         ])
       | [a, ...tl] => [a, ...f(tl)]
@@ -360,12 +360,11 @@ let rule_compose_FH_FH: idxfunc => idxfunc = (
     let rec f = (l: list(idxfunc)): list(idxfunc) =>
       switch (l) {
       | [
-          [@implicit_arity] FH(_, gnp, bp, sp),
-          [@implicit_arity] FH(n, _, b, s),
+          FH(_, gnp, bp, sp),
+          FH(n, _, b, s),
           ...tl,
         ] =>
         f([
-          [@implicit_arity]
           FH(n, gnp, IPlus([bp, IMul([sp, b])]), IMul([sp, s])),
           ...tl,
         ])
@@ -384,8 +383,8 @@ let rule_compose_FHH_FHH: idxfunc => idxfunc = (
     let rec f = (l: list(idxfunc)): list(idxfunc) =>
       switch (l) {
       | [
-          [@implicit_arity] FHH(_, ra, ba, sa, vsa),
-          [@implicit_arity] FHH(db, _, bb, sb, vsb),
+          FHH(_, ra, ba, sa, vsa),
+          FHH(db, _, bb, sb, vsb),
           ...tl,
         ] =>
         let rec mul = (a: list(intexpr), b: list(intexpr)): list(intexpr) =>
@@ -400,7 +399,6 @@ let rule_compose_FHH_FHH: idxfunc => idxfunc = (
           };
 
         f([
-          [@implicit_arity]
           FHH(
             db,
             ra,
@@ -449,14 +447,14 @@ let rule_distribute_downrank: idxfunc => idxfunc = (
   meta_transform_idxfunc_on_idxfunc(
     TopDown,
     fun
-    | [@implicit_arity] FDown(FCompose(list), j, l) =>
-      FCompose(List.map(x => [@implicit_arity] FDown(x, j, l), list))
-    | [@implicit_arity] FDown(Pre(f), j, l) =>
-      Pre([@implicit_arity] FDown(f, j, l))
-    | [@implicit_arity] FDown([@implicit_arity] FArg(cvar, l), j, _) =>
-      [@implicit_arity] FArg(cvar, [j, ...l])
-    | [@implicit_arity] FDown(FUp(f), _, _) => f
-    | [@implicit_arity] FDown(FNil, _, _) => FNil
+    | FDown(FCompose(list), j, l) =>
+      FCompose(List.map(x => FDown(x, j, l), list))
+    | FDown(Pre(f), j, l) =>
+      Pre(FDown(f, j, l))
+    | FDown(FArg(cvar, l), j, _) =>
+      FArg(cvar, [j, ...l])
+    | FDown(FUp(f), _, _) => f
+    | FDown(FNil, _, _) => FNil
     | x => x,
   ):
     idxfunc => idxfunc
@@ -466,8 +464,8 @@ let rule_uprank_FHH: idxfunc => idxfunc = (
   meta_transform_idxfunc_on_idxfunc(
     TopDown,
     fun
-    | FUp([@implicit_arity] FHH(d, r, b, s, vs)) =>
-      [@implicit_arity] FHH(d, r, b, s, [IConstant(0), ...vs])
+    | FUp(FHH(d, r, b, s, vs)) =>
+      FHH(d, r, b, s, [IConstant(0), ...vs])
     | x => x,
   ):
     idxfunc => idxfunc
@@ -490,9 +488,8 @@ let rule_downrank_FHH: idxfunc => idxfunc = (
     meta_transform_idxfunc_on_idxfunc(
       TopDown,
       fun
-      | [@implicit_arity] FDown([@implicit_arity] FHH(d, r, b, s, vs), j, l) => {
+      | FDown(FHH(d, r, b, s, vs), j, l) => {
           let (content, remainder) = extract(l, vs);
-          [@implicit_arity]
           FHH(d, r, IPlus([b, IMul([content, j])]), s, remainder);
         }
       | x => x,
@@ -505,8 +502,8 @@ let rule_FHH_to_FH: idxfunc => idxfunc = (
   meta_transform_idxfunc_on_idxfunc(
     TopDown,
     fun
-    | [@implicit_arity] FHH(d, r, b, s, []) =>
-      [@implicit_arity] FH(d, r, b, s)
+    | FHH(d, r, b, s, []) =>
+      FH(d, r, b, s)
     | x => x,
   ):
     idxfunc => idxfunc

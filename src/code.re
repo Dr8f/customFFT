@@ -70,15 +70,15 @@ let rec ctype_of_expr = (e: expr): ctype => {
     | _ => failwith("Cannot dereference a non-pointer type")
     };
   switch (e) {
-  | [@implicit_arity] Var(ctype, _) => ctype
-  | [@implicit_arity] Nth(expr, _) => deref(ctype_of_expr(expr))
-  | [@implicit_arity] Cast(_, ctype) => ctype
+  | Var(ctype, _) => ctype
+  | Nth(expr, _) => deref(ctype_of_expr(expr))
+  | Cast(_, ctype) => ctype
   | Equal(_) => Bool
-  | [@implicit_arity] Mul(a, b)
-  | [@implicit_arity] Plus(a, b)
-  | [@implicit_arity] Minus(a, b)
-  | [@implicit_arity] Mod(a, b)
-  | [@implicit_arity] Divide(a, b) =>
+  | Mul(a, b)
+  | Plus(a, b)
+  | Minus(a, b)
+  | Mod(a, b)
+  | Divide(a, b) =>
     let (at, bt) = (ctype_of_expr(a), ctype_of_expr(b));
     if (at == bt) {
       at;
@@ -100,16 +100,16 @@ let rec ctype_of_expr = (e: expr): ctype => {
 
 let rec string_of_expr = (expr: expr): string =>
   switch (expr) {
-  | [@implicit_arity] Equal(a, b) =>
+  | Equal(a, b) =>
     "Equal(" ++ string_of_expr(a) ++ ", " ++ string_of_expr(b) ++ ")"
   | New(f) => "New(" ++ string_of_expr(f) ++ ")"
-  | [@implicit_arity] Nth(expr, count) =>
+  | Nth(expr, count) =>
     "Nth(" ++ string_of_expr(expr) ++ ", " ++ string_of_expr(count) ++ ")"
-  | [@implicit_arity] Var(a, b) =>
+  | Var(a, b) =>
     "Var(" ++ string_of_ctype(a) ++ ", \"" ++ b ++ "\")"
-  | [@implicit_arity] Cast(expr, ctype) =>
+  | Cast(expr, ctype) =>
     "Cast(" ++ string_of_expr(expr) ++ ", " ++ string_of_ctype(ctype) ++ ")"
-  | [@implicit_arity] MethodCall(expr, methodname, args) =>
+  | MethodCall(expr, methodname, args) =>
     "MethodCall("
     ++ string_of_expr(expr)
     ++ ", \""
@@ -117,21 +117,21 @@ let rec string_of_expr = (expr: expr): string =>
     ++ "\", ["
     ++ String.concat("; ", List.map(string_of_expr, args))
     ++ "])"
-  | [@implicit_arity] FunctionCall(functionname, args) =>
+  | FunctionCall(functionname, args) =>
     "FunctionCall(\""
     ++ functionname
     ++ "\", ["
     ++ String.concat("; ", List.map(string_of_expr, args))
     ++ "])"
-  | [@implicit_arity] Plus(a, b) =>
+  | Plus(a, b) =>
     "Plus(" ++ string_of_expr(a) ++ ", " ++ string_of_expr(b) ++ ")"
-  | [@implicit_arity] Minus(a, b) =>
+  | Minus(a, b) =>
     "Minus(" ++ string_of_expr(a) ++ ", " ++ string_of_expr(b) ++ ")"
-  | [@implicit_arity] Mul(a, b) =>
+  | Mul(a, b) =>
     "Mul(" ++ string_of_expr(a) ++ ", " ++ string_of_expr(b) ++ ")"
-  | [@implicit_arity] Mod(a, b) =>
+  | Mod(a, b) =>
     "Mod(" ++ string_of_expr(a) ++ ", " ++ string_of_expr(b) ++ ")"
-  | [@implicit_arity] Divide(a, b) =>
+  | Divide(a, b) =>
     "Divide(" ++ string_of_expr(a) ++ ", " ++ string_of_expr(b) ++ ")"
   | UniMinus(a) => "UniMinus(" ++ string_of_expr(a) ++ ")"
   | IConst(a) => "IConst(" ++ string_of_int(a) ++ ")"
@@ -148,15 +148,15 @@ let rec string_of_code = (n: int, code: code): string =>
       ++ "\n"
       ++ white(n)
       ++ "] )"
-    | [@implicit_arity] PlacementNew(l, r) =>
+    | PlacementNew(l, r) =>
       "PlacementNew("
       ++ string_of_expr(l)
       ++ ", "
       ++ string_of_expr(r)
       ++ ")"
-    | [@implicit_arity] Assign(l, r) =>
+    | Assign(l, r) =>
       "Assign(" ++ string_of_expr(l) ++ ", " ++ string_of_expr(r) ++ ")"
-    | [@implicit_arity] Loop(var, expr, code) =>
+    | Loop(var, expr, code) =>
       "Loop("
       ++ string_of_expr(var)
       ++ ", "
@@ -166,7 +166,7 @@ let rec string_of_code = (n: int, code: code): string =>
       ++ "\n"
       ++ white(n)
       ++ ")"
-    | [@implicit_arity] ArrayAllocate(expr, elttype, int) =>
+    | ArrayAllocate(expr, elttype, int) =>
       "ArrayAllocate("
       ++ string_of_expr(expr)
       ++ ", "
@@ -174,7 +174,7 @@ let rec string_of_code = (n: int, code: code): string =>
       ++ ", "
       ++ string_of_expr(int)
       ++ ")"
-    | [@implicit_arity] ArrayDeallocate(buf, size) =>
+    | ArrayDeallocate(buf, size) =>
       "ArrayDeallocate("
       ++ string_of_expr(buf)
       ++ ", "
@@ -196,8 +196,8 @@ let meta_transform_code_on_code =
   let z = (g: code => code, e: code): code =>
     switch (e) {
     | Chain(l) => Chain(List.map(g, l))
-    | [@implicit_arity] Loop(var, expr, code) =>
-      [@implicit_arity] Loop(var, expr, g(code))
+    | Loop(var, expr, code) =>
+      Loop(var, expr, g(code))
     | PlacementNew(_)
     | Assign(_)
     | ArrayAllocate(_)
@@ -215,8 +215,8 @@ let meta_collect_code_on_code = (f: code => list('a)): (code => list('a)) => {
   let z = (g: code => list('a), e: code): list('a) =>
     switch (e) {
     | Chain(l) => List.flatten(List.map(g, l))
-    | [@implicit_arity] Loop(_, _, code) => g(code)
-    | [@implicit_arity] If(_, true_branch, false_branch) =>
+    | Loop(_, _, code) => g(code)
+    | If(_, true_branch, false_branch) =>
       g(true_branch) @ g(false_branch)
     | _ => []
     };
@@ -227,19 +227,19 @@ let meta_collect_code_on_code = (f: code => list('a)): (code => list('a)) => {
 let meta_collect_expr_on_expr = (f: expr => list('a)): (expr => list('a)) => {
   let z = (g: expr => list('a), e: expr): list('a) =>
     switch (e) {
-    | [@implicit_arity] Nth(a, b)
-    | [@implicit_arity] Equal(a, b)
-    | [@implicit_arity] Mul(a, b)
-    | [@implicit_arity] Plus(a, b)
-    | [@implicit_arity] Minus(a, b)
-    | [@implicit_arity] Mod(a, b)
-    | [@implicit_arity] Divide(a, b) => g(a) @ g(b)
-    | [@implicit_arity] Cast(a, _)
+    | Nth(a, b)
+    | Equal(a, b)
+    | Mul(a, b)
+    | Plus(a, b)
+    | Minus(a, b)
+    | Mod(a, b)
+    | Divide(a, b) => g(a) @ g(b)
+    | Cast(a, _)
     | New(a)
     | UniMinus(a)
     | AddressOf(a) => g(a)
-    | [@implicit_arity] FunctionCall(_, l) => List.flatten(List.map(g, l))
-    | [@implicit_arity] MethodCall(a, _, l) =>
+    | FunctionCall(_, l) => List.flatten(List.map(g, l))
+    | MethodCall(a, _, l) =>
       g(a) @ List.flatten(List.map(g, l))
     | _ => []
     };
@@ -250,14 +250,14 @@ let meta_collect_expr_on_expr = (f: expr => list('a)): (expr => list('a)) => {
 let meta_collect_expr_on_code = (f: expr => list('a)): (code => list('a)) => {
   let direct_from_code = (ff: expr => list('a), e: code): list('a) =>
     switch (e) {
-    | [@implicit_arity] Assign(dest, orig) => ff(dest) @ ff(orig)
-    | [@implicit_arity] ArrayAllocate(pointer, _, elcount) =>
+    | Assign(dest, orig) => ff(dest) @ ff(orig)
+    | ArrayAllocate(pointer, _, elcount) =>
       ff(pointer) @ ff(elcount)
-    | [@implicit_arity] PlacementNew(address, content) =>
+    | PlacementNew(address, content) =>
       ff(address) @ ff(content)
-    | [@implicit_arity] If(condition, _, _) => ff(condition)
-    | [@implicit_arity] Loop(var, expr, _) => ff(var) @ ff(expr)
-    | [@implicit_arity] ArrayDeallocate(pointer, elcount) =>
+    | If(condition, _, _) => ff(condition)
+    | Loop(var, expr, _) => ff(var) @ ff(expr)
+    | ArrayDeallocate(pointer, elcount) =>
       ff(pointer) @ ff(elcount)
     | Return(expr)
     | Declare(expr)
@@ -265,7 +265,7 @@ let meta_collect_expr_on_code = (f: expr => list('a)): (code => list('a)) => {
     | Noop
     | Chain(_)
     | ErrorMsg(_) => []
-    | [@implicit_arity] Class(_, _, _, _) => []
+    | Class(_, _, _, _) => []
     }; /* not seriously thought after*/
 
   (e: code) => {
@@ -278,14 +278,14 @@ let meta_transform_expr_on_expr =
     (recursion_direction: recursion_direction): ((expr => expr, expr) => expr) => {
   let z = (g: expr => expr, e: expr): expr =>
     switch (e) {
-    | [@implicit_arity] Equal(a, b) => [@implicit_arity] Equal(g(a), g(b))
-    | [@implicit_arity] Plus(a, b) => [@implicit_arity] Plus(g(a), g(b))
-    | [@implicit_arity] Minus(a, b) => [@implicit_arity] Minus(g(a), g(b))
-    | [@implicit_arity] Mul(a, b) => [@implicit_arity] Mul(g(a), g(b))
-    | [@implicit_arity] Cast(expr, ctype) =>
-      [@implicit_arity] Cast(g(expr), ctype)
-    | [@implicit_arity] Nth(expr, count) =>
-      [@implicit_arity] Nth(g(expr), g(count))
+    | Equal(a, b) => Equal(g(a), g(b))
+    | Plus(a, b) => Plus(g(a), g(b))
+    | Minus(a, b) => Minus(g(a), g(b))
+    | Mul(a, b) => Mul(g(a), g(b))
+    | Cast(expr, ctype) =>
+      Cast(g(expr), ctype)
+    | Nth(expr, count) =>
+      Nth(g(expr), g(count))
     | Var(_)
     | IConst(_) => e
     | x => failwith("Pattern_matching failed:\n" ++ string_of_expr(x))
@@ -302,16 +302,16 @@ let meta_transform_expr_on_code =
     recursion_direction,
     fun
     | Declare(e) => Declare(g(e))
-    | [@implicit_arity] Assign(l, r) =>
-      [@implicit_arity] Assign(g(l), g(r))
+    | Assign(l, r) =>
+      Assign(g(l), g(r))
     | Chain(_) as x => x
-    | [@implicit_arity] ArrayAllocate(a, ctype, b) =>
-      [@implicit_arity] ArrayAllocate(g(a), ctype, g(b))
-    | [@implicit_arity] ArrayDeallocate(a, b) =>
-      [@implicit_arity] ArrayDeallocate(g(a), g(b))
+    | ArrayAllocate(a, ctype, b) =>
+      ArrayAllocate(g(a), ctype, g(b))
+    | ArrayDeallocate(a, b) =>
+      ArrayDeallocate(g(a), g(b))
     | Noop => Noop
-    | [@implicit_arity] Loop(var, expr, code) =>
-      [@implicit_arity] Loop(g(var), g(expr), code)
+    | Loop(var, expr, code) =>
+      Loop(g(var), g(expr), code)
     | x =>
       failwith(
         "Pattern_matching failed in meta_transform_expr_on_code:\n"
@@ -361,7 +361,7 @@ let gen_var = {
         1;
       };
     tbl := StringMap.add(prefix, count, tbl^);
-    [@implicit_arity] Var(ctype, prefix ++ string_of_int(count));
+    Var(ctype, prefix ++ string_of_int(count));
   }
 };
 

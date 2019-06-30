@@ -18,8 +18,8 @@ let replace_bound_vars = (code: code): code => {
   let bound_vars =
     meta_collect_code_on_code(
       fun
-      | Declare([@implicit_arity] Var(ctype, name))
-      | [@implicit_arity] Loop([@implicit_arity] Var(ctype, name), _, _) => [
+      | Declare(Var(ctype, name))
+      | Loop(Var(ctype, name), _, _) => [
           (ctype, name),
         ]
       | _ => [],
@@ -28,7 +28,7 @@ let replace_bound_vars = (code: code): code => {
   List.fold_left(
     (c, (ctype, name)) =>
       substitution_expr_on_code(
-        [@implicit_arity] Var(ctype, name),
+        Var(ctype, name),
         gen_var#get(ctype, "r"),
         c,
       ),
@@ -42,12 +42,12 @@ let constant_folding: code => code = (
   meta_transform_expr_on_code(
     BottomUp,
     fun
-    | [@implicit_arity] Mul(IConst(0), _)
-    | [@implicit_arity] Mul(_, IConst(0)) => IConst(0)
-    | [@implicit_arity] Mul(IConst(1), x)
-    | [@implicit_arity] Mul(x, IConst(1)) => x
-    | [@implicit_arity] Plus(IConst(0), x)
-    | [@implicit_arity] Plus(x, IConst(0)) => x
+    | Mul(IConst(0), _)
+    | Mul(_, IConst(0)) => IConst(0)
+    | Mul(IConst(1), x)
+    | Mul(x, IConst(1)) => x
+    | Plus(IConst(0), x)
+    | Plus(x, IConst(0)) => x
     | x => x,
   ):
     code => code
@@ -58,7 +58,7 @@ let unroll_loops = (code: code): code => {
     meta_transform_code_on_code(
       TopDown,
       fun
-      | [@implicit_arity] Loop(var, IConst(n), code) => {
+      | Loop(var, IConst(n), code) => {
           let g = (i: int) =>
             substitution_expr_on_code(
               var,
@@ -79,7 +79,7 @@ let array_scalarization = (code: code): code => {
   let all_arrays =
     meta_collect_code_on_code(
       fun
-      | [@implicit_arity] ArrayAllocate(arr, ctype, size) => [
+      | ArrayAllocate(arr, ctype, size) => [
           (arr, ctype, size),
         ]
       | _ => [],
@@ -90,7 +90,7 @@ let array_scalarization = (code: code): code => {
     let all_nth =
       meta_collect_expr_on_code(
         fun
-        | [@implicit_arity] Nth(arr, idx) when arr == array => [idx]
+        | Nth(arr, idx) when arr == array => [idx]
         | _ => [],
         code,
       );
@@ -116,20 +116,20 @@ let array_scalarization = (code: code): code => {
         let varname = gen_var#get(ctype, "a");
         let r1 =
           substitution_expr_on_code(
-            [@implicit_arity] Nth(array, IConst(i)),
+            Nth(array, IConst(i)),
             varname,
             code,
           );
         let r2 = substitution_code_on_code(Declare(array), Noop, r1);
         let r3 =
           substitution_code_on_code(
-            [@implicit_arity] ArrayAllocate(array, ctype, size),
+            ArrayAllocate(array, ctype, size),
             Noop,
             r2,
           );
         let r =
           substitution_code_on_code(
-            [@implicit_arity] ArrayDeallocate(array, size),
+            ArrayDeallocate(array, size),
             Noop,
             r3,
           );
@@ -146,17 +146,17 @@ let canonical_associative_form: code => code = (
   meta_transform_expr_on_code(
     BottomUp,
     fun
-    | [@implicit_arity] Mul(x, y) =>
+    | Mul(x, y) =>
       if (x < y) {
-        [@implicit_arity] Mul(x, y);
+        Mul(x, y);
       } else {
-        [@implicit_arity] Mul(y, x);
+        Mul(y, x);
       }
-    | [@implicit_arity] Plus(x, y) =>
+    | Plus(x, y) =>
       if (x < y) {
-        [@implicit_arity] Plus(x, y);
+        Plus(x, y);
       } else {
-        [@implicit_arity] Plus(y, x);
+        Plus(y, x);
       }
     | x => x,
   ):
@@ -174,7 +174,7 @@ let common_subexpression_elimination = (code: code): code => {
       } else {
         let nvar = gen_var#get(ctype_of_expr(nexpr), "g");
         output :=
-          output^ @ [Declare(nvar), [@implicit_arity] Assign(nvar, nexpr)];
+          output^ @ [Declare(nvar), Assign(nvar, nexpr)];
         map := ExprMap.add(nexpr, nvar, map^);
         nvar;
       };
@@ -186,14 +186,14 @@ let common_subexpression_elimination = (code: code): code => {
         | Var(_)
         | IConst(_)
         | Cast(_) => expr
-        | [@implicit_arity] Plus(a, b) =>
-          handle([@implicit_arity] Plus(z(a), z(b)))
-        | [@implicit_arity] Minus(a, b) =>
-          handle([@implicit_arity] Minus(z(a), z(b)))
-        | [@implicit_arity] Mul(a, b) =>
-          handle([@implicit_arity] Mul(z(a), z(b)))
-        | [@implicit_arity] Nth(a, b) =>
-          handle([@implicit_arity] Nth(z(a), z(b)))
+        | Plus(a, b) =>
+          handle(Plus(z(a), z(b)))
+        | Minus(a, b) =>
+          handle(Minus(z(a), z(b)))
+        | Mul(a, b) =>
+          handle(Mul(z(a), z(b)))
+        | Nth(a, b) =>
+          handle(Nth(z(a), z(b)))
         | _ => failwith("case not handled by z : " ++ string_of_expr(expr))
         };
       };
@@ -201,23 +201,22 @@ let common_subexpression_elimination = (code: code): code => {
       switch (next_insn) {
       | Declare(_) => ()
 
-      | [@implicit_arity] ArrayAllocate(var, ctype, rvalue) =>
+      | ArrayAllocate(var, ctype, rvalue) =>
         output :=
           output^
           @ [
             Declare(var),
-            [@implicit_arity] ArrayAllocate(var, ctype, z(rvalue)),
+            ArrayAllocate(var, ctype, z(rvalue)),
           ]
 
-      | [@implicit_arity] ArrayDeallocate(var, rvalue) =>
+      | ArrayDeallocate(var, rvalue) =>
         output :=
-          output^ @ [[@implicit_arity] ArrayDeallocate(var, z(rvalue))]
+          output^ @ [ArrayDeallocate(var, z(rvalue))]
 
-      | [@implicit_arity] Loop(var, count, Chain(code)) =>
+      | Loop(var, count, Chain(code)) =>
         output :=
           output^
           @ [
-            [@implicit_arity]
             Loop(
               var,
               z(count),
@@ -229,15 +228,14 @@ let common_subexpression_elimination = (code: code): code => {
         output := output^ @ [Chain(eliminate_within_a_chain(map^, x))]
 
       /* the following assumes no writes are really needed, except those in memory*/
-      | [@implicit_arity] Assign(Var(_) as lvalue, rvalue) =>
+      | Assign(Var(_) as lvalue, rvalue) =>
         map := ExprMap.add(lvalue, z(rvalue), map^)
 
-      | [@implicit_arity] Assign([@implicit_arity] Nth(a, b), rvalue) =>
+      | Assign(Nth(a, b), rvalue) =>
         output :=
           output^
           @ [
-            [@implicit_arity]
-            Assign([@implicit_arity] Nth(z(a), z(b)), z(rvalue)),
+            Assign(Nth(z(a), z(b)), z(rvalue)),
           ]
 
       | _ =>

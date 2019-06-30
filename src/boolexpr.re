@@ -15,7 +15,7 @@ let rec string_of_boolexpr = (e: boolexpr): string =>
   | IsPrime(l) => "IsPrime(" ++ string_of_intexpr(l) ++ ")"
   | And(l) =>
     optional_short_infix_list_print("And", " && ", l, string_of_boolexpr)
-  | [@implicit_arity] Equal(a, b) =>
+  | Equal(a, b) =>
     optional_short_print(
       "(" ++ string_of_intexpr(a) ++ " == " ++ string_of_intexpr(b) ++ ")",
       "Equal(" ++ string_of_intexpr(a) ++ ", " ++ string_of_intexpr(b) ++ ")",
@@ -46,7 +46,7 @@ let meta_collect_intexpr_on_boolexpr =
   meta_collect_boolexpr_on_boolexpr(
     fun
     | IsPrime(x) => f(x)
-    | [@implicit_arity] Equal(a, b) => f(a) @ f(b)
+    | Equal(a, b) => f(a) @ f(b)
     | _ => [],
   );
 

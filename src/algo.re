@@ -27,7 +27,7 @@ let within_GT_rank_one = (l: list(spl)): bool => {
     true;
   } else if (n == 1) {
     switch (List.hd(mylist)) {
-    | [@implicit_arity] GT(_, _, _, l) => List.length(l) <= 1
+    | GT(_, _, _, l) => List.length(l) <= 1
     | _ => assert(false)
     };
   } else {
@@ -46,12 +46,12 @@ let algo_cooley_tukey: spl => (boolexpr, list((intexpr, intexpr)), spl) = (
           conditions := [Not(IsPrime(n)), ...conditions^];
           let k = gen_freedom_var#get();
           freedoms := [(k, IDivisor(n)), ...freedoms^];
-          let m = [@implicit_arity] IDivPerfect(n, k);
+          let m = IDivPerfect(n, k);
           Compose([
             Tensor([DFT(k), I(m)]),
-            [@implicit_arity] T(n, m),
+            T(n, m),
             Tensor([I(k), DFT(m)]),
-            [@implicit_arity] L(n, k),
+            L(n, k),
           ]);
         | DFT(_) =>
           raise(AlgoNotApplicable("Cooley Tukey not applicable within GT"))
@@ -90,11 +90,11 @@ let algo_dft_base: spl => (boolexpr, list((intexpr, intexpr)), spl) = (
           fun
           | DFT(n) => {
               conditions :=
-                [[@implicit_arity] Equal(n, IConstant(2)), ...conditions^];
+                [Equal(n, IConstant(2)), ...conditions^];
               BB(F(2));
             }
 
-          | [@implicit_arity] Spl.GT(_, _, _, l) as e =>
+          | Spl.GT(_, _, _, l) as e =>
             if (List.length(l) > 1) {
               raise(
                 AlgoNotApplicable(

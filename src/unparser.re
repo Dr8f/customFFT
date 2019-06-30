@@ -21,45 +21,45 @@ type unparse_type =
 
 let ctype_of_expr = (e: expr): Ctype.ctype =>
   switch (e) {
-  | [@implicit_arity] Var(ctype, _) => ctype
+  | Var(ctype, _) => ctype
   | _ => failwith("ctype_of_expr, not handled: " ++ string_of_expr(e))
   };
 
 let rec string_of_expr = (expr: expr): string =>
   switch (expr) {
-  | [@implicit_arity] Equal(a, b) =>
+  | Equal(a, b) =>
     "(" ++ string_of_expr(a) ++ " == " ++ string_of_expr(b) ++ ")"
   | New(f) => "new " ++ string_of_expr(f)
-  | [@implicit_arity] Nth(expr, count) =>
+  | Nth(expr, count) =>
     string_of_expr(expr) ++ "[" ++ string_of_expr(count) ++ "]"
-  | [@implicit_arity] Var(_, name) => name
-  | [@implicit_arity] Cast(expr, ctype) =>
+  | Var(_, name) => name
+  | Cast(expr, ctype) =>
     "(reinterpret_cast<"
     ++ string_of_ctype(ctype)
     ++ ">("
     ++ string_of_expr(expr)
     ++ "))"
-  | [@implicit_arity] MethodCall(expr, methodname, args) =>
+  | MethodCall(expr, methodname, args) =>
     string_of_expr(expr)
     ++ " -> "
     ++ methodname
     ++ "("
     ++ String.concat(", ", List.map(string_of_expr, args))
     ++ ")"
-  | [@implicit_arity] FunctionCall(functionname, args) =>
+  | FunctionCall(functionname, args) =>
     functionname
     ++ "("
     ++ String.concat(", ", List.map(string_of_expr, args))
     ++ ")"
-  | [@implicit_arity] Plus(a, b) =>
+  | Plus(a, b) =>
     "(" ++ string_of_expr(a) ++ " + " ++ string_of_expr(b) ++ ")"
-  | [@implicit_arity] Minus(a, b) =>
+  | Minus(a, b) =>
     "(" ++ string_of_expr(a) ++ " - " ++ string_of_expr(b) ++ ")"
-  | [@implicit_arity] Mul(a, b) =>
+  | Mul(a, b) =>
     "(" ++ string_of_expr(a) ++ " * " ++ string_of_expr(b) ++ ")"
-  | [@implicit_arity] Mod(a, b) =>
+  | Mod(a, b) =>
     "(" ++ string_of_expr(a) ++ " % " ++ string_of_expr(b) ++ ")"
-  | [@implicit_arity] Divide(a, b) =>
+  | Divide(a, b) =>
     "(" ++ string_of_expr(a) ++ " / " ++ string_of_expr(b) ++ ")"
   | UniMinus(a) => "-(" ++ string_of_expr(a) ++ ")"
   | IConst(a) => string_of_int(a)
@@ -76,7 +76,7 @@ let make_signatures = (l: list('a)): list(string) =>
 let rec cpp_string_of_code =
         (unparse_type: unparse_type, n: int, code: code): string =>
   switch (code) {
-  | [@implicit_arity] Class(name, super, privates, methods) =>
+  | Class(name, super, privates, methods) =>
     (
       switch (unparse_type) {
       | Prototype =>
@@ -137,18 +137,18 @@ let rec cpp_string_of_code =
        )
     ++ white(n)
     ++ "}\n"
-  | [@implicit_arity] PlacementNew(l, r) =>
+  | PlacementNew(l, r) =>
     white(n)
     ++ "new ("
     ++ string_of_expr(l)
     ++ ") "
     ++ string_of_expr(r)
     ++ ";\n"
-  | [@implicit_arity] Assign(l, r) =>
+  | Assign(l, r) =>
     white(n) ++ string_of_expr(l) ++ " = " ++ string_of_expr(r) ++ ";\n"
   | Noop => white(n) ++ "/* noop */\n"
   | ErrorMsg(str) => white(n) ++ "error(\"" ++ str ++ "\");\n"
-  | [@implicit_arity] If(cond, path_a, path_b) =>
+  | If(cond, path_a, path_b) =>
     white(n)
     ++ "if ("
     ++ string_of_expr(cond)
@@ -159,7 +159,7 @@ let rec cpp_string_of_code =
     ++ cpp_string_of_code(unparse_type, n + 4, path_b)
     ++ white(n)
     ++ "}\n"
-  | [@implicit_arity] Loop(var, expr, code) =>
+  | Loop(var, expr, code) =>
     white(n)
     ++ "for(int "
     ++ string_of_expr(var)
@@ -173,7 +173,7 @@ let rec cpp_string_of_code =
     ++ cpp_string_of_code(unparse_type, n + 4, code)
     ++ white(n)
     ++ "}\n"
-  | [@implicit_arity] ArrayAllocate(expr, elttype, int) =>
+  | ArrayAllocate(expr, elttype, int) =>
     white(n)
     ++ string_of_expr(expr)
     ++ " = ("
@@ -183,7 +183,7 @@ let rec cpp_string_of_code =
     ++ ") * "
     ++ string_of_expr(int)
     ++ ");\n"
-  | [@implicit_arity] ArrayDeallocate(buf, _) =>
+  | ArrayDeallocate(buf, _) =>
     white(n) ++ "free(" ++ string_of_expr(buf) ++ ");\n"
   | Return(expr) => white(n) ++ "return " ++ string_of_expr(expr) ++ ";\n"
   | Declare(expr) =>
@@ -199,7 +199,7 @@ and cpp_string_of_cmethod =
     (unparse_type: unparse_type, n: int, name: string, cmethod: cmethod)
     : string =>
   switch (cmethod) {
-  | [@implicit_arity] Method(return_type, method_name, args, code) =>
+  | Method(return_type, method_name, args, code) =>
     (
       switch (unparse_type) {
       | Prototype => white(n + 4) ++ string_of_ctype(return_type) ++ " "
@@ -221,7 +221,7 @@ and cpp_string_of_cmethod =
         ++ "}\n"
       }
     )
-  | [@implicit_arity] Constructor(args, code) =>
+  | Constructor(args, code) =>
     name
     ++ "("
     ++ String.concat(", ", make_signatures(args))

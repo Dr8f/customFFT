@@ -10,33 +10,31 @@ let _at = "at";
 
 let _compute = "compute";
 
-let _rule = [@implicit_arity] Var(Ctype.Int, "_rule");
+let _rule = Var(Ctype.Int, "_rule");
 
-let _dat = [@implicit_arity] Var(Ctype.Ptr(Ctype.Complex), "_dat");
+let _dat = Var(Ctype.Ptr(Ctype.Complex), "_dat");
 
 let _internal_error =
-  [@implicit_arity] Var(Ctype.Ptr(Ctype.Complex), "_internal_error");
+  Var(Ctype.Ptr(Ctype.Complex), "_internal_error");
 
 let build_child_var = (num: int): expr =>
-  [@implicit_arity] Var(Ctype.Ptr(_rs), "child" ++ string_of_int(num));
+  Var(Ctype.Ptr(_rs), "child" ++ string_of_int(num));
 
 let expr_of_intexpr = (intexpr: Intexpr.intexpr): expr =>
   switch (intexpr) {
   | Intexpr.IConstant(x) => IConst(x)
-  | _ => [@implicit_arity] Var(Ctype.Int, Intexpr.string_of_intexpr(intexpr))
+  | _ => Var(Ctype.Int, Intexpr.string_of_intexpr(intexpr))
   };
 
-let _output = [@implicit_arity] Var(Ctype.Ptr(Ctype.Complex), "Y");
+let _output = Var(Ctype.Ptr(Ctype.Complex), "Y");
 
-let _input = [@implicit_arity] Var(Ctype.Ptr(Ctype.Complex), "X");
+let _input = Var(Ctype.Ptr(Ctype.Complex), "X");
 
 let rec expr_of_idxfunc = (idxfunc: Idxfunc.idxfunc): expr =>
   switch (idxfunc) {
-  | [@implicit_arity] Idxfunc.FArg(cvar, _) =>
-    [@implicit_arity]
+  | Idxfunc.FArg(cvar, _) =>
     Var(Ctype.Ptr(Ctype.ctype_of_cvar(cvar)), Ctype.name_of_cvar(cvar))
-  | [@implicit_arity] Idxfunc.PreWrap(cvar, l, funcs, _) =>
-    [@implicit_arity]
+  | Idxfunc.PreWrap(cvar, l, funcs, _) =>
     FunctionCall(
       Ctype.name_of_cvar(cvar),
       List.map(expr_of_intexpr, l) @ List.map(expr_of_idxfunc, funcs),
@@ -54,44 +52,39 @@ let rec code_of_func =
     "Now building code for " ++ Idxfunc.string_of_idxfunc(func) ++ "\n",
   );
   switch (func) {
-  | [@implicit_arity] Idxfunc.FH(_, _, b, s) =>
+  | Idxfunc.FH(_, _, b, s) =>
     let output = gen_var#get(Ctype.Int, "t");
     (
       output,
       code
       @ [
         Declare(output),
-        [@implicit_arity]
         Assign(
           output,
-          [@implicit_arity]
           Plus(
             expr_of_intexpr(b),
-            [@implicit_arity] Mul(expr_of_intexpr(s), input),
+            Mul(expr_of_intexpr(s), input),
           ),
         ),
       ],
     );
-  | [@implicit_arity] Idxfunc.FD(n, k) =>
+  | Idxfunc.FD(n, k) =>
     let output = gen_var#get(Ctype.Complex, "c");
     (
       output,
       code
       @ [
         Declare(output),
-        [@implicit_arity]
         Assign(
           output,
-          [@implicit_arity]
           FunctionCall(
             "omega",
             [
               expr_of_intexpr(n),
               UniMinus(
-                [@implicit_arity]
                 Mul(
-                  [@implicit_arity] Mod(input, expr_of_intexpr(k)),
-                  [@implicit_arity] Divide(input, expr_of_intexpr(k)),
+                  Mod(input, expr_of_intexpr(k)),
+                  Divide(input, expr_of_intexpr(k)),
                 ),
               ),
             ],
@@ -99,7 +92,7 @@ let rec code_of_func =
         ),
       ],
     );
-  | [@implicit_arity] Idxfunc.FArg((_, Ctype.Func(ctypes)), mylist) =>
+  | Idxfunc.FArg((_, Ctype.Func(ctypes)), mylist) =>
     switch (last(ctypes)) {
     | None => failwith("empty type list")
     | Some(x) =>
@@ -109,10 +102,8 @@ let rec code_of_func =
         code
         @ [
           Declare(output),
-          [@implicit_arity]
           Assign(
             output,
-            [@implicit_arity]
             MethodCall(
               expr_of_idxfunc(func),
               _at,
@@ -139,7 +130,6 @@ let rec code_of_spl = (output: expr, input: expr, e: Spl.spl): code =>
       let g = (res: list(expr), _: Spl.spl): list(expr) => {
         count := count^ + 1;
         [
-          [@implicit_arity]
           Var(Ctype.Ptr(ctype), "T" ++ string_of_int(count^)),
           ...res,
         ];
@@ -161,7 +151,6 @@ let rec code_of_spl = (output: expr, input: expr, e: Spl.spl): code =>
       List.map(((output, _)) => Declare(output), buffers)
       @ List.map(
           ((output, size)) =>
-            [@implicit_arity]
             ArrayAllocate(output, ctype, expr_of_intexpr(size)),
           buffers,
         )
@@ -171,39 +160,32 @@ let rec code_of_spl = (output: expr, input: expr, e: Spl.spl): code =>
         )
       @ List.map(
           ((output, size)) =>
-            [@implicit_arity] ArrayDeallocate(output, expr_of_intexpr(size)),
+            ArrayDeallocate(output, expr_of_intexpr(size)),
           buffers,
         ),
     );
-  | [@implicit_arity] Spl.ISum(i, count, content) =>
-    [@implicit_arity]
+  | Spl.ISum(i, count, content) =>
     Loop(
       expr_of_intexpr(i),
       expr_of_intexpr(count),
       code_of_spl(output, input, content),
     )
-  | [@implicit_arity] Spl.Compute(numchild, rs, hot, _, _) =>
+  | Spl.Compute(numchild, rs, hot, _, _) =>
     Ignore(
-      [@implicit_arity]
       MethodCall(
-        [@implicit_arity]
         Cast(build_child_var(numchild), Ctype.Ptr(Ctype.Env(rs))),
         _compute,
         [output, input, ...List.map(expr_of_intexpr, hot)],
       ),
     )
-  | [@implicit_arity] Spl.ISumReinitCompute(numchild, i, count, rs, hot, _, _) =>
-    [@implicit_arity]
+  | Spl.ISumReinitCompute(numchild, i, count, rs, hot, _, _) =>
     Loop(
       expr_of_intexpr(i),
       expr_of_intexpr(count),
       Ignore(
-        [@implicit_arity]
         MethodCall(
           AddressOf(
-            [@implicit_arity]
             Nth(
-              [@implicit_arity]
               Cast(build_child_var(numchild), Ctype.Ptr(Ctype.Env(rs))),
               expr_of_intexpr(i),
             ),
@@ -215,39 +197,33 @@ let rec code_of_spl = (output: expr, input: expr, e: Spl.spl): code =>
     )
   | Spl.F(2) =>
     Chain([
-      [@implicit_arity]
       Assign(
-        [@implicit_arity] Nth(output, IConst(0)),
-        [@implicit_arity]
+        Nth(output, IConst(0)),
         Plus(
-          [@implicit_arity] Nth(input, IConst(0)),
-          [@implicit_arity] Nth(input, IConst(1)),
+          Nth(input, IConst(0)),
+          Nth(input, IConst(1)),
         ),
       ),
-      [@implicit_arity]
       Assign(
-        [@implicit_arity] Nth(output, IConst(1)),
-        [@implicit_arity]
+        Nth(output, IConst(1)),
         Minus(
-          [@implicit_arity] Nth(input, IConst(0)),
-          [@implicit_arity] Nth(input, IConst(1)),
+          Nth(input, IConst(0)),
+          Nth(input, IConst(1)),
         ),
       ),
     ])
   | Spl.S(idxfunc) =>
     let var = gen_var#get(Ctype.Int, "t");
     let (index, codelines) = code_of_func(idxfunc, (var, []));
-    [@implicit_arity]
     Loop(
       var,
       expr_of_intexpr(Spl.spl_domain(e)),
       Chain(
         codelines
         @ [
-          [@implicit_arity]
           Assign(
-            [@implicit_arity] Nth(output, index),
-            [@implicit_arity] Nth(input, var),
+            Nth(output, index),
+            Nth(input, var),
           ),
         ],
       ),
@@ -255,17 +231,15 @@ let rec code_of_spl = (output: expr, input: expr, e: Spl.spl): code =>
   | Spl.G(idxfunc) =>
     let var = gen_var#get(Ctype.Int, "t");
     let (index, codelines) = code_of_func(idxfunc, (var, []));
-    [@implicit_arity]
     Loop(
       var,
       expr_of_intexpr(Spl.spl_range(e)),
       Chain(
         codelines
         @ [
-          [@implicit_arity]
           Assign(
-            [@implicit_arity] Nth(output, var),
-            [@implicit_arity] Nth(input, index),
+            Nth(output, var),
+            Nth(input, index),
           ),
         ],
       ),
@@ -276,40 +250,34 @@ let rec code_of_spl = (output: expr, input: expr, e: Spl.spl): code =>
     let var = gen_var#get(Ctype.Int, "t");
     let (precomp, codelines) = code_of_func(idxfunc, (var, []));
     Chain([
-      [@implicit_arity]
       Loop(
         var,
         expr_of_intexpr(Spl.spl_range(e)),
         Chain(
           codelines
           @ [
-            [@implicit_arity]
-            Assign([@implicit_arity] Nth(output, var), precomp),
+            Assign(Nth(output, var), precomp),
           ],
         ),
       ),
     ]);
 
-  | [@implicit_arity] Spl.DiagData(_, g) =>
+  | Spl.DiagData(_, g) =>
     /* just loading the the stored data*/
     let var = gen_var#get(Ctype.Int, "t");
     let (precomp, codelines) = code_of_func(g, (var, []));
-    [@implicit_arity]
     Loop(
       var,
       expr_of_intexpr(Spl.spl_range(e)),
       Chain(
         codelines
         @ [
-          [@implicit_arity]
           Assign(
-            [@implicit_arity] Nth(output, var),
-            [@implicit_arity]
+            Nth(output, var),
             Mul(
-              [@implicit_arity] Nth(input, var),
-              [@implicit_arity]
+              Nth(input, var),
               Nth(
-                [@implicit_arity] Cast(_dat, Ctype.Ptr(Ctype.Complex)),
+                Cast(_dat, Ctype.Ptr(Ctype.Complex)),
                 precomp,
               ),
             ),
@@ -318,17 +286,16 @@ let rec code_of_spl = (output: expr, input: expr, e: Spl.spl): code =>
       ),
     );
 
-  | [@implicit_arity] Spl.GT(a, g, s, [v]) =>
+  | Spl.GT(a, g, s, [v]) =>
     let i = Intexpr.gen_loop_counter#get();
     let spl =
-      [@implicit_arity]
       Spl.ISum(
         i,
         v,
         Spl.Compose([
-          Spl.S([@implicit_arity] Idxfunc.FDown(s, i, 0)),
-          [@implicit_arity] Spl.Down(a, i, 0),
-          Spl.G([@implicit_arity] Idxfunc.FDown(g, i, 0)),
+          Spl.S(Idxfunc.FDown(s, i, 0)),
+          Spl.Down(a, i, 0),
+          Spl.G(Idxfunc.FDown(g, i, 0)),
         ]),
       ); /*the Down here pushes the downrank to the SideArg*/
     code_of_spl(output, input, Spl.simplify_spl(spl));
@@ -343,9 +310,8 @@ let code_of_rstep = (rstep_partitioned: rstep_partitioned): code => {
     let g = ((_, _, _, _, _, constructs, _): breakdown_enhanced): _ =>
       List.iter(
         fun
-        | [@implicit_arity] Spl.Construct(numchild, _, _, _)
-        | [@implicit_arity]
-          Spl.ISumReinitConstruct(numchild, _, _, _, _, _, _) =>
+        | Spl.Construct(numchild, _, _, _)
+        | Spl.ISumReinitConstruct(numchild, _, _, _, _, _, _) =>
           res := IntSet.add(numchild, res^)
         | _ => (),
         constructs,
@@ -371,12 +337,10 @@ let code_of_rstep = (rstep_partitioned: rstep_partitioned): code => {
     let prepare_constructs = (l: list(Spl.spl)): code => {
       let f = e =>
         switch (e) {
-        | [@implicit_arity] Spl.Construct(numchild, rs, args, funcs) =>
-          [@implicit_arity]
+        | Spl.Construct(numchild, rs, args, funcs) =>
           Assign(
             build_child_var(numchild),
             New(
-              [@implicit_arity]
               FunctionCall(
                 rs,
                 List.map(expr_of_intexpr, args)
@@ -384,26 +348,20 @@ let code_of_rstep = (rstep_partitioned: rstep_partitioned): code => {
               ),
             ),
           )
-        | [@implicit_arity]
-          Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) =>
+        | Spl.ISumReinitConstruct(numchild, i, count, rs, cold, reinit, funcs) =>
           let child = build_child_var(numchild);
           Chain([
-            [@implicit_arity]
             ArrayAllocate(child, Ctype.Env(rs), expr_of_intexpr(count)),
-            [@implicit_arity]
             Loop(
               expr_of_intexpr(i),
               expr_of_intexpr(count),
-              [@implicit_arity]
               PlacementNew(
                 AddressOf(
-                  [@implicit_arity]
                   Nth(
-                    [@implicit_arity] Cast(child, Ctype.Ptr(Ctype.Env(rs))),
+                    Cast(child, Ctype.Ptr(Ctype.Env(rs))),
                     expr_of_intexpr(i),
                   ),
                 ),
-                [@implicit_arity]
                 FunctionCall(
                   rs,
                   List.map(expr_of_intexpr, cold @ reinit)
@@ -425,7 +383,6 @@ let code_of_rstep = (rstep_partitioned: rstep_partitioned): code => {
           "Preparing precomputations for : " ++ Spl.string_of_spl(x) ++ "\n",
         );
         Chain([
-          [@implicit_arity]
           ArrayAllocate(
             _dat,
             Ctype.Complex,
@@ -446,18 +403,14 @@ let code_of_rstep = (rstep_partitioned: rstep_partitioned): code => {
       let freedom_assigns =
         List.map(
           ((l, r)) =>
-            [@implicit_arity]
             Assign(expr_of_intexpr(l), expr_of_intexpr(r)),
           freedoms,
         );
       rulecount := rulecount^ + 1;
-      [@implicit_arity]
       If(
-        [@implicit_arity]
         Var(Ctype.Bool, Boolexpr.string_of_boolexpr(condition)),
         Chain(
           [
-            [@implicit_arity]
             Assign(_rule, expr_of_intexpr(Intexpr.IConstant(rulecount^))),
           ]
           @ freedom_assigns
@@ -504,9 +457,7 @@ let code_of_rstep = (rstep_partitioned: rstep_partitioned): code => {
         ++ "\n",
       );
       rulecount := rulecount^ + 1;
-      [@implicit_arity]
       If(
-        [@implicit_arity]
         Equal(_rule, expr_of_intexpr(Intexpr.IConstant(rulecount^))),
         code_of_spl(output, input, desc_comp),
         stmt,
@@ -522,7 +473,6 @@ let code_of_rstep = (rstep_partitioned: rstep_partitioned): code => {
 
   print_string("=== Building " ++ name ++ " ===\n");
   let met =
-    [@implicit_arity]
     Method(
       Ctype.Void,
       _compute,
@@ -531,11 +481,9 @@ let code_of_rstep = (rstep_partitioned: rstep_partitioned): code => {
     );
   print_string("... built method \n");
   let cons =
-    [@implicit_arity]
     Constructor(cons_args, cons_code_of_rstep(rstep_partitioned));
   print_string("... built constructor \n");
   let claz =
-    [@implicit_arity]
     Class(
       name,
       _rs,
@@ -566,21 +514,19 @@ let code_of_envfunc = ((name, f, args, fargs): envfunc): code => {
   let rankvars = ref([]) /* while (Idxfunc.rank_of_func !g > 0) do */; /* FIXME, there is an issue here, how to handle the rank of these guys? */
   print_string("downranking:" ++ Idxfunc.string_of_idxfunc(g^) ++ "\n");
   let i = Intexpr.gen_loop_counter#get();
-  g := Idxfunc.simplify_idxfunc([@implicit_arity] Idxfunc.FDown(g^, i, 0));
+  g := Idxfunc.simplify_idxfunc(Idxfunc.FDown(g^, i, 0));
   rankvars := [expr_of_intexpr(i), ...rankvars^];
   /* done; */
   let input = gen_var#get(Ctype.Int, "t");
   let (output, code) = code_of_func(g^, (input, []));
   let cons_args =
     List.map(expr_of_intexpr, args) @ List.map(expr_of_idxfunc, fargs);
-  [@implicit_arity]
   Class(
     name,
     Idxfunc.ctype_of_func(f),
     cons_args,
     [
-      [@implicit_arity] Constructor(cons_args, Noop),
-      [@implicit_arity]
+      Constructor(cons_args, Noop),
       Method(
         Ctype.Complex,
         _at,

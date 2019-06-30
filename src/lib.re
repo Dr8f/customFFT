@@ -241,7 +241,7 @@ let extract_constraints_spl = (e: spl): list((intexpr, intexpr)) => {
       )
     | Diag(x) => extract_constraints_func(x)
     | BB(x) => inner_extract_constraints_spl(x)
-    | [@implicit_arity] GT(a, g, s, _) => [
+    | GT(a, g, s, _) => [
         (spl_domain(a), func_domain(g)),
         (spl_range(a), func_domain(s)),
         ...inner_extract_constraints_spl(a),
@@ -302,7 +302,7 @@ let wrap_intexprs = (count: ref(int), i: intexpr): intexpr =>
   | ILoopCounter(_)
   | IArg(_) =>
     count := count^ + 1;
-    [@implicit_arity] ICountWrap(count^, i);
+    ICountWrap(count^, i);
   | x => x
   };
 
@@ -320,11 +320,10 @@ let unwrap_idxfunc = (e: idxfunc): idxfunc => {
   let count = ref(0);
   let h = (e: idxfunc): idxfunc =>
     switch (e) {
-    | [@implicit_arity] PreWrap((_, ct), _, _, d) =>
+    | PreWrap((_, ct), _, _, d) =>
       print_string("now unwrapping " ++ string_of_idxfunc(e) ++ "\n");
       count := count^ + 1;
       Pre(
-        [@implicit_arity]
         FArg(("lambda" ++ string_of_int(count^), ct), [d]),
       );
     | x => x
@@ -335,7 +334,7 @@ let unwrap_idxfunc = (e: idxfunc): idxfunc => {
 
 let unwrap_intexpr = (e: intexpr): intexpr =>
   switch (e) {
-  | [@implicit_arity] ICountWrap(l, _) => IArg(l)
+  | ICountWrap(l, _) => IArg(l)
   | x => x
   };
 
@@ -348,7 +347,7 @@ let rec mapify =
         (binds: list(intexpr), map: IntMap.t(intexpr)): IntMap.t(intexpr) =>
   switch (binds) {
   | [] => map
-  | [[@implicit_arity] ICountWrap(p, expr), ...tl] =>
+  | [ICountWrap(p, expr), ...tl] =>
     mapify(tl, IntMap.add(p, expr, map))
   | _ => failwith("type is not supported")
   };
@@ -401,7 +400,6 @@ let replace_by_a_call_idxfunc =
   let fargs = (meta_collect_idxfunc_on_idxfunc(collect_farg))(f);
   let name = ensure_name(newdef, new_args, fargs);
   let res =
-    [@implicit_arity]
     PreWrap((name, ctype_of_func(f)), args, fargs, domain);
   let printer = (args: IntMap.t(intexpr)): string =>
     String.concat(
@@ -488,7 +486,6 @@ let replace_by_a_call_spl =
     };
 
   let res =
-    [@implicit_arity]
     UnpartitionnedCall(
       name,
       mapify(
@@ -522,12 +519,10 @@ let localize_precomputations = (e: Spl.spl): Spl.spl => {
       let gt_list = List.flatten(List.map(Spl.collect_GT, ctx));
       if (List.length(gt_list) == 1) {
         switch (List.hd(gt_list)) {
-        | [@implicit_arity] Spl.GT(_, _, _, l) =>
+        | Spl.GT(_, _, _, l) =>
           if (List.length(l) == 1) {
-            [@implicit_arity]
             Spl.DiagData(
               f,
-              [@implicit_arity]
               Idxfunc.FHH(
                 Idxfunc.func_domain(f),
                 Idxfunc.func_domain(f),
@@ -537,10 +532,8 @@ let localize_precomputations = (e: Spl.spl): Spl.spl => {
               ),
             );
           } else if (List.length(l) == 2) {
-            [@implicit_arity]
             Spl.DiagData(
               f,
-              [@implicit_arity]
               Idxfunc.FHH(
                 Idxfunc.func_domain(f),
                 Idxfunc.func_domain(f),
@@ -559,10 +552,8 @@ let localize_precomputations = (e: Spl.spl): Spl.spl => {
         | _ => assert(false)
         };
       } else if (List.length(gt_list) == 0) {
-        [@implicit_arity]
         Spl.DiagData(
           f,
-          [@implicit_arity]
           Idxfunc.FH(
             Idxfunc.func_domain(f),
             Idxfunc.func_domain(f),
@@ -721,7 +712,7 @@ let dependency_map_of_rsteps =
     let per_rule = ((_, _, _, desc_with_calls): breakdown): _ =>
       meta_iter_spl_on_spl(
         fun
-        | [@implicit_arity] UnpartitionnedCall(callee, vars, _, _, _) => {
+        | UnpartitionnedCall(callee, vars, _, _, _) => {
             let g = (arg: int, expr: intexpr): _ => {
               let key = (callee, arg);
               let h = (e: intexpr): _ =>
@@ -773,7 +764,7 @@ let initial_hots_of_rsteps =
     let per_rule = ((_, _, _, desc_with_calls): breakdown): _ =>
       meta_iter_spl_on_spl(
         fun
-        | [@implicit_arity] UnpartitionnedCall(callee, vars, _, _, _) => {
+        | UnpartitionnedCall(callee, vars, _, _, _) => {
             let g = (arg: int, expr: intexpr): _ => {
               let h = (e: intexpr): _ =>
                 switch (e) {
@@ -818,7 +809,7 @@ let initial_colds_of_rsteps =
         /* and all the loop bounds of wrapping GTs */
         let f = (
           fun
-          | [@implicit_arity] GT(_, _, _, l) =>
+          | GT(_, _, _, l) =>
             List.iter(add_args_to_cold, l)
           | _ => ()
         );
@@ -984,10 +975,8 @@ let lib_from_closure = ((funcs, rsteps): closure): lib => {
       let childcount = ref(0);
       let h = (e: spl): spl =>
         switch (e) {
-        | [@implicit_arity]
-          UnpartitionnedCall(callee, args, funcs, range, domain) =>
+        | UnpartitionnedCall(callee, args, funcs, range, domain) =>
           childcount := childcount^ + 1;
-          [@implicit_arity]
           PartitionnedCall(
             childcount^,
             callee,
@@ -1006,19 +995,15 @@ let lib_from_closure = ((funcs, rsteps): closure): lib => {
 
       let j = (e: spl): spl =>
         switch (e) {
-        | [@implicit_arity]
-          ISum(
+        | ISum(
             _,
             _,
-            [@implicit_arity]
             PartitionnedCall(childcount, callee, cold, [], _, [], _, _),
           ) =>
-          [@implicit_arity] Construct(childcount, callee, cold, [])
-        | [@implicit_arity]
-          ISum(
+          Construct(childcount, callee, cold, [])
+        | ISum(
             i,
             high,
-            [@implicit_arity]
             PartitionnedCall(
               childcount,
               callee,
@@ -1030,7 +1015,6 @@ let lib_from_closure = ((funcs, rsteps): closure): lib => {
               _,
             ),
           ) =>
-          [@implicit_arity]
           ISumReinitConstruct(
             childcount,
             i,
@@ -1040,19 +1024,16 @@ let lib_from_closure = ((funcs, rsteps): closure): lib => {
             reinit,
             funcs,
           )
-        | [@implicit_arity]
-          PartitionnedCall(childcount, callee, cold, _, _, funcs, _, _) =>
-          [@implicit_arity] Construct(childcount, callee, cold, funcs)
+        | PartitionnedCall(childcount, callee, cold, _, _, funcs, _, _) =>
+          Construct(childcount, callee, cold, funcs)
         | x => x
         };
 
       let k = (e: spl): spl =>
         switch (e) {
-        | [@implicit_arity]
-          ISum(
+        | ISum(
             i,
             high,
-            [@implicit_arity]
             PartitionnedCall(
               childcount,
               callee,
@@ -1065,11 +1046,9 @@ let lib_from_closure = ((funcs, rsteps): closure): lib => {
             ),
           )
             when depends_on(funcs, i) =>
-          [@implicit_arity]
           ISumReinitCompute(childcount, i, high, callee, hot, range, domain) /*this should only fire if needed, there are funcs that are dependent on i*/
-        | [@implicit_arity]
-          PartitionnedCall(childcount, callee, _, _, hot, _, range, domain) =>
-          [@implicit_arity] Compute(childcount, callee, hot, range, domain) /*this is the default, most general case*/ /*the combination of the two impose a TopDown approach*/
+        | PartitionnedCall(childcount, callee, _, _, hot, _, range, domain) =>
+          Compute(childcount, callee, hot, range, domain) /*this is the default, most general case*/ /*the combination of the two impose a TopDown approach*/
         | x => x
         };
 
@@ -1078,8 +1057,8 @@ let lib_from_closure = ((funcs, rsteps): closure): lib => {
           meta_transform_spl_on_spl(
             BottomUp,
             fun
-            | [@implicit_arity] DiagData(f, loc) =>
-              [@implicit_arity] SideArg(Diag(f), loc)
+            | DiagData(f, loc) =>
+              SideArg(Diag(f), loc)
             | x => x,
             s,
           );
@@ -1102,7 +1081,7 @@ let lib_from_closure = ((funcs, rsteps): closure): lib => {
 
       let prepare_precomputations = (a: spl): option(spl) =>
         switch (a) {
-        | [@implicit_arity] Spl.SideArg(x, _) => Some(x)
+        | Spl.SideArg(x, _) => Some(x)
         | _ => None
         };
 

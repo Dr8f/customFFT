@@ -22,14 +22,14 @@ let rec string_of_intexpr = (e: intexpr): string =>
     optional_short_infix_list_print("IMul", " * ", l, string_of_intexpr)
   | IPlus(l) =>
     optional_short_infix_list_print("IPlus", " + ", l, string_of_intexpr)
-  | [@implicit_arity] IDivPerfect(l, r) =>
+  | IDivPerfect(l, r) =>
     optional_short_print(
       string_of_intexpr(l) ++ " / " ++ string_of_intexpr(r),
       "IDivPerfect("
       ++ (string_of_intexpr(l) ++ ", " ++ string_of_intexpr(r))
       ++ ")",
     )
-  | [@implicit_arity] ICountWrap(l, r) =>
+  | ICountWrap(l, r) =>
     "ICountWrap(" ++ string_of_int(l) ++ ", " ++ string_of_intexpr(r) ++ ")"
   | IDivisor(l) => "IDivisor(" ++ string_of_intexpr(l) ++ ")"
   | IFreedom(i) =>
@@ -72,9 +72,9 @@ let meta_transform_ctx_intexpr_on_intexpr =
     switch (e) {
     | IMul(l) => IMul(List.map(g, l))
     | IPlus(l) => IPlus(List.map(g, l))
-    | [@implicit_arity] IDivPerfect(a, b) =>
-      [@implicit_arity] IDivPerfect(g(a), g(b))
-    | [@implicit_arity] ICountWrap(_, _) => e /*FIXME this seems just wrong*/
+    | IDivPerfect(a, b) =>
+      IDivPerfect(g(a), g(b))
+    | ICountWrap(_, _) => e /*FIXME this seems just wrong*/
     | IDivisor(l) => IDivisor(g(l))
     | IFreedom(_)
     | IArg(_)
@@ -96,9 +96,9 @@ let meta_collect_intexpr_on_intexpr =
     switch (e) {
     | IMul(l) => List.flatten(List.map(g, l))
     | IPlus(l) => List.flatten(List.map(g, l))
-    | [@implicit_arity] IDivPerfect(a, b) => g(a) @ g(b)
+    | IDivPerfect(a, b) => g(a) @ g(b)
     | IDivisor(b)
-    | [@implicit_arity] ICountWrap(_, b) => g(b)
+    | ICountWrap(_, b) => g(b)
     | IFreedom(_)
     | IArg(_)
     | IConstant(_)
@@ -203,9 +203,9 @@ let rule_multiply_and_divide_by_the_same_on_intexpr: intexpr => intexpr = (
   {
     let rec f = (l: list(intexpr)): list(intexpr) =>
       switch (l) {
-      | [a, [@implicit_arity] IDivPerfect(b, c), ...tl] when a == c =>
+      | [a, IDivPerfect(b, c), ...tl] when a == c =>
         f([b, ...tl])
-      | [[@implicit_arity] IDivPerfect(a, b), c, ...tl] when b == c =>
+      | [IDivPerfect(a, b), c, ...tl] when b == c =>
         f([a, ...tl])
       | [a, ...tl] => [a, ...f(tl)]
       | [] => []

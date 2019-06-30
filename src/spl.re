@@ -66,22 +66,22 @@ let rec string_of_spl = (e: spl): string =>
   | Tensor(list) =>
     optional_short_infix_list_print("Tensor", " x ", list, string_of_spl)
   | I(n) => "I(" ++ string_of_intexpr(n) ++ ")"
-  | [@implicit_arity] T(n, m) =>
+  | T(n, m) =>
     "T(" ++ string_of_intexpr(n) ++ "," ++ string_of_intexpr(m) ++ ")"
-  | [@implicit_arity] L(n, m) =>
+  | L(n, m) =>
     "L(" ++ string_of_intexpr(n) ++ "," ++ string_of_intexpr(m) ++ ")"
   | Compose(list) =>
     optional_short_infix_list_print("Compose", " . ", list, string_of_spl)
   | S(f) => "S(" ++ string_of_idxfunc(f) ++ ")"
   | G(f) => "G(" ++ string_of_idxfunc(f) ++ ")"
   | Diag(f) => "Diag(" ++ string_of_idxfunc(f) ++ ")"
-  | [@implicit_arity] DiagData(f, g) =>
+  | DiagData(f, g) =>
     "DiagData("
     ++ string_of_idxfunc(f)
     ++ ", "
     ++ string_of_idxfunc(g)
     ++ ")"
-  | [@implicit_arity] ISum(i, high, spl) =>
+  | ISum(i, high, spl) =>
     "ISum("
     ++ string_of_intexpr(i)
     ++ ","
@@ -90,7 +90,7 @@ let rec string_of_spl = (e: spl): string =>
     ++ string_of_spl(spl)
     ++ ")"
   | RS(spl) => "RS(" ++ string_of_spl(spl) ++ ")"
-  | [@implicit_arity] UnpartitionnedCall(f, map, funcs, r, d) =>
+  | UnpartitionnedCall(f, map, funcs, r, d) =>
     "UnpartitionnedCall(\""
     ++ f
     ++ "\", ("
@@ -102,8 +102,7 @@ let rec string_of_spl = (e: spl): string =>
     ++ ", "
     ++ string_of_intexpr(d)
     ++ ")"
-  | [@implicit_arity]
-    PartitionnedCall(childcount, f, cold, reinit, hot, funcs, r, d) =>
+  | PartitionnedCall(childcount, f, cold, reinit, hot, funcs, r, d) =>
     "PartitionnedCall("
     ++ string_of_int(childcount)
     ++ ", \""
@@ -121,7 +120,7 @@ let rec string_of_spl = (e: spl): string =>
     ++ ", "
     ++ string_of_intexpr(d)
     ++ ")"
-  | [@implicit_arity] Construct(childcount, f, cold, funcs) =>
+  | Construct(childcount, f, cold, funcs) =>
     "Construct("
     ++ string_of_int(childcount)
     ++ ", \""
@@ -131,8 +130,7 @@ let rec string_of_spl = (e: spl): string =>
     ++ "], ["
     ++ String.concat(";", List.map(string_of_idxfunc, funcs))
     ++ "])"
-  | [@implicit_arity]
-    ISumReinitConstruct(childcount, i, high, f, cold, reinit, funcs) =>
+  | ISumReinitConstruct(childcount, i, high, f, cold, reinit, funcs) =>
     "ISumReinitConstruct("
     ++ string_of_int(childcount)
     ++ ", "
@@ -148,7 +146,7 @@ let rec string_of_spl = (e: spl): string =>
     ++ "], ["
     ++ String.concat(";", List.map(string_of_idxfunc, funcs))
     ++ "])"
-  | [@implicit_arity] Compute(childcount, f, hot, _, _) =>
+  | Compute(childcount, f, hot, _, _) =>
     "Compute("
     ++ string_of_int(childcount)
     ++ ", "
@@ -156,7 +154,7 @@ let rec string_of_spl = (e: spl): string =>
     ++ ", ["
     ++ String.concat(";", List.map(string_of_intexpr, hot))
     ++ "])"
-  | [@implicit_arity] ISumReinitCompute(childcount, i, high, f, hot, _, _) =>
+  | ISumReinitCompute(childcount, i, high, f, hot, _, _) =>
     "ISumReinitCompute("
     ++ string_of_int(childcount)
     ++ ", "
@@ -170,7 +168,7 @@ let rec string_of_spl = (e: spl): string =>
     ++ "])"
   | F(i) => "F(" ++ string_of_int(i) ++ ")"
   | BB(x) => "BB(" ++ string_of_spl(x) ++ ")"
-  | [@implicit_arity] GT(a, g, s, l) =>
+  | GT(a, g, s, l) =>
     "GT("
     ++ string_of_spl(a)
     ++ ", "
@@ -180,7 +178,7 @@ let rec string_of_spl = (e: spl): string =>
     ++ ", ["
     ++ String.concat(";", List.map(string_of_intexpr, l))
     ++ "])"
-  | [@implicit_arity] Down(s, l, d) =>
+  | Down(s, l, d) =>
     "Down("
     ++ string_of_spl(s)
     ++ ", "
@@ -188,7 +186,7 @@ let rec string_of_spl = (e: spl): string =>
     ++ ", "
     ++ string_of_int(d)
     ++ ")"
-  | [@implicit_arity] SideArg(s, f) =>
+  | SideArg(s, f) =>
     "SideArg(" ++ string_of_spl(s) ++ ", " ++ string_of_idxfunc(f) ++ ")"
   };
 
@@ -203,11 +201,11 @@ let meta_transform_ctx_spl_on_spl =
     switch (e) {
     | Compose(l) => Compose(List.map(g, l))
     | Tensor(l) => Tensor(List.map(g, l))
-    | [@implicit_arity] ISum(v, c, a) => [@implicit_arity] ISum(v, c, g(a))
+    | ISum(v, c, a) => ISum(v, c, g(a))
     | RS(l) => RS(g(l))
     | BB(l) => BB(g(l))
-    | [@implicit_arity] GT(a, c, s, l) =>
-      [@implicit_arity] GT(g(a), c, s, l)
+    | GT(a, c, s, l) =>
+      GT(g(a), c, s, l)
     | DFT(_)
     | I(_)
     | T(_)
@@ -223,8 +221,8 @@ let meta_transform_ctx_spl_on_spl =
     | ISumReinitConstruct(_)
     | Construct(_)
     | PartitionnedCall(_) => e
-    | [@implicit_arity] Down(s, a, b) => [@implicit_arity] Down(g(s), a, b)
-    | [@implicit_arity] SideArg(s, f) => [@implicit_arity] SideArg(g(s), f)
+    | Down(s, a, b) => Down(g(s), a, b)
+    | SideArg(s, f) => SideArg(g(s), f)
     };
 
   recursion_transform_ctx(recursion_direction, z);
@@ -248,10 +246,10 @@ let meta_transform_ctx_idxfunc_on_spl =
     | G(l) => G(g(l))
     | S(l) => S(g(l))
     | Diag(l) => Diag(g(l))
-    | [@implicit_arity] DiagData(a, b) =>
-      [@implicit_arity] DiagData(g(a), g(b))
-    | [@implicit_arity] GT(a, c, s, l) =>
-      [@implicit_arity] GT(a, g(c), g(s), l)
+    | DiagData(a, b) =>
+      DiagData(g(a), g(b))
+    | GT(a, c, s, l) =>
+      GT(a, g(c), g(s), l)
     | (
         DFT(_) | RS(_) | I(_) | Tensor(_) | T(_) | L(_) | Compose(_) | ISum(_) |
         F(_) |
@@ -260,14 +258,13 @@ let meta_transform_ctx_idxfunc_on_spl =
         Compute(_) |
         ISumReinitCompute(_)
       ) as e => e
-    | [@implicit_arity] Construct(a, b, c, d) =>
-      [@implicit_arity] Construct(a, b, c, List.map(g, d))
-    | [@implicit_arity] ISumReinitConstruct(a, b, c, d, ee, f, gg) =>
-      [@implicit_arity]
+    | Construct(a, b, c, d) =>
+      Construct(a, b, c, List.map(g, d))
+    | ISumReinitConstruct(a, b, c, d, ee, f, gg) =>
       ISumReinitConstruct(a, b, c, d, ee, f, List.map(g, gg))
-    | [@implicit_arity] SideArg(s, f) => [@implicit_arity] SideArg(s, g(f))
-    | [@implicit_arity] UnpartitionnedCall(a, b, c, d, e) =>
-      [@implicit_arity] UnpartitionnedCall(a, b, List.map(g, c), d, e)
+    | SideArg(s, f) => SideArg(s, g(f))
+    | UnpartitionnedCall(a, b, c, d, e) =>
+      UnpartitionnedCall(a, b, List.map(g, c), d, e)
     | e =>
       failwith(
         "meta_transform_idxfunc_on_spl, not handled: " ++ string_of_spl(e),
@@ -301,20 +298,19 @@ let meta_transform_ctx_intexpr_on_spl =
     | DiagData(_)
     | G(_)
     | S(_) => e
-    | [@implicit_arity] ISum(v, c, a) =>
-      [@implicit_arity] ISum(g(v), g(c), a)
-    | [@implicit_arity] GT(v, c, s, l) =>
-      [@implicit_arity] GT(v, c, s, List.map(g, l))
-    | [@implicit_arity] L(n, m) => [@implicit_arity] L(g(n), g(m))
-    | [@implicit_arity] T(n, m) => [@implicit_arity] T(g(n), g(m))
+    | ISum(v, c, a) =>
+      ISum(g(v), g(c), a)
+    | GT(v, c, s, l) =>
+      GT(v, c, s, List.map(g, l))
+    | L(n, m) => L(g(n), g(m))
+    | T(n, m) => T(g(n), g(m))
     | I(n) => I(g(n))
     | DFT(n) => DFT(g(n))
     | BB(_) => e
     | UnpartitionnedCall(_) => e
     | PartitionnedCall(_) => e
     | F(_) => e
-    | [@implicit_arity] ISumReinitConstruct(a, b, c, d, ee, f, gg) =>
-      [@implicit_arity]
+    | ISumReinitConstruct(a, b, c, d, ee, f, gg) =>
       ISumReinitConstruct(
         a,
         g(b),
@@ -324,15 +320,14 @@ let meta_transform_ctx_intexpr_on_spl =
         List.map(g, f),
         gg,
       )
-    | [@implicit_arity] ISumReinitCompute(a, b, c, d, ee, f, gg) =>
-      [@implicit_arity]
+    | ISumReinitCompute(a, b, c, d, ee, f, gg) =>
       ISumReinitCompute(a, g(b), g(c), d, List.map(g, ee), g(f), g(gg))
-    | [@implicit_arity] Construct(a, b, c, d) =>
-      [@implicit_arity] Construct(a, b, List.map(g, c), d)
-    | [@implicit_arity] Compute(a, b, c, d, e) =>
-      [@implicit_arity] Compute(a, b, List.map(g, c), g(d), g(e))
-    | [@implicit_arity] Down(s, l, d) => [@implicit_arity] Down(s, g(l), d)
-    | [@implicit_arity] SideArg(_, _) => e
+    | Construct(a, b, c, d) =>
+      Construct(a, b, List.map(g, c), d)
+    | Compute(a, b, c, d, e) =>
+      Compute(a, b, List.map(g, c), g(d), g(e))
+    | Down(s, l, d) => Down(s, g(l), d)
+    | SideArg(_, _) => e
     };
   };
   /* | _ -> failwith("meta_transform_intexpr_on_spl, not handled: "^(string_of_spl e))         		 */
@@ -361,8 +356,8 @@ let meta_collect_ctx_spl_on_spl =
     switch (e) {
     | Compose(l)
     | Tensor(l) => List.flatten(List.map(g, l))
-    | [@implicit_arity] ISum(_, _, a)
-    | [@implicit_arity] GT(a, _, _, _) => g(a)
+    | ISum(_, _, a)
+    | GT(a, _, _, _) => g(a)
     | RS(a) => g(a)
     | _ => []
     };
@@ -380,8 +375,8 @@ let meta_collect_ctx_idxfunc_on_spl =
     | G(l) => f(ctx, l)
     | S(l) => f(ctx, l)
     | Diag(l) => f(ctx, l)
-    | [@implicit_arity] DiagData(a, b) => f(ctx, a) @ f(ctx, b)
-    | [@implicit_arity] GT(_, a, b, _) => f(ctx, a) @ f(ctx, b)
+    | DiagData(a, b) => f(ctx, a) @ f(ctx, b)
+    | GT(_, a, b, _) => f(ctx, a) @ f(ctx, b)
     | _ => []
     };
 
@@ -405,12 +400,12 @@ let meta_collect_intexpr_on_spl =
     | S(_)
     | UnpartitionnedCall(_)
     | PartitionnedCall(_) => []
-    | [@implicit_arity] ISum(n, m, _)
-    | [@implicit_arity] L(n, m)
-    | [@implicit_arity] T(n, m) => ff(n) @ ff(m)
+    | ISum(n, m, _)
+    | L(n, m)
+    | T(n, m) => ff(n) @ ff(m)
     | I(n)
     | DFT(n) => ff(n)
-    | [@implicit_arity] GT(_, _, _, l) => List.flatten(List.map(ff, l))
+    | GT(_, _, _, l) => List.flatten(List.map(ff, l))
     | ISumReinitCompute(_)
     | Compute(_)
     | ISumReinitConstruct(_)
@@ -508,55 +503,55 @@ let collect_GT: spl => list(spl) = (
 let rec spl_range = (e: spl): intexpr =>
   switch (e) {
   | Tensor(list) => IMul(List.map(spl_range, list))
-  | [@implicit_arity] GT(a, _, _, l) => IMul([spl_range(a), ...l])
+  | GT(a, _, _, l) => IMul([spl_range(a), ...l])
   | I(n)
-  | [@implicit_arity] T(n, _)
-  | [@implicit_arity] L(n, _)
+  | T(n, _)
+  | L(n, _)
   | DFT(n) => n
   | Compose(list) => spl_range(List.hd(list))
   | S(f) => func_range(f)
   | G(f)
   | Diag(f)
-  | [@implicit_arity] DiagData(f, _) => func_domain(f)
-  | [@implicit_arity] ISum(_, _, s)
+  | DiagData(f, _) => func_domain(f)
+  | ISum(_, _, s)
   | RS(s)
   | BB(s) => spl_range(s)
   | F(n) => IConstant(n)
-  | [@implicit_arity] ISumReinitCompute(_, _, _, _, _, r, _)
-  | [@implicit_arity] Compute(_, _, _, r, _) => r
+  | ISumReinitCompute(_, _, _, _, _, r, _)
+  | Compute(_, _, _, r, _) => r
   | ISumReinitConstruct(_)
   | Construct(_)
   | UnpartitionnedCall(_)
   | PartitionnedCall(_) => assert(false)
-  | [@implicit_arity] Down(a, _, _) => spl_range(a)
-  | [@implicit_arity] SideArg(a, _) => spl_range(a)
+  | Down(a, _, _) => spl_range(a)
+  | SideArg(a, _) => spl_range(a)
   };
 
 let rec spl_domain = (e: spl): intexpr =>
   switch (e) {
   | F(n) => IConstant(n)
   | Tensor(list) => IMul(List.map(spl_domain, list))
-  | [@implicit_arity] GT(a, _, _, l) => IMul([spl_domain(a), ...l])
+  | GT(a, _, _, l) => IMul([spl_domain(a), ...l])
   | DFT(n)
   | I(n)
-  | [@implicit_arity] T(n, _)
-  | [@implicit_arity] L(n, _) => n
+  | T(n, _)
+  | L(n, _) => n
   | Compose(list) => spl_domain(List.hd(List.rev(list)))
   | S(f) => func_domain(f)
   | G(f) => func_range(f)
   | Diag(f)
-  | [@implicit_arity] DiagData(f, _) => func_domain(f) /* by definition a diag range is equal to a diag domain. However the range of the function is larger but noone cares since its precomputed*/
-  | [@implicit_arity] ISum(_, _, s)
+  | DiagData(f, _) => func_domain(f) /* by definition a diag range is equal to a diag domain. However the range of the function is larger but noone cares since its precomputed*/
+  | ISum(_, _, s)
   | RS(s)
   | BB(s) => spl_domain(s)
   | UnpartitionnedCall(_)
   | PartitionnedCall(_)
   | ISumReinitConstruct(_)
   | Construct(_) => assert(false)
-  | [@implicit_arity] ISumReinitCompute(_, _, _, _, _, _, d)
-  | [@implicit_arity] Compute(_, _, _, _, d) => d
-  | [@implicit_arity] Down(a, _, _) => spl_domain(a)
-  | [@implicit_arity] SideArg(a, _) => spl_domain(a)
+  | ISumReinitCompute(_, _, _, _, _, _, d)
+  | Compute(_, _, _, _, d) => d
+  | Down(a, _, _) => spl_domain(a)
+  | SideArg(a, _) => spl_domain(a)
   };
 
 /*********************************************
@@ -570,13 +565,11 @@ let rule_tensor_to_isum: spl => spl = (
       | [I(k), a, ...tl] =>
         let i = gen_loop_counter#get();
         f([
-          [@implicit_arity]
           ISum(
             i,
             k,
             Compose([
               S(
-                [@implicit_arity]
                 FH(
                   spl_range(a),
                   IMul([spl_range(a), k]),
@@ -586,7 +579,6 @@ let rule_tensor_to_isum: spl => spl = (
               ),
               a,
               G(
-                [@implicit_arity]
                 FH(
                   spl_domain(a),
                   IMul([spl_domain(a), k]),
@@ -601,18 +593,15 @@ let rule_tensor_to_isum: spl => spl = (
       | [a, I(k), ...tl] =>
         let i = gen_loop_counter#get();
         f([
-          [@implicit_arity]
           ISum(
             i,
             k,
             Compose([
               S(
-                [@implicit_arity]
                 FH(spl_range(a), IMul([spl_range(a), k]), i, k),
               ),
               a,
               G(
-                [@implicit_arity]
                 FH(spl_domain(a), IMul([spl_domain(a), k]), i, k),
               ),
             ]),
@@ -633,10 +622,8 @@ let rule_tensor_to_GT: spl => spl = (
     let rec f = (l: list(spl)): list(spl) =>
       switch (l) {
       | [I(k), a, ...tl] => [
-          [@implicit_arity]
           GT(
             a,
-            [@implicit_arity]
             FHH(
               spl_domain(a),
               spl_domain(a),
@@ -644,7 +631,6 @@ let rule_tensor_to_GT: spl => spl = (
               IConstant(1),
               [spl_domain(a)],
             ),
-            [@implicit_arity]
             FHH(
               spl_range(a),
               spl_range(a),
@@ -657,10 +643,8 @@ let rule_tensor_to_GT: spl => spl = (
           ...tl,
         ]
       | [a, I(k), ...tl] => [
-          [@implicit_arity]
           GT(
             a,
-            [@implicit_arity]
             FHH(
               spl_domain(a),
               spl_domain(a),
@@ -668,7 +652,6 @@ let rule_tensor_to_GT: spl => spl = (
               k,
               [IConstant(1)],
             ),
-            [@implicit_arity]
             FHH(
               spl_range(a),
               spl_range(a),
@@ -693,15 +676,13 @@ let rule_suck_inside_GT: spl => spl = (
   {
     let rec f = (l: list(spl)): list(spl) =>
       switch (l) {
-      | [[@implicit_arity] GT(a, g, s, v), [@implicit_arity] L(n, k), ...tl] =>
+      | [GT(a, g, s, v), L(n, k), ...tl] =>
         f([
-          [@implicit_arity]
-          GT(a, FCompose([FUp([@implicit_arity] FL(n, k)), g]), s, v),
+          GT(a, FCompose([FUp(FL(n, k)), g]), s, v),
           ...tl,
         ])
-      | [[@implicit_arity] GT(a, g, s, v), Diag(d), ...tl] =>
+      | [GT(a, g, s, v), Diag(d), ...tl] =>
         f([
-          [@implicit_arity]
           GT(Compose([a, Diag(FCompose([FUp(d), g]))]), g, s, v),
           ...tl,
         ])
@@ -719,18 +700,17 @@ let rule_suck_inside_isum: spl => spl = (
   {
     let rec f = (l: list(spl)): list(spl) =>
       switch (l) {
-      | [[@implicit_arity] ISum(v, c, a), [@implicit_arity] L(n, k), ...tl] =>
+      | [ISum(v, c, a), L(n, k), ...tl] =>
         f([
-          [@implicit_arity]
-          ISum(v, c, Compose([a, G([@implicit_arity] FL(n, k))])),
+          ISum(v, c, Compose([a, G(FL(n, k))])),
           ...tl,
         ])
-      | [[@implicit_arity] ISum(v, c, a), Diag(_) as d, ...tl] =>
-        f([[@implicit_arity] ISum(v, c, Compose([a, d])), ...tl])
-      | [[@implicit_arity] ISum(v, c, a), G(h), ...tl] =>
-        f([[@implicit_arity] ISum(v, c, Compose([a, G(h)])), ...tl])
-      | [S(h), [@implicit_arity] ISum(v, c, a), ...tl] =>
-        f([[@implicit_arity] ISum(v, c, Compose([S(h), a])), ...tl])
+      | [ISum(v, c, a), Diag(_) as d, ...tl] =>
+        f([ISum(v, c, Compose([a, d])), ...tl])
+      | [ISum(v, c, a), G(h), ...tl] =>
+        f([ISum(v, c, Compose([a, G(h)])), ...tl])
+      | [S(h), ISum(v, c, a), ...tl] =>
+        f([ISum(v, c, Compose([S(h), a])), ...tl])
       | [a, ...tl] => [a, ...f(tl)]
       | [] => []
       };
@@ -744,7 +724,7 @@ let rule_transorm_T_into_diag: spl => spl = (
   meta_transform_spl_on_spl(
     BottomUp,
     fun
-    | [@implicit_arity] T(n, k) => Diag(Pre([@implicit_arity] FD(n, k)))
+    | T(n, k) => Diag(Pre(FD(n, k)))
     | x => x,
   ):
     spl => spl
@@ -754,12 +734,12 @@ let rule_warp_GT_RS: spl => spl = (
   meta_transform_spl_on_spl(
     BottomUp,
     fun
-    | [@implicit_arity] GT(RS(a), g, s, l) =>
-      RS([@implicit_arity] GT(a, g, s, l))
-    | [@implicit_arity] GT(Compose([RS(a), RS(b)]), g, s, l) =>
+    | GT(RS(a), g, s, l) =>
+      RS(GT(a, g, s, l))
+    | GT(Compose([RS(a), RS(b)]), g, s, l) =>
       Compose([
-        RS([@implicit_arity] GT(a, g, s, l)),
-        RS([@implicit_arity] GT(b, g, s, l)),
+        RS(GT(a, g, s, l)),
+        RS(GT(b, g, s, l)),
       ])
     | x => x,
   ):
@@ -770,14 +750,13 @@ let rule_GT_GT: spl => spl = (
   meta_transform_spl_on_spl(
     BottomUp,
     fun
-    | [@implicit_arity] GT([@implicit_arity] GT(a, ga, sa, la), gb, sb, lb) => {
+    | GT(GT(a, ga, sa, la), gb, sb, lb) => {
         let rec f = (elt: idxfunc, count: list('a)): idxfunc =>
           switch (count) {
           | [_, ...tl] => FUp(f(elt, tl))
           | _ => elt
           };
 
-        [@implicit_arity]
         GT(
           a,
           FCompose([f(gb, la), ga]),
@@ -795,10 +774,10 @@ let rule_pull_side_argument: spl => spl = (
   meta_transform_spl_on_spl(
     BottomUp,
     fun
-    | BB([@implicit_arity] SideArg(a, f)) => [@implicit_arity] SideArg(a, f)
-    | [@implicit_arity] GT([@implicit_arity] SideArg(a, s), _, _, l) =>
+    | BB(SideArg(a, f)) => SideArg(a, f)
+    | GT(SideArg(a, s), _, _, l) =>
       if (List.length(l) === rank_of_func(s)) {
-        [@implicit_arity] SideArg([@implicit_arity] GT(a, FNil, s, l), FNil);
+        SideArg(GT(a, FNil, s, l), FNil);
       } else {
         failwith("not implemented yet here");
       }
@@ -848,18 +827,17 @@ let rule_distribute_downrank_spl: spl => spl = (
   meta_transform_spl_on_spl(
     TopDown,
     fun
-    | [@implicit_arity] Down(Compose(list), j, l) =>
-      Compose(List.map(x => [@implicit_arity] Down(x, j, l), list))
-    | [@implicit_arity] Down(BB(x), j, l) =>
-      BB([@implicit_arity] Down(x, j, l))
-    | [@implicit_arity] Down(F(i), _, _) => F(i)
-    | [@implicit_arity] Down(Diag(f), j, l) =>
-      Diag([@implicit_arity] FDown(f, j, l))
-    | [@implicit_arity] Down([@implicit_arity] DiagData(f, g), j, l) =>
-      [@implicit_arity]
+    | Down(Compose(list), j, l) =>
+      Compose(List.map(x => Down(x, j, l), list))
+    | Down(BB(x), j, l) =>
+      BB(Down(x, j, l))
+    | Down(F(i), _, _) => F(i)
+    | Down(Diag(f), j, l) =>
+      Diag(FDown(f, j, l))
+    | Down(DiagData(f, g), j, l) =>
       DiagData(
-        [@implicit_arity] FDown(f, j, l),
-        [@implicit_arity] FDown(g, j, l),
+        FDown(f, j, l),
+        FDown(g, j, l),
       )
     | x => x,
   ):
@@ -884,12 +862,12 @@ let rule_pull_sidearg_thru_compose: spl => spl = (
   {
     let rec f = (l: list(spl)): list(spl) =>
       switch (l) {
-      | [F(_), [@implicit_arity] SideArg(a, b), ...tl] =>
-        f([[@implicit_arity] SideArg(a, b), ...tl])
-      | [[@implicit_arity] SideArg(a, b), G(_), ...tl] =>
-        f([[@implicit_arity] SideArg(a, b), ...tl])
-      | [S(_), [@implicit_arity] SideArg(a, b), ...tl] =>
-        f([[@implicit_arity] SideArg(Compose([S(b), a]), FNil), ...tl])
+      | [F(_), SideArg(a, b), ...tl] =>
+        f([SideArg(a, b), ...tl])
+      | [SideArg(a, b), G(_), ...tl] =>
+        f([SideArg(a, b), ...tl])
+      | [S(_), SideArg(a, b), ...tl] =>
+        f([SideArg(Compose([S(b), a]), FNil), ...tl])
       | [a, G(FNil), ...tl] => f([a, ...tl])
       | [a, b, ...tl] => [a, ...f([b, ...tl])]
       | x => x
