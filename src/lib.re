@@ -12,19 +12,19 @@ open Boolexpr;
 module SplMap =
   Map.Make({
     type t = spl;
-    let compare = Pervasives.compare;
+    let compare = Stdlib.compare;
   });
 
 module IdxFuncMap =
   Map.Make({
     type t = idxfunc;
-    let compare = Pervasives.compare;
+    let compare = Stdlib.compare;
   });
 
 module IntExprSet =
   Set.Make({
     type t = intexpr;
-    let compare = Pervasives.compare;
+    let compare = Stdlib.compare;
   });
 
 type breakdown = (boolexpr, list((intexpr, intexpr)), spl, spl);
@@ -62,13 +62,13 @@ type specified_arg = (string, int);
 module SpecArgMap =
   Map.Make({
     type t = specified_arg;
-    let compare = Pervasives.compare;
+    let compare = Stdlib.compare;
   });
 
 module SpecArgSet =
   Set.Make({
     type t = specified_arg;
-    let compare = Pervasives.compare;
+    let compare = Stdlib.compare;
   });
 
 /******** PRINTING *******/

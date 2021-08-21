@@ -54,12 +54,12 @@ and code =
 module ExprMap =
   Map.Make({
     type t = expr;
-    let compare = Pervasives.compare;
+    let compare = Stdlib.compare;
   });
 
 module ExprSet =
   Set.Make({
-    let compare = Pervasives.compare;
+    let compare = Stdlib.compare;
     type t = expr;
   });
 

@@ -8,7 +8,7 @@ module IntMap =
 
 module IntSet =
   Set.Make({
-    let compare = Pervasives.compare;
+    let compare = Stdlib.compare;
     type t = int;
   });
 
